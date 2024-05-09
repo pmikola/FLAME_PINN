@@ -33,7 +33,7 @@ for period in range(0,1):
     t1.fsim.fuel_dens_modifier = 1/t1.fsim.dt
     t1.fsim.simulate(simulate=0,save_rgb=1,save_alpha=1,save_fuel=1,delete_data=0)
     t1.data_preparation(first_frame,last_frame,frame_skip)
-
+    #t1.learning_loop() # TODO : push data trough network
 
 
 
