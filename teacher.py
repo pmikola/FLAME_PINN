@@ -111,7 +111,7 @@ class teacher(object):
                     central_point_y_binary = "{0:010b}".format(central_point_y[0])
                     central_point_y_binary = torch.tensor(np.array([int(d)for d in central_point_y_binary]))
                     print(central_point_y_binary)
-                    # TODO : need to
+                    # TODO : need to finish data preparation
                     time.sleep(100)
 
 
