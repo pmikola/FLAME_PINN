@@ -18,6 +18,15 @@ class teacher(object):
         self.meta_binary = None
         self.field_names = None
         self.first_frame, self.last_frame, self.frame_skip = None, None, None
+
+        self.data_input = None
+        self.meta_input_h1 = None
+        self.meta_input_h2 = None
+        self.meta_input_h3 = None
+        self.data_output = None
+        self.meta_output_h1 = None
+        self.meta_output_h2 = None
+        self.meta_output_h3 = None
     def generate_structure(self):
         no_structure = random.randint(0, self.fsim.grid_size_y - self.fsim.N_boundary)
         self.fsim.idx = torch.randint(low=self.fsim.N_boundary,high=self.fsim.grid_size_x-self.fsim.N_boundary,size=(no_structure,))
@@ -31,7 +40,7 @@ class teacher(object):
     def generate_sim_params(self):
         pass
 
-    def data_preparation(self,first_frame,last_frame,frame_skip):
+    def data_preparation(self,no_frame_samples,batch_size,input_window_size,first_frame,last_frame,frame_skip):
         self.first_frame, self.last_frame, self.frame_skip = first_frame, last_frame, frame_skip
         folder_names = ['v','u','velocity_magnitude','fuel_density','oxidizer_density',
                         'product_density','pressure','temperature','rgb','alpha']
@@ -70,51 +79,125 @@ class teacher(object):
             meta_binary.append(meta_temp)
         self.meta_binary =  torch.from_numpy(np.array(meta_binary))
         self.field_names = field_names
+        fdens_idx = np.array([i for i, x in enumerate(self.field_names) if x == "fuel_density"])
+        frame_samples = random.sample(list(set(fdens_idx)), k=no_frame_samples)
+        f_dens_pos = len(fdens_idx)
+        fdens_idx = fdens_idx[frame_samples]
+        rgb_idx = np.array([i for i, x in enumerate(self.field_names) if x == "rgb"])
+        r_idx = rgb_idx[0:f_dens_pos][frame_samples]
+        g_idx = rgb_idx[f_dens_pos:f_dens_pos * 2][frame_samples]
+        b_idx = rgb_idx[f_dens_pos * 2:f_dens_pos * 3][frame_samples]
+        alpha_idx = np.array([i for i, x in enumerate(self.field_names) if x == "alpha"])[frame_samples]
+        fuel_slices = self.data_tensor[fdens_idx]
+        r_slices = self.data_tensor[r_idx]
+        g_slices = self.data_tensor[g_idx]
+        b_slices = self.data_tensor[b_idx]
+        alpha_slices = self.data_tensor[alpha_idx]
+        meta_binary_slices = self.meta_binary[fdens_idx]
+        x_range = range(self.fsim.N_boundary + input_window_size,
+                        fuel_slices[0].shape[0] - self.fsim.N_boundary - input_window_size)
+        y_range = range(self.fsim.N_boundary + input_window_size,
+                        fuel_slices[0].shape[1] - self.fsim.N_boundary - input_window_size)
+        data_input = []
+        meta_input_h1 = []
+        meta_input_h2 = []
+        meta_input_h3 = []
+        data_output = []
+        meta_output_h1 = []
+        meta_output_h2 = []
+        meta_output_h3 = []
+        for _ in range(batch_size):
+            idx_input = random.choice(range(0, fuel_slices.shape[0]))
+            idx_output = random.choice(range(0, fuel_slices.shape[0]))
+
+            central_point_x = random.sample(x_range, 1)[0]
+            central_point_y = random.sample(y_range, 1)[0]
+            window_x = np.array(range(central_point_x - input_window_size, central_point_x + input_window_size + 1))
+            window_y = np.array(range(central_point_y - input_window_size, central_point_y + input_window_size + 1))
+            central_point_x_binary = "{0:010b}".format(central_point_x)
+            central_point_x_binary = torch.tensor(np.array([int(d) for d in central_point_x_binary]))
+            central_point_y_binary = "{0:010b}".format(central_point_y)
+            central_point_y_binary = torch.tensor(np.array([int(d) for d in central_point_y_binary]))
+            slice_x = slice(window_x[0], window_x[-1] + 1)
+            slice_y = slice(window_y[0], window_y[-1] + 1)
+            # Note : Input data
+            fuel_subslice_in = fuel_slices[idx_input][slice_x, slice_y]
+            r_subslice_in = r_slices[idx_input][slice_x, slice_y]
+            g_subslice_in = g_slices[idx_input][slice_x, slice_y]
+            b_subslice_in = b_slices[idx_input][slice_x, slice_y]
+            alpha_subslice_in = alpha_slices[idx_input][slice_x, slice_y]
+            data_input_subslice = torch.cat([fuel_subslice_in, r_subslice_in,
+                                             g_subslice_in, b_subslice_in, alpha_subslice_in], dim=0)
+            meta_step_in = meta_binary_slices[idx_input][0]
+            meta_fuel_initial_speed_in = meta_binary_slices[idx_input][1]
+            meta_fuel_cut_off_time_in = meta_binary_slices[idx_input][2]
+            meta_igni_time_in = meta_binary_slices[idx_input][3]
+            meta_ignition_temp_in = meta_binary_slices[idx_input][4]
+            meta_viscosity_in = meta_binary_slices[idx_input][14]
+            meta_diff_in = meta_binary_slices[idx_input][15]
+            meta_input_subslice = torch.cat([meta_step_in, meta_fuel_initial_speed_in,
+                                             meta_fuel_cut_off_time_in, meta_igni_time_in,
+                                             meta_ignition_temp_in, meta_viscosity_in, meta_diff_in], dim=0)
+
+            # Note : Output data
+            fuel_subslice_out = fuel_slices[idx_output][central_point_x, central_point_y].reshape(1)
+
+            r_subslice_out = r_slices[idx_output][central_point_x, central_point_y].reshape(1)
+            g_subslice_out = g_slices[idx_output][central_point_x, central_point_y].reshape(1)
+            b_subslice_out = b_slices[idx_output][central_point_x, central_point_y].reshape(1)
+            alpha_subslice_out = alpha_slices[idx_output][central_point_x, central_point_y].reshape(1)
+            data_output_subslice = torch.cat([fuel_subslice_out, r_subslice_out,
+                                              g_subslice_out, b_subslice_out, alpha_subslice_out], dim=0)
+            meta_step_out = meta_binary_slices[idx_output][0]
+            meta_fuel_initial_speed_out = meta_binary_slices[idx_output][1]
+            meta_fuel_cut_off_time_out = meta_binary_slices[idx_output][2]
+            meta_igni_time_out = meta_binary_slices[idx_output][3]
+            meta_ignition_temp_out = meta_binary_slices[idx_output][4]
+            meta_viscosity_out = meta_binary_slices[idx_output][14]
+            meta_diff_out = meta_binary_slices[idx_output][15]
+            meta_output_subslice = torch.cat([meta_step_out, meta_fuel_initial_speed_out,
+                                              meta_fuel_cut_off_time_out, meta_igni_time_out,
+                                              meta_ignition_temp_out, meta_viscosity_out, meta_diff_out], dim=0)
+
+            central_points = torch.cat([central_point_x_binary, central_point_y_binary], dim=0)
+            data_input.append(data_input_subslice)
+            meta_input_h1.append(meta_input_subslice)
+            meta_input_h2.append(meta_step_in)
+            meta_input_h3.append(central_points)
+            data_output.append(data_output_subslice)
+            meta_output_h1.append(meta_output_subslice)
+            meta_output_h2.append(data_output_subslice)
+            meta_output_h3.append(central_points)
 
 
-    def learning_loop(self,no_frame_samples,batch_size,input_window_size,criterion,optimizer,device,num_epochs=100):
+        self.data_input = torch.stack(data_input,dim=0)
+        self.meta_input_h1 = meta_input_h1
+        self.meta_input_h2 = meta_input_h2
+        self.meta_input_h3 = meta_input_h3
+        self.data_output = data_output
+        self.meta_output_h1 = meta_output_h1
+        self.meta_output_h2 = meta_output_h2
+        self.meta_output_h3 = meta_output_h3
+
+        time.sleep(100)
+
+
+    def learning_phase(self,criterion,optimizer,device,num_epochs=100):
             global loss
             best_loss = float('inf')
             best_model_state = None
             num_epochs = num_epochs
             for epoch in range(num_epochs):
-                fdens_idx  = np.array([i for i, x in enumerate(self.field_names) if x == "fuel_density"])
-                frame_samples = random.sample(list(set(fdens_idx)), k=no_frame_samples)
-                f_dens_pos = len(fdens_idx)
-                fdens_idx = fdens_idx[frame_samples]
-                rgb_idx = np.array([i for i, x in enumerate(self.field_names) if x == "rgb"])
-                r_idx = rgb_idx[0:f_dens_pos][frame_samples]
-                g_idx = rgb_idx[f_dens_pos:f_dens_pos*2][frame_samples]
-                b_idx = rgb_idx[f_dens_pos*2:f_dens_pos*3][frame_samples]
-                alpha_idx = np.array([i for i, x in enumerate(self.field_names) if x == "alpha"])[frame_samples]
-                fuel_slices = self.data_tensor[fdens_idx]
-                r_slices = self.data_tensor[r_idx]
-                g_slices = self.data_tensor[g_idx]
-                b_slices = self.data_tensor[b_idx]
-                alpha_slices = self.data_tensor[alpha_idx]
-                meta_slices = self.meta_binary[fdens_idx]
-                x_range = range(self.fsim.N_boundary + input_window_size,
-                                fuel_slices[0].shape[0] - self.fsim.N_boundary - input_window_size)
-                y_range = range(self.fsim.N_boundary + input_window_size,
-                                fuel_slices[0].shape[1] - self.fsim.N_boundary - input_window_size)
-
-                for i in range(batch_size):
-                    idx = random.choice(range(0,fuel_slices.shape[0]))
-                    print(y_range,x_range)
-                    central_point_x = random.sample(x_range,1)
-                    central_point_y = random.sample(y_range, 1)
-                    window_x = np.array(range(central_point_x-input_window_size,central_point_x+input_window_size))
-                    window_y = np.array(range(central_point_y-input_window_size,central_point_y+input_window_size))
-
-                    central_point_x_binary = "{0:010b}".format(central_point_x[0])
-                    central_point_x_binary = torch.tensor(np.array([int(d) for d in central_point_x_binary]))
-                    central_point_y_binary = "{0:010b}".format(central_point_y[0])
-                    central_point_y_binary = torch.tensor(np.array([int(d)for d in central_point_y_binary]))
-                    print(central_point_y_binary)
-                    # TODO : need to finish data preparation
-                    time.sleep(100)
-
-
+                (self.data_input,self.meta_input_h1,self.meta_input_h2,
+                 self.meta_input_h3,self.data_output,self.meta_output_h1,
+                 self.meta_output_h2,self.meta_output_h3) =(self.data_input.to(device),
+                                                            self.meta_input_h1.to(device),
+                                                            self.meta_input_h2.to(device),
+                                                            self.meta_input_h3.to(device),
+                                                            self.data_output.to(device),
+                                                            self.meta_output_h1.to(device),
+                                                            self.meta_output_h2.to(device),
+                                                            self.meta_output_h3.to(device))
                 inputs, targets = inputs.to(device), targets.to(device)
                 outputs = self.model(inputs)
                 loss = criterion(outputs, targets)
@@ -134,3 +217,6 @@ class teacher(object):
             else:
                 self.model = best_model_state
             return self.model
+
+    def dreaming_phase(self):
+        pass

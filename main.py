@@ -26,15 +26,15 @@ optimizer = torch.optim.Adam(model.parameters(), lr=0.001, betas=(0.9, 0.999), e
 
 no_frame_samples = 5
 batch_size = 32
-input_window_size = 2
+input_window_size = 1
 # Note: Eon > Era > Period > Epoch
 for period in range(0,1):
     t1.fsim = f1
     t1.generate_structure()
     t1.fsim.fuel_dens_modifier = 1/t1.fsim.dt
     t1.fsim.simulate(simulate=0,save_rgb=1,save_alpha=1,save_fuel=1,delete_data=0)
-    t1.data_preparation(first_frame,last_frame,frame_skip)
-    t1.learning_loop(no_frame_samples,batch_size,input_window_size,loss,optimizer,device)
+    t1.data_preparation(no_frame_samples,batch_size,input_window_size,first_frame,last_frame,frame_skip)
+    t1.learning_phase(loss,optimizer,device)
 
 
 
