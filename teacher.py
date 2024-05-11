@@ -10,6 +10,7 @@ import torch
 class teacher(object):
     def __init__(self,model,device):
         super(teacher, self).__init__()
+
         self.model = model
         self.device = device
         self.fsim = None
@@ -17,7 +18,7 @@ class teacher(object):
         self.meta_tensor = None
         self.meta_binary = None
         self.field_names = None
-        self.first_frame, self.last_frame, self.frame_skip = None, None, None
+        self.no_frame_samples,self.first_frame, self.last_frame, self.frame_skip =None, None, None, None
 
         self.data_input = None
         self.meta_input_h1 = None
@@ -40,8 +41,7 @@ class teacher(object):
     def generate_sim_params(self):
         pass
 
-    def data_preparation(self,no_frame_samples,batch_size,input_window_size,first_frame,last_frame,frame_skip):
-        self.first_frame, self.last_frame, self.frame_skip = first_frame, last_frame, frame_skip
+    def data_preparation(self):
         folder_names = ['v','u','velocity_magnitude','fuel_density','oxidizer_density',
                         'product_density','pressure','temperature','rgb','alpha']
         data_tensor = []
@@ -80,7 +80,7 @@ class teacher(object):
         self.meta_binary =  torch.from_numpy(np.array(meta_binary))
         self.field_names = field_names
         fdens_idx = np.array([i for i, x in enumerate(self.field_names) if x == "fuel_density"])
-        frame_samples = random.sample(list(set(fdens_idx)), k=no_frame_samples)
+        frame_samples = random.sample(list(set(fdens_idx)), k=self.no_frame_samples)
         f_dens_pos = len(fdens_idx)
         fdens_idx = fdens_idx[frame_samples]
         rgb_idx = np.array([i for i, x in enumerate(self.field_names) if x == "rgb"])
@@ -94,10 +94,10 @@ class teacher(object):
         b_slices = self.data_tensor[b_idx]
         alpha_slices = self.data_tensor[alpha_idx]
         meta_binary_slices = self.meta_binary[fdens_idx]
-        x_range = range(self.fsim.N_boundary + input_window_size,
-                        fuel_slices[0].shape[0] - self.fsim.N_boundary - input_window_size)
-        y_range = range(self.fsim.N_boundary + input_window_size,
-                        fuel_slices[0].shape[1] - self.fsim.N_boundary - input_window_size)
+        x_range = range(self.fsim.N_boundary + self.input_window_size,
+                        fuel_slices[0].shape[0] - self.fsim.N_boundary - self.input_window_size)
+        y_range = range(self.fsim.N_boundary + self.input_window_size,
+                        fuel_slices[0].shape[1] - self.fsim.N_boundary - self.input_window_size)
         data_input = []
         meta_input_h1 = []
         meta_input_h2 = []
@@ -106,14 +106,14 @@ class teacher(object):
         meta_output_h1 = []
         meta_output_h2 = []
         meta_output_h3 = []
-        for _ in range(batch_size):
+        for _ in range(self.batch_size):
             idx_input = random.choice(range(0, fuel_slices.shape[0]))
             idx_output = random.choice(range(0, fuel_slices.shape[0]))
 
             central_point_x = random.sample(x_range, 1)[0]
             central_point_y = random.sample(y_range, 1)[0]
-            window_x = np.array(range(central_point_x - input_window_size, central_point_x + input_window_size + 1))
-            window_y = np.array(range(central_point_y - input_window_size, central_point_y + input_window_size + 1))
+            window_x = np.array(range(central_point_x - self.input_window_size, central_point_x + self.input_window_size + 1))
+            window_y = np.array(range(central_point_y - self.input_window_size, central_point_y + self.input_window_size + 1))
             central_point_x_binary = "{0:010b}".format(central_point_x)
             central_point_x_binary = torch.tensor(np.array([int(d) for d in central_point_x_binary]))
             central_point_y_binary = "{0:010b}".format(central_point_y)
@@ -171,23 +171,25 @@ class teacher(object):
 
 
         self.data_input = torch.stack(data_input,dim=0)
-        self.meta_input_h1 = meta_input_h1
-        self.meta_input_h2 = meta_input_h2
-        self.meta_input_h3 = meta_input_h3
-        self.data_output = data_output
-        self.meta_output_h1 = meta_output_h1
-        self.meta_output_h2 = meta_output_h2
-        self.meta_output_h3 = meta_output_h3
+        self.meta_input_h1 = torch.stack(meta_input_h1,dim=0)
+        self.meta_input_h2 = torch.stack(meta_input_h2,dim=0)
+        self.meta_input_h3 = torch.stack(meta_input_h3,dim=0)
+        self.data_output = torch.stack(data_output,dim=0)
+        self.meta_output_h1 = torch.stack(meta_output_h1,dim=0)
+        self.meta_output_h2 = torch.stack(meta_output_h2,dim=0)
+        self.meta_output_h3 = torch.stack(meta_output_h3,dim=0)
 
-        time.sleep(100)
-
-
-    def learning_phase(self,criterion,optimizer,device,num_epochs=100):
+    def learning_phase(self,no_frame_samples, batch_size, input_window_size, first_frame, last_frame,
+                                      frame_skip,criterion,optimizer,device,num_epochs=100):
+            (self.no_frame_samples,self.batch_size,self.input_window_size,self.first_frame,
+             self.last_frame,self.frame_skip) = (no_frame_samples, batch_size,
+                                                 input_window_size, first_frame, last_frame,frame_skip)
             global loss
             best_loss = float('inf')
             best_model_state = None
             num_epochs = num_epochs
             for epoch in range(num_epochs):
+                self.data_preparation()
                 (self.data_input,self.meta_input_h1,self.meta_input_h2,
                  self.meta_input_h3,self.data_output,self.meta_output_h1,
                  self.meta_output_h2,self.meta_output_h3) =(self.data_input.to(device),
@@ -198,9 +200,13 @@ class teacher(object):
                                                             self.meta_output_h1.to(device),
                                                             self.meta_output_h2.to(device),
                                                             self.meta_output_h3.to(device))
-                inputs, targets = inputs.to(device), targets.to(device)
-                outputs = self.model(inputs)
-                loss = criterion(outputs, targets)
+
+
+                dataset = (self.data_input,self.meta_input_h1,self.meta_input_h2,
+                           self.meta_input_h3,self.data_output,self.meta_output_h1,
+                           self.meta_output_h2,self.meta_output_h3)
+                predictions = self.model(dataset)
+                loss = criterion(predictions, self.data_output)
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
