@@ -60,10 +60,9 @@ class PINO(nn.Module):
         c = torch.relu(c)
         x = torch.cat([a,b,c],dim=2)
 
-        alpha = self.l0h1(meta_input_h1.float())
-        alpha = self.l1h1(alpha)
+        alpha = torch.relu(self.l0h1(meta_input_h1.float()))
+        alpha = self.shapeShift(self.l1h1(alpha),alpha)
         alpha =  self.shapeShift(self.l2h1(alpha),alpha)
-        print(alpha.shape,'alpha')
         x = self.l1h0(x)
         x = self.shapeShift(x,alpha)
         print(x.shape, a.shape, b.shape, c.shape,'xabc')
@@ -79,13 +78,21 @@ class PINO(nn.Module):
             coefficients = h[0:self.batch_size, 0:self.no_shifter_params].unsqueeze(1).unsqueeze(2)
             exponents = torch.arange(1,self.no_shifter_params+1,1,device=self.device)
             x_powers = torch.pow(x[0:self.batch_size,:,:].unsqueeze(3), exponents.unsqueeze(0).unsqueeze(1))
-            craftedPolynominal = torch.sum(coefficients*x_powers,dim=3)
+            craftedPolynomial = torch.sum(coefficients*x_powers,dim=3)
+            return craftedPolynomial
         elif x.dim() == 2:
             coefficients = h[0:self.batch_size, 0:self.no_shifter_params].unsqueeze(1)
             exponents = torch.arange(1, self.no_shifter_params + 1, 1, device=self.device)
             x_powers = torch.pow(x[0:self.batch_size, :].unsqueeze(2), exponents.unsqueeze(0).unsqueeze(1))
-            craftedPolynominal = torch.sum(coefficients * x_powers, dim=2)
+            craftedPolynomial = torch.sum(coefficients * x_powers, dim=2)
+            return craftedPolynomial
+        elif x.dim() == 4:
+            coefficients = h[0:self.batch_size, 0:self.no_shifter_params].unsqueeze(1).unsqueeze(2).unsqueeze(3)
+            exponents = torch.arange(1, self.no_shifter_params + 1, 1, device=self.device)
+            x_powers = torch.pow(x[0:self.batch_size, :, :, :].unsqueeze(4),
+                                 exponents.unsqueeze(0).unsqueeze(1).unsqueeze(2))
+            craftedPolynomial = torch.sum(coefficients * x_powers, dim=4)
+            return craftedPolynomial
         else:
-            craftedPolynominal = 0.
-        return craftedPolynominal
+            raise ValueError("Unsupported input dimensions")
 
