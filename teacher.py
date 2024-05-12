@@ -5,15 +5,17 @@ import time
 
 import numpy as np
 import torch
+from matplotlib import pyplot as plt
 
 
 class teacher(object):
     def __init__(self,model,device):
         super(teacher, self).__init__()
-
         self.model = model
         self.device = device
         self.fsim = None
+        self.period = 1
+        self.no_of_periods = 1
         self.data_tensor = None
         self.meta_tensor = None
         self.meta_binary = None
@@ -28,6 +30,8 @@ class teacher(object):
         self.meta_output_h1 = None
         self.meta_output_h2 = None
         self.meta_output_h3 = None
+
+        self.saved_loss = []
     def generate_structure(self):
         no_structure = random.randint(0, self.fsim.grid_size_y - self.fsim.N_boundary)
         self.fsim.idx = torch.randint(low=self.fsim.N_boundary,high=self.fsim.grid_size_x-self.fsim.N_boundary,size=(no_structure,))
@@ -146,8 +150,7 @@ class teacher(object):
             g_subslice_out = g_slices[idx_output][central_point_x, central_point_y].reshape(1)
             b_subslice_out = b_slices[idx_output][central_point_x, central_point_y].reshape(1)
             alpha_subslice_out = alpha_slices[idx_output][central_point_x, central_point_y].reshape(1)
-            data_output_subslice = torch.cat([fuel_subslice_out, r_subslice_out,
-                                              g_subslice_out, b_subslice_out, alpha_subslice_out], dim=0)
+            data_output_subslice = torch.cat([r_subslice_out,g_subslice_out, b_subslice_out, alpha_subslice_out], dim=0)
             meta_step_out = meta_binary_slices[idx_output][0]
             meta_fuel_initial_speed_out = meta_binary_slices[idx_output][1]
             meta_fuel_cut_off_time_out = meta_binary_slices[idx_output][2]
@@ -166,7 +169,7 @@ class teacher(object):
             meta_input_h3.append(central_points)
             data_output.append(data_output_subslice)
             meta_output_h1.append(meta_output_subslice)
-            meta_output_h2.append(data_output_subslice)
+            meta_output_h2.append(meta_step_out)
             meta_output_h3.append(central_points)
 
 
@@ -180,44 +183,51 @@ class teacher(object):
         self.meta_output_h3 = torch.stack(meta_output_h3,dim=0)
 
     def learning_phase(self,no_frame_samples, batch_size, input_window_size, first_frame, last_frame,
-                                      frame_skip,criterion,optimizer,device,num_epochs=100):
+                                      frame_skip,criterion,optimizer,device,num_epochs=500):
             (self.no_frame_samples,self.batch_size,self.input_window_size,self.first_frame,
              self.last_frame,self.frame_skip) = (no_frame_samples, batch_size,
                                                  input_window_size, first_frame, last_frame,frame_skip)
             global loss
+
             best_loss = float('inf')
             best_model_state = None
             num_epochs = num_epochs
             for epoch in range(num_epochs):
                 self.data_preparation()
                 (self.data_input,self.meta_input_h1,self.meta_input_h2,
-                 self.meta_input_h3,self.data_output,self.meta_output_h1,
+                 self.meta_input_h3,self.meta_output_h1,
                  self.meta_output_h2,self.meta_output_h3) =(self.data_input.to(device),
                                                             self.meta_input_h1.to(device),
                                                             self.meta_input_h2.to(device),
                                                             self.meta_input_h3.to(device),
-                                                            self.data_output.to(device),
                                                             self.meta_output_h1.to(device),
                                                             self.meta_output_h2.to(device),
                                                             self.meta_output_h3.to(device))
 
 
+                self.data_output = self.data_output.to(device)
                 dataset = (self.data_input,self.meta_input_h1,self.meta_input_h2,
-                           self.meta_input_h3,self.data_output,self.meta_output_h1,
+                           self.meta_input_h3,self.meta_output_h1,
                            self.meta_output_h2,self.meta_output_h3)
-                predictions = self.model(dataset)
-                loss = criterion(predictions, self.data_output)
+                pred_r,pred_g,pred_b,pred_a = self.model(dataset)
+
+                loss_r = criterion(pred_r, self.data_output[:,0].unsqueeze(1))
+                loss_g = criterion(pred_g, self.data_output[:,1].unsqueeze(1))
+                loss_b = criterion(pred_b, self.data_output[:,2].unsqueeze(1))
+                loss_alpha = criterion(pred_a, self.data_output[:,3].unsqueeze(1))
+
+                loss = loss_r + loss_g + loss_b + loss_alpha
+                self.saved_loss.append(loss.item())
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
-
                 if (epoch+1) % 10 == 0:
-                    print(f'Epoch [{epoch+1}/{num_epochs}], Loss: {loss.item():.4f}')
+                    print(f'Period: {self.period}/{self.no_of_periods} | Epoch: {epoch+1}/{num_epochs}, Loss: {loss.item():.4f}')
 
                 if (epoch + 1) % 10 == 0:
                     if loss.item() < best_loss:
                         best_loss = loss.item()
-                        best_model_state = self.model.state_dict()
+                        best_model_state = self.model
             if best_model_state is None:
                 pass
             else:
@@ -226,3 +236,11 @@ class teacher(object):
 
     def dreaming_phase(self):
         pass
+
+
+    def visualize_lerning(self):
+        plt.plot(self.saved_loss)
+        plt.xlabel('Epoch')
+        plt.ylabel('Loss')
+        plt.grid(True)
+        plt.show()
