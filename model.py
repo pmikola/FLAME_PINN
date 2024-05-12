@@ -62,11 +62,11 @@ class PINO(nn.Module):
 
         alpha = self.l0h1(meta_input_h1.float())
         alpha = self.l1h1(alpha)
-        alpha = self.l2h1(alpha)
-        print(alpha.shape)
+        alpha =  self.shapeShift(self.l2h1(alpha),alpha)
+        print(alpha.shape,'alpha')
         x = self.l1h0(x)
         x = self.shapeShift(x,alpha)
-        print(x.shape, a.shape, b.shape, c.shape)
+        print(x.shape, a.shape, b.shape, c.shape,'xabc')
         time.sleep(1100)
 
 
@@ -75,21 +75,17 @@ class PINO(nn.Module):
 
 
     def shapeShift(self,x, h):
-        # TODO: rid off for loop for faster performance
         if x.dim() == 3:
-            craftedPolynominal = 0.
-            for i in range(1, self.no_shifter_params):
-                craftedPolynominal += h[0:self.batch_size, i].unsqueeze(1).unsqueeze(2) * torch.pow(x[0:self.batch_size], i + 1)
+            coefficients = h[0:self.batch_size, 0:self.no_shifter_params].unsqueeze(1).unsqueeze(2)
+            exponents = torch.arange(1,self.no_shifter_params+1,1,device=self.device)
+            x_powers = torch.pow(x[0:self.batch_size,:,:].unsqueeze(3), exponents.unsqueeze(0).unsqueeze(1))
+            craftedPolynominal = torch.sum(coefficients*x_powers,dim=3)
         elif x.dim() == 2:
-            craftedPolynominal = 0.
-            for i in range(0, self.no_shifter_params):
-                craftedPolynominal += h[0:self.batch_size, i].unsqueeze(1) * torch.pow(
-                    x[0:self.batch_size], i + 1)
+            coefficients = h[0:self.batch_size, 0:self.no_shifter_params].unsqueeze(1)
+            exponents = torch.arange(1, self.no_shifter_params + 1, 1, device=self.device)
+            x_powers = torch.pow(x[0:self.batch_size, :].unsqueeze(2), exponents.unsqueeze(0).unsqueeze(1))
+            craftedPolynominal = torch.sum(coefficients * x_powers, dim=2)
         else:
             craftedPolynominal = 0.
-            for i in range(0, self.no_shifter_params):
-                craftedPolynominal += h[0:self.batch_size, i] * torch.pow(
-                    x[0:self.batch_size], i + 1)
-
         return craftedPolynominal
 
