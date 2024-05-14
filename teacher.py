@@ -11,6 +11,8 @@ from matplotlib import pyplot as plt
 class teacher(object):
     def __init__(self,model,device):
         super(teacher, self).__init__()
+
+
         self.model = model
         self.device = device
         self.fsim = None
@@ -26,10 +28,14 @@ class teacher(object):
         self.meta_input_h1 = None
         self.meta_input_h2 = None
         self.meta_input_h3 = None
+        self.meta_input_h4 = None
+        self.meta_input_h5 = None
         self.data_output = None
         self.meta_output_h1 = None
         self.meta_output_h2 = None
         self.meta_output_h3 = None
+        self.meta_output_h4 = None
+        self.meta_output_h5 = None
 
         self.saved_loss = []
     def generate_structure(self):
@@ -106,10 +112,14 @@ class teacher(object):
         meta_input_h1 = []
         meta_input_h2 = []
         meta_input_h3 = []
+        meta_input_h4 = []
+        meta_input_h5 = []
         data_output = []
         meta_output_h1 = []
         meta_output_h2 = []
         meta_output_h3 = []
+        meta_output_h4 = []
+        meta_output_h5 = []
         for _ in range(self.batch_size):
             idx_input = random.choice(range(0, fuel_slices.shape[0]))
             idx_output = random.choice(range(0, fuel_slices.shape[0]))
@@ -133,6 +143,8 @@ class teacher(object):
             data_input_subslice = torch.cat([fuel_subslice_in, r_subslice_in,
                                              g_subslice_in, b_subslice_in, alpha_subslice_in], dim=0)
             meta_step_in = meta_binary_slices[idx_input][0]
+            meta_step_in_numeric = self.meta_tensor[idx_input][0]
+
             meta_fuel_initial_speed_in = meta_binary_slices[idx_input][1]
             meta_fuel_cut_off_time_in = meta_binary_slices[idx_input][2]
             meta_igni_time_in = meta_binary_slices[idx_input][3]
@@ -152,6 +164,7 @@ class teacher(object):
             alpha_subslice_out = alpha_slices[idx_output][central_point_x, central_point_y].reshape(1)
             data_output_subslice = torch.cat([r_subslice_out,g_subslice_out, b_subslice_out, alpha_subslice_out], dim=0)
             meta_step_out = meta_binary_slices[idx_output][0]
+            meta_step_out_numeric = self.meta_tensor[idx_output][0]
             meta_fuel_initial_speed_out = meta_binary_slices[idx_output][1]
             meta_fuel_cut_off_time_out = meta_binary_slices[idx_output][2]
             meta_igni_time_out = meta_binary_slices[idx_output][3]
@@ -167,20 +180,29 @@ class teacher(object):
             meta_input_h1.append(meta_input_subslice)
             meta_input_h2.append(meta_step_in)
             meta_input_h3.append(central_points)
+            meta_input_h4.append(torch.cat([torch.tensor(window_x),torch.tensor(window_y)]))
+            meta_input_h5.append(meta_step_in_numeric)
             data_output.append(data_output_subslice)
             meta_output_h1.append(meta_output_subslice)
             meta_output_h2.append(meta_step_out)
             meta_output_h3.append(central_points)
-
+            meta_output_h4.append(torch.cat([torch.tensor(window_x), torch.tensor(window_y)]))
+            meta_output_h5.append(meta_step_out_numeric)
 
         self.data_input = torch.stack(data_input,dim=0)
         self.meta_input_h1 = torch.stack(meta_input_h1,dim=0)
         self.meta_input_h2 = torch.stack(meta_input_h2,dim=0)
         self.meta_input_h3 = torch.stack(meta_input_h3,dim=0)
+        self.meta_input_h4 = torch.stack(meta_input_h4,dim=0)
+        self.meta_input_h5 = torch.stack(meta_input_h5,dim=0)
+
         self.data_output = torch.stack(data_output,dim=0)
         self.meta_output_h1 = torch.stack(meta_output_h1,dim=0)
         self.meta_output_h2 = torch.stack(meta_output_h2,dim=0)
         self.meta_output_h3 = torch.stack(meta_output_h3,dim=0)
+        self.meta_output_h4 = torch.stack(meta_output_h4,dim=0)
+        self.meta_output_h5 = torch.stack(meta_output_h5,dim=0)
+
 
     def learning_phase(self,no_frame_samples, batch_size, input_window_size, first_frame, last_frame,
                                       frame_skip,criterion,optimizer,device,num_epochs=500):
@@ -195,20 +217,25 @@ class teacher(object):
             for epoch in range(num_epochs):
                 self.data_preparation()
                 (self.data_input,self.meta_input_h1,self.meta_input_h2,
-                 self.meta_input_h3,self.meta_output_h1,
-                 self.meta_output_h2,self.meta_output_h3) =(self.data_input.to(device),
+                 self.meta_input_h3,self.meta_input_h4,self.meta_input_h5,self.meta_output_h1,
+                 self.meta_output_h2,self.meta_output_h3,self.meta_output_h4,self.meta_output_h5) =\
+                                                            (self.data_input.to(device),
                                                             self.meta_input_h1.to(device),
                                                             self.meta_input_h2.to(device),
                                                             self.meta_input_h3.to(device),
+                                                            self.meta_input_h4.to(device),
+                                                            self.meta_input_h5.to(device),
                                                             self.meta_output_h1.to(device),
                                                             self.meta_output_h2.to(device),
-                                                            self.meta_output_h3.to(device))
+                                                            self.meta_output_h3.to(device),
+                                                            self.meta_output_h4.to(device),
+                                                            self.meta_output_h5.to(device))
 
 
                 self.data_output = self.data_output.to(device)
                 dataset = (self.data_input,self.meta_input_h1,self.meta_input_h2,
-                           self.meta_input_h3,self.meta_output_h1,
-                           self.meta_output_h2,self.meta_output_h3)
+                           self.meta_input_h3,self.meta_input_h4,self.meta_input_h5,self.meta_output_h1,
+                           self.meta_output_h2,self.meta_output_h3,self.meta_output_h4,self.meta_output_h5)
                 pred_r,pred_g,pred_b,pred_a = self.model(dataset)
 
                 loss_r = criterion(pred_r, self.data_output[:,0].unsqueeze(1))
