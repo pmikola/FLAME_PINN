@@ -15,8 +15,7 @@ class PINO(nn.Module):
         self.input_window_size = input_window_size
         self.in_scale = (1+self.input_window_size*2)
         self.no_subslice_in_tensors = 5
-
-
+        self.in_data = 25
 
         # NOTE : on Hierarchy 0 flows data and on higher levels flows metas
         self.no_meta_h3 = 20 * 2
@@ -33,23 +32,23 @@ class PINO(nn.Module):
         self.l2h3 = nn.Linear(in_features=int(self.no_meta_h1 / 4), out_features=self.shifterCoefficients)
 
         # Definition of intermediate layer/parameters that transforms input into Fourier Feature with positional encoding and gaussian Gate
-        self.weights_fd1 = nn.Parameter(torch.rand(1,self.no_subslice_in_tensors*self.in_scale, 12, dtype=torch.cfloat))
+        self.weights_fd1 = nn.Parameter(torch.rand(1,self.no_subslice_in_tensors*self.in_scale, 5, dtype=torch.cfloat))
         self.m = 16 # No o of modes for SpaceTime Encoding
         self.ii = torch.arange(start=0, end=self.m, step=1, device=self.device)
 
-        self.kernel_0 = torch.zeros(25, 25, 1, 2, 2,device=self.device)
-        self.k0_init = nn.Parameter(torch.FloatTensor([[random.uniform(-1,1),random.uniform(-1,1)],
-                                                       [random.uniform(-1,1),random.uniform(-1,1)]]))
+        self.kernel_0 = torch.zeros(self.in_data, self.in_data, 1, 2, 2,device=self.device)
+        self.k0_init = nn.Parameter(torch.tensor([[random.uniform(-1,1),random.uniform(-1,1)],
+                                                       [random.uniform(-1,1),random.uniform(-1,1)]],device=self.device))
         self.kernel_0[0,:,0,:,:] = self.k0_init
 
-        self.kernel_1 = torch.zeros(25, 25, 1, 2, 2, device=self.device)
-        self.k1_init = nn.Parameter(torch.FloatTensor([[random.uniform(-1, 1), random.uniform(-1, 1)],
-                                                       [random.uniform(-1, 1), random.uniform(-1, 1)]]))
+        self.kernel_1 = torch.zeros(self.in_data, self.in_data, 1, 2, 2, device=self.device)
+        self.k1_init = nn.Parameter(torch.tensor([[random.uniform(-1, 1), random.uniform(-1, 1)],
+                                                       [random.uniform(-1, 1), random.uniform(-1, 1)]],device=self.device))
         self.kernel_1[0, :, 0, :, :] = self.k1_init
 
-        self.kernel_2 = torch.zeros(25, 25, 1, 2, 2, device=self.device)
-        self.k2_init = nn.Parameter(torch.FloatTensor([[random.uniform(-1, 1), random.uniform(-1, 1)],
-                                                       [random.uniform(-1, 1), random.uniform(-1, 1)]]))
+        self.kernel_2 = torch.zeros(self.in_data, self.in_data, 1, 2, 2, device=self.device)
+        self.k2_init = nn.Parameter(torch.tensor([[random.uniform(-1, 1), random.uniform(-1, 1)],
+                                                       [random.uniform(-1, 1), random.uniform(-1, 1)]],device=self.device))
         self.kernel_2[0, :, 0, :, :] = self.k2_init
         # Definition of layer 0,1,2 for lvl 2 in hierarchy
         self.l0h2 = nn.Linear(in_features=self.no_meta_h2, out_features=int(self.no_meta_h1 / 4))
@@ -124,7 +123,7 @@ class PINO(nn.Module):
         alpha_l1 = self.shapeShift(self.l1h1(alpha),beta_l1)
         alpha_l2 =  self.shapeShift(self.l2h1(alpha_l1),beta_l2)
 
-        x = self.SpaceTimefftFeature(data_input, meta_input_h4, meta_input_h5, meta_output_h5)
+        x = self.SpaceTimeFFTFeature(data_input, meta_input_h4, meta_input_h5, meta_output_h5)
 
         a = self.l0h0_small(x)
         b = self.l0h0_medium(x)
@@ -137,8 +136,6 @@ class PINO(nn.Module):
         b = torch.relu(b)
         c = torch.relu(c)
         x = torch.cat([a, b, c], dim=2)
-
-
 
         x = self.shapeShift(self.l1h0(x),alpha_l1)
         x = self.shapeShift(self.l2h0(x),alpha_l2)
@@ -157,23 +154,26 @@ class PINO(nn.Module):
             coefficients = h[0:self.batch_size, 0:self.shifterCoefficients].unsqueeze(1).unsqueeze(2)
             x_powers = torch.pow(x[0:self.batch_size,:,:].unsqueeze(3), self.exponents.unsqueeze(0).unsqueeze(1))
             craftedPolynomial = torch.sum(coefficients*x_powers,dim=3)
+            craftedPolynomial = nn.functional.hardtanh(craftedPolynomial,-2,2)
             return craftedPolynomial
         elif x.dim() == 2:
             coefficients = h[0:self.batch_size, 0:self.shifterCoefficients].unsqueeze(1)
             x_powers = torch.pow(x[0:self.batch_size, :].unsqueeze(2), self.exponents.unsqueeze(0).unsqueeze(1))
             craftedPolynomial = torch.sum(coefficients * x_powers, dim=2)
+            craftedPolynomial = nn.functional.hardtanh(craftedPolynomial, -2, 2)
             return craftedPolynomial
         elif x.dim() == 4:
             coefficients = h[0:self.batch_size, 0:self.shifterCoefficients].unsqueeze(1).unsqueeze(2).unsqueeze(3)
             x_powers = torch.pow(x[0:self.batch_size, :, :, :].unsqueeze(4),
                                  self.exponents.unsqueeze(0).unsqueeze(1).unsqueeze(2))
             craftedPolynomial = torch.sum(coefficients * x_powers, dim=4)
+            craftedPolynomial = nn.functional.hardtanh(craftedPolynomial, -2, 2)
             return craftedPolynomial
         else:
             raise ValueError("Unsupported input dimensions")
 
-    def SpaceTimefftFeature(self,data,meta_space,meta_step_in,meta_step_out):
-        fft_data = torch.fft.fft(data).real
+    def SpaceTimeFFTFeature(self,data,meta_space,meta_step_in,meta_step_out):
+
         # print(self.weights_fd1.shape)
         # print(data.shape)
         x_grid, y_grid = torch.meshgrid(meta_space[0, 0:self.in_scale], meta_space[0, self.in_scale:], indexing='ij')
@@ -186,9 +186,6 @@ class PINO(nn.Module):
             yy_grid = yy_grid.unsqueeze(0)
             x_grid = torch.cat([x_grid,xx_grid],dim=0)
             y_grid = torch.cat([y_grid,yy_grid],dim=0)
-
-        # print(x_grid.shape)
-        # print(y_grid.shape)
 
         fseries_space_x = torch.pow(x_grid.unsqueeze(3), (2 * self.ii // 2))
         fseries_space_y = torch.pow(y_grid.unsqueeze(3), (2 * self.ii // 2))
@@ -216,19 +213,20 @@ class PINO(nn.Module):
         SpaceTimeEncodings = (SpaceTimeEncodings.unsqueeze(4).
                               reshape(int(st[0]), int(st[1]), int(st[2]), n,n))
 
+        SpaceTimeEncodings  = torch.tanh(nn.functional.conv3d(SpaceTimeEncodings,self.kernel_0))
+        SpaceTimeEncodings = torch.tanh(nn.functional.conv3d(SpaceTimeEncodings, self.kernel_1))
+        SpaceTimeEncodings = torch.tanh(nn.functional.conv3d(SpaceTimeEncodings, self.kernel_2))
 
-
-
-        SpaceTimeEncodings  = nn.functional.conv3d(SpaceTimeEncodings,self.kernel_0)
-        SpaceTimeEncodings = nn.functional.conv3d(SpaceTimeEncodings, self.kernel_1)
-        SpaceTimeEncodings = nn.functional.conv3d(SpaceTimeEncodings, self.kernel_2)
-        # TODO : Need to conv only 2 las dim
-        print(SpaceTimeEncodings.shape)
-        # SpaceTimeEncodings = self.ffConv_1(SpaceTimeEncodings)
-        # SpaceTimeEncodings = self.ffConv_2(SpaceTimeEncodings)
-        time.sleep(1000)
-
-        return fft_data
+        SpaceTimeEncodings = torch.flatten(SpaceTimeEncodings,start_dim=2)
+        data = data+SpaceTimeEncodings
+        # Attention :  Below is implemented simplified FNO LAYER
+        # question : using only real gives better results than using real and imag in sum or concat manner?
+        fft_data = torch.fft.fftshift(torch.fft.fftn(data))
+        # question : is "bij,own->bin" give same outcome as "bij,own->bwj" ?
+        FFwithWeights = torch.einsum("bij,own->bin", fft_data, self.weights_fd1)
+        data = torch.tanh(torch.fft.ifftshift(torch.fft.ifftn(FFwithWeights))).real
+        # Attention :  Above is implemented simplified FNO LAYER
+        return data
 
 
 
