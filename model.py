@@ -1,3 +1,4 @@
+import random
 import time
 
 import torch
@@ -31,15 +32,25 @@ class PINO(nn.Module):
         self.l1h3 = nn.Linear(in_features=int(self.no_meta_h1 / 4), out_features=int(self.no_meta_h1 / 4))
         self.l2h3 = nn.Linear(in_features=int(self.no_meta_h1 / 4), out_features=self.shifterCoefficients)
 
-        # TODO : FFT input with positional encoding and gausian Gate (Fourier Features)
-        # Definition of intermediate layer/parameter that transforms input into Fourier Feature with positional encoding and gaussian Gate
+        # Definition of intermediate layer/parameters that transforms input into Fourier Feature with positional encoding and gaussian Gate
         self.weights_fd1 = nn.Parameter(torch.rand(1,self.no_subslice_in_tensors*self.in_scale, 12, dtype=torch.cfloat))
-        self.m = 16
+        self.m = 16 # No o of modes for SpaceTime Encoding
         self.ii = torch.arange(start=0, end=self.m, step=1, device=self.device)
-        self.ffConv_0 = nn.Conv3d(in_channels=25,out_channels=25,kernel_size=2)
-        self.ffConv_1 = nn.Conv3d(in_channels=25,out_channels=25,kernel_size=2)
-        self.ffConv_2 = nn.Conv3d(in_channels=25, out_channels=25, kernel_size=3)
 
+        self.kernel_0 = torch.zeros(25, 25, 1, 2, 2,device=self.device)
+        self.k0_init = nn.Parameter(torch.FloatTensor([[random.uniform(-1,1),random.uniform(-1,1)],
+                                                       [random.uniform(-1,1),random.uniform(-1,1)]]))
+        self.kernel_0[0,:,0,:,:] = self.k0_init
+
+        self.kernel_1 = torch.zeros(25, 25, 1, 2, 2, device=self.device)
+        self.k1_init = nn.Parameter(torch.FloatTensor([[random.uniform(-1, 1), random.uniform(-1, 1)],
+                                                       [random.uniform(-1, 1), random.uniform(-1, 1)]]))
+        self.kernel_1[0, :, 0, :, :] = self.k1_init
+
+        self.kernel_2 = torch.zeros(25, 25, 1, 2, 2, device=self.device)
+        self.k2_init = nn.Parameter(torch.FloatTensor([[random.uniform(-1, 1), random.uniform(-1, 1)],
+                                                       [random.uniform(-1, 1), random.uniform(-1, 1)]]))
+        self.kernel_2[0, :, 0, :, :] = self.k2_init
         # Definition of layer 0,1,2 for lvl 2 in hierarchy
         self.l0h2 = nn.Linear(in_features=self.no_meta_h2, out_features=int(self.no_meta_h1 / 4))
         self.l1h2 = nn.Linear(in_features=int(self.no_meta_h1 / 4), out_features=int(self.no_meta_h1 / 4))
@@ -204,11 +215,17 @@ class PINO(nn.Module):
 
         SpaceTimeEncodings = (SpaceTimeEncodings.unsqueeze(4).
                               reshape(int(st[0]), int(st[1]), int(st[2]), n,n))
-        SpaceTimeEncodings  = self.ffConv_0(SpaceTimeEncodings)
+
+
+
+
+        SpaceTimeEncodings  = nn.functional.conv3d(SpaceTimeEncodings,self.kernel_0)
+        SpaceTimeEncodings = nn.functional.conv3d(SpaceTimeEncodings, self.kernel_1)
+        SpaceTimeEncodings = nn.functional.conv3d(SpaceTimeEncodings, self.kernel_2)
         # TODO : Need to conv only 2 las dim
+        print(SpaceTimeEncodings.shape)
         # SpaceTimeEncodings = self.ffConv_1(SpaceTimeEncodings)
         # SpaceTimeEncodings = self.ffConv_2(SpaceTimeEncodings)
-        print(SpaceTimeEncodings.shape)
         time.sleep(1000)
 
         return fft_data
