@@ -5,10 +5,10 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-class PINO(nn.Module):
+class Metamorph(nn.Module):
     # Note : Buzzword - Metamorph will be better name here probably :) or HIPNO
     def __init__(self,no_frame_samples,batch_size,input_window_size,device):
-        super(PINO, self).__init__()
+        super(Metamorph, self).__init__()
         self.device = device
         self.no_frame_samples = no_frame_samples
         self.batch_size = batch_size

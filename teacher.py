@@ -11,8 +11,6 @@ from matplotlib import pyplot as plt
 class teacher(object):
     def __init__(self,model,device):
         super(teacher, self).__init__()
-
-
         self.model = model
         self.device = device
         self.fsim = None
@@ -243,7 +241,7 @@ class teacher(object):
                     loss_b = criterion(pred_b, self.data_output[:,2].unsqueeze(1))
                     loss_alpha = criterion(pred_a, self.data_output[:,3].unsqueeze(1))
 
-                    loss = loss_r + loss_g + loss_b + loss_alpha
+                    loss = loss_r + loss_g + loss_b + loss_alpha # TODO : Add Endropy loss + diversity loss + intermidiete velocity vectors loss
                     self.saved_loss.append(loss.item())
                     optimizer.zero_grad()
                     loss.backward(retain_graph=True)
@@ -254,11 +252,11 @@ class teacher(object):
                     if (epoch + 1) % 10 == 0:
                         if loss.item() < best_loss:
                             best_loss = loss.item()
-                            best_model_state = torch.save(self.model.state_dict(), "model.pt")
+                            torch.save(self.model.state_dict(), 'model.pt')
                 if best_model_state is None:
                     pass
                 else:
-                    self.model.load_state_dict(torch.load("model.pt"))
+                    self.model.load_state_dict(torch.load('model.pt'))
             else:
                 pass
             return self.model
@@ -274,8 +272,8 @@ class teacher(object):
         plt.grid(True)
         plt.show()
 
-    def examine(self):
-        self.model.load_state_dict(torch.load("model.pt"))
+    def examine(self,criterion,device):
+        self.model.load_state_dict(torch.load('model.pt'))
         folder_names = ['v', 'u', 'velocity_magnitude', 'fuel_density', 'oxidizer_density',
                         'product_density', 'pressure', 'temperature', 'rgb', 'alpha']
         data_tensor = []
@@ -328,10 +326,6 @@ class teacher(object):
         b_slices = self.data_tensor[b_idx]
         alpha_slices = self.data_tensor[alpha_idx]
         meta_binary_slices = self.meta_binary[fdens_idx]
-        x_range = range(self.fsim.N_boundary + self.input_window_size,
-                        fuel_slices[0].shape[0] - self.fsim.N_boundary - self.input_window_size)
-        y_range = range(self.fsim.N_boundary + self.input_window_size,
-                        fuel_slices[0].shape[1] - self.fsim.N_boundary - self.input_window_size)
         data_input = []
         meta_input_h1 = []
         meta_input_h2 = []
@@ -344,81 +338,109 @@ class teacher(object):
         meta_output_h3 = []
         meta_output_h4 = []
         meta_output_h5 = []
-        time.sleep(10000)
-        for i in range(fuel_slices.shape[0]):
+        # for i in range(fuel_slices.shape[0]):
+
+        for i in range(0,fuel_slices.shape[0]):
             idx_input = i
             idx_output = i+1
-            for j in range(0,fuel_slices.shape[1]):
-                for k in range(0,fuel_slices.shape[2]):
-                    central_point_x = j
-                    central_point_y = k
-                    # TODO : generate results in form of ground truth vs prediction for given sim files
-                    window_x = np.array(
-                        range(central_point_x - self.input_window_size, central_point_x + self.input_window_size + 1))
-                    window_y = np.array(
-                        range(central_point_y - self.input_window_size, central_point_y + self.input_window_size + 1))
-                    central_point_x_binary = "{0:010b}".format(central_point_x)
-                    central_point_x_binary = torch.tensor(np.array([int(d) for d in central_point_x_binary]))
-                    central_point_y_binary = "{0:010b}".format(central_point_y)
-                    central_point_y_binary = torch.tensor(np.array([int(d) for d in central_point_y_binary]))
-                    slice_x = slice(window_x[0], window_x[-1] + 1)
-                    slice_y = slice(window_y[0], window_y[-1] + 1)
-                    # Note : Input data
-                    fuel_subslice_in = fuel_slices[idx_input][slice_x, slice_y]
-                    r_subslice_in = r_slices[idx_input][slice_x, slice_y]
-                    g_subslice_in = g_slices[idx_input][slice_x, slice_y]
-                    b_subslice_in = b_slices[idx_input][slice_x, slice_y]
-                    alpha_subslice_in = alpha_slices[idx_input][slice_x, slice_y]
-                    data_input_subslice = torch.cat([fuel_subslice_in, r_subslice_in,
-                                                     g_subslice_in, b_subslice_in, alpha_subslice_in], dim=0)
-                    meta_step_in = meta_binary_slices[idx_input][0]
-                    meta_step_in_numeric = self.meta_tensor[idx_input][0]
 
-                    meta_fuel_initial_speed_in = meta_binary_slices[idx_input][1]
-                    meta_fuel_cut_off_time_in = meta_binary_slices[idx_input][2]
-                    meta_igni_time_in = meta_binary_slices[idx_input][3]
-                    meta_ignition_temp_in = meta_binary_slices[idx_input][4]
-                    meta_viscosity_in = meta_binary_slices[idx_input][14]
-                    meta_diff_in = meta_binary_slices[idx_input][15]
-                    meta_input_subslice = torch.cat([meta_step_in, meta_fuel_initial_speed_in,
-                                                     meta_fuel_cut_off_time_in, meta_igni_time_in,
-                                                     meta_ignition_temp_in, meta_viscosity_in, meta_diff_in], dim=0)
+            central_points_x = np.arange(self.input_window_size, fuel_slices.shape[1]-self.input_window_size)
+            central_points_y = np.arange(self.input_window_size, fuel_slices.shape[2]-self.input_window_size)
 
-                    # Note : Output data
-                    fuel_subslice_out = fuel_slices[idx_output][central_point_x, central_point_y].reshape(1)
-                    r_subslice_out = r_slices[idx_output][central_point_x, central_point_y].reshape(1)
-                    g_subslice_out = g_slices[idx_output][central_point_x, central_point_y].reshape(1)
-                    b_subslice_out = b_slices[idx_output][central_point_x, central_point_y].reshape(1)
-                    alpha_subslice_out = alpha_slices[idx_output][central_point_x, central_point_y].reshape(1)
-                    data_output_subslice = torch.cat([r_subslice_out, g_subslice_out, b_subslice_out, alpha_subslice_out],
-                                                     dim=0)
-                    meta_step_out = meta_binary_slices[idx_output][0]
-                    meta_step_out_numeric = self.meta_tensor[idx_output][0]
-                    meta_fuel_initial_speed_out = meta_binary_slices[idx_output][1]
-                    meta_fuel_cut_off_time_out = meta_binary_slices[idx_output][2]
-                    meta_igni_time_out = meta_binary_slices[idx_output][3]
-                    meta_ignition_temp_out = meta_binary_slices[idx_output][4]
-                    meta_viscosity_out = meta_binary_slices[idx_output][14]
-                    meta_diff_out = meta_binary_slices[idx_output][15]
-                    meta_output_subslice = torch.cat([meta_step_out, meta_fuel_initial_speed_out,
-                                                      meta_fuel_cut_off_time_out, meta_igni_time_out,
-                                                      meta_ignition_temp_out, meta_viscosity_out, meta_diff_out], dim=0)
+            central_points_x_pos = central_points_x + self.input_window_size
+            central_points_x_neg = central_points_x - self.input_window_size
+            central_points_y_pos = central_points_y + self.input_window_size
+            central_points_y_neg = central_points_y - self.input_window_size
+            windows_x = []
+            windows_y = []
+            central_point_x_binary =[]
+            central_point_y_binary = []
+            for j in range(0,central_points_x_pos.shape[0]):
+                wx_range = range(int(central_points_x_neg[j]), int(central_points_x_pos[j]) + 1)
+                windows_x.append(wx_range)
+                central_point_x_binary.append("{0:010b}".format(central_points_x[j]))
+                central_point_x_binary[j] = torch.tensor(np.array([int(d) for d in central_point_x_binary[j]]))
+                if j >= central_points_y_neg.shape[0]:
+                    pass
+                else:
+                    wy_range = range(int(central_points_y_neg[j]),int(central_points_y_pos[j])+1)
+                    windows_y.append(wy_range)
+                    central_point_y_binary.append("{0:010b}".format(central_points_y[j]))
+                    central_point_y_binary[j] = torch.tensor(np.array([int(d) for d in central_point_y_binary[j]]))
 
-                    # Note: Data for the different layers
-                    central_points = torch.cat([central_point_x_binary, central_point_y_binary], dim=0)
-                    data_input.append(data_input_subslice)
-                    meta_input_h1.append(meta_input_subslice)
-                    meta_input_h2.append(meta_step_in)
-                    meta_input_h3.append(central_points)
-                    meta_input_h4.append(torch.cat([torch.tensor(window_x), torch.tensor(window_y)]))
-                    meta_input_h5.append(meta_step_in_numeric)
-                    data_output.append(data_output_subslice)
-                    meta_output_h1.append(meta_output_subslice)
-                    meta_output_h2.append(meta_step_out)
-                    meta_output_h3.append(central_points)
-                    meta_output_h4.append(torch.cat([torch.tensor(window_x), torch.tensor(window_y)]))
-                    meta_output_h5.append(meta_step_out_numeric)
+            wx_idx = np.arange(0,len(windows_x))
+            wy_idx = np.arange(0,len(windows_y))
+            slice_x = [torch.arange(windows_x[k][0], windows_x[k][-1]+1) for k in wx_idx]
+            slice_y = [torch.arange(windows_y[k][0], windows_y[k][-1]+1) for k in wy_idx]
+            # Note : Input data
+            slice_x = torch.stack(slice_x,dim=0)
+            slice_y = torch.stack(slice_y, dim=0)
 
+            xy = torch.zeros((1,25,2))
+            for g in range(slice_x.shape[0]):
+                for h in range(slice_y.shape[0]):
+                    cprod = torch.cartesian_prod(slice_x[range(slice_x.shape[0])],slice_y[range(slice_y.shape[0])])
+                    xy = torch.cat([xy,cprod.unsqueeze(0)],dim=0)
+            xy = xy[1:]
+            print(xy.shape) # TODO : rid of for loop with some kind of 3d mesh
+            fuel_subslice_in = fuel_slices[idx_input, xy]
+            r_subslice_in = r_slices[idx_input, xy]
+            g_subslice_in = g_slices[idx_input, xy]
+            b_subslice_in = b_slices[idx_input, xy]
+            alpha_subslice_in = alpha_slices[idx_input, xy]
+            data_input_subslice = torch.cat([fuel_subslice_in.unsqueeze(0), r_subslice_in.unsqueeze(0),
+                                             g_subslice_in.unsqueeze(0), b_subslice_in.unsqueeze(0),
+                                             alpha_subslice_in.unsqueeze(0)], dim=0)
+            print(data_input_subslice.shape)
+            meta_step_in = meta_binary_slices[idx_input][0]
+            meta_step_in_numeric = self.meta_tensor[idx_input][0]
+
+            meta_fuel_initial_speed_in = meta_binary_slices[idx_input][1]
+            meta_fuel_cut_off_time_in = meta_binary_slices[idx_input][2]
+            meta_igni_time_in = meta_binary_slices[idx_input][3]
+            meta_ignition_temp_in = meta_binary_slices[idx_input][4]
+
+            meta_viscosity_in = meta_binary_slices[idx_input][14]
+            meta_diff_in = meta_binary_slices[idx_input][15]
+            meta_input_subslice = torch.cat([meta_step_in, meta_fuel_initial_speed_in,
+                                             meta_fuel_cut_off_time_in, meta_igni_time_in,
+                                             meta_ignition_temp_in, meta_viscosity_in, meta_diff_in], dim=0)
+
+            # TODO : output
+            # Note : Output data
+            fuel_subslice_out = fuel_slices[idx_output][central_points_x, central_points_y].reshape(1)
+            r_subslice_out = r_slices[idx_output][central_points_x, central_points_y].reshape(1)
+            g_subslice_out = g_slices[idx_output][central_points_x, central_points_y].reshape(1)
+            b_subslice_out = b_slices[idx_output][central_points_x, central_points_y].reshape(1)
+            alpha_subslice_out = alpha_slices[idx_output][central_points_x, central_points_y].reshape(1)
+            data_output_subslice = torch.cat([r_subslice_out, g_subslice_out, b_subslice_out, alpha_subslice_out],
+                                             dim=0)
+            meta_step_out = meta_binary_slices[idx_output][0]
+            meta_step_out_numeric = self.meta_tensor[idx_output][0]
+            meta_fuel_initial_speed_out = meta_binary_slices[idx_output][1]
+            meta_fuel_cut_off_time_out = meta_binary_slices[idx_output][2]
+            meta_igni_time_out = meta_binary_slices[idx_output][3]
+            meta_ignition_temp_out = meta_binary_slices[idx_output][4]
+            meta_viscosity_out = meta_binary_slices[idx_output][14]
+            meta_diff_out = meta_binary_slices[idx_output][15]
+            meta_output_subslice = torch.cat([meta_step_out, meta_fuel_initial_speed_out,
+                                              meta_fuel_cut_off_time_out, meta_igni_time_out,
+                                              meta_ignition_temp_out, meta_viscosity_out, meta_diff_out], dim=0)
+
+            # Note: Data for the different layers
+            central_points = torch.cat([central_point_x_binary, central_point_y_binary], dim=0)
+            data_input.append(data_input_subslice)
+            meta_input_h1.append(meta_input_subslice)
+            meta_input_h2.append(meta_step_in)
+            meta_input_h3.append(central_points)
+            meta_input_h4.append(torch.cat([torch.tensor(window_x), torch.tensor(window_y)]))
+            meta_input_h5.append(meta_step_in_numeric)
+            data_output.append(data_output_subslice)
+            meta_output_h1.append(meta_output_subslice)
+            meta_output_h2.append(meta_step_out)
+            meta_output_h3.append(central_points)
+            meta_output_h4.append(torch.cat([torch.tensor(window_x), torch.tensor(window_y)]))
+            meta_output_h5.append(meta_step_out_numeric)
         self.data_input = torch.stack(data_input, dim=0)
         self.meta_input_h1 = torch.stack(meta_input_h1, dim=0)
         self.meta_input_h2 = torch.stack(meta_input_h2, dim=0)
@@ -432,3 +454,37 @@ class teacher(object):
         self.meta_output_h3 = torch.stack(meta_output_h3, dim=0)
         self.meta_output_h4 = torch.stack(meta_output_h4, dim=0)
         self.meta_output_h5 = torch.stack(meta_output_h5, dim=0)
+        print(self.data_output.shape)
+        for idx in range(num_epochs):
+            self.data_preparation()
+            (self.data_input, self.meta_input_h1, self.meta_input_h2,
+             self.meta_input_h3, self.meta_input_h4, self.meta_input_h5, self.meta_output_h1,
+             self.meta_output_h2, self.meta_output_h3, self.meta_output_h4, self.meta_output_h5) = \
+                (self.data_input.to(device),
+                 self.meta_input_h1.to(device),
+                 self.meta_input_h2.to(device),
+                 self.meta_input_h3.to(device),
+                 self.meta_input_h4.to(device),
+                 self.meta_input_h5.to(device),
+                 self.meta_output_h1.to(device),
+                 self.meta_output_h2.to(device),
+                 self.meta_output_h3.to(device),
+                 self.meta_output_h4.to(device),
+                 self.meta_output_h5.to(device))
+
+            self.data_output = self.data_output.to(device)
+            dataset = (self.data_input, self.meta_input_h1, self.meta_input_h2,
+                       self.meta_input_h3, self.meta_input_h4, self.meta_input_h5, self.meta_output_h1,
+                       self.meta_output_h2, self.meta_output_h3, self.meta_output_h4, self.meta_output_h5)
+            pred_r, pred_g, pred_b, pred_a = self.model(dataset)
+
+            loss_r = criterion(pred_r, self.data_output[:, 0].unsqueeze(1))
+            loss_g = criterion(pred_g, self.data_output[:, 1].unsqueeze(1))
+            loss_b = criterion(pred_b, self.data_output[:, 2].unsqueeze(1))
+            loss_alpha = criterion(pred_a, self.data_output[:, 3].unsqueeze(1))
+
+            loss = loss_r + loss_g + loss_b + loss_alpha  # TODO : Add Endropy loss + diversity loss + intermidiete velocity vectors loss
+            self.saved_loss.append(loss.item())
+            if (epoch + 1) % 10 == 0:
+                print(
+                    f'Period: {self.period}/{self.no_of_periods} | Epoch: {epoch + 1}/{num_epochs}, Loss: {loss.item():.4f}')
