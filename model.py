@@ -132,15 +132,15 @@ class Metamorph(nn.Module):
         # Assumption : static relu on input to make fixed stable embedded/hidden
         #  representation - also all values for used tensor should be above 0.
 
-        a = torch.relu(a)
-        b = torch.relu(b)
-        c = torch.relu(c)
+        a = torch.tanh(a)
+        b = torch.tanh(b)
+        c = torch.tanh(c)
         x = torch.cat([a, b, c], dim=2)
 
         x = self.shapeShift(self.l1h0(x),alpha_l1)
         x = self.shapeShift(self.l2h0(x),alpha_l2)
         x = torch.flatten(x,start_dim=1)
-        x = torch.relu(self.l3h0(x))
+        x = torch.tanh(self.l3h0(x))
 
         r = self.l4_h0_r(x)
         g = self.l4_h0_g(x)
