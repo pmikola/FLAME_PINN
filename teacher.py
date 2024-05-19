@@ -241,7 +241,7 @@ class teacher(object):
                     loss_b = criterion(pred_b, self.data_output[:,2].unsqueeze(1))
                     loss_alpha = criterion(pred_a, self.data_output[:,3].unsqueeze(1))
 
-                    loss = loss_r + loss_g + loss_b + loss_alpha # TODO : Add Endropy loss + diversity loss + intermidiete velocity vectors loss
+                    loss = loss_r + loss_g + loss_b + loss_alpha # TODO : Add Endropy loss + diversity loss + intermidiete velocity vectors loss + casual loss + grad pinn rgb loss
                     self.saved_loss.append(loss.item())
                     optimizer.zero_grad()
                     loss.backward(retain_graph=True)
@@ -375,6 +375,7 @@ class teacher(object):
         slice_y = torch.stack([torch.arange(w[0], w[-1] + 1) for w in [windows_y[k] for k in wy_idx]], dim=0)
 
         n_x, n_y = slice_x.shape[0], slice_y.shape[0]
+
         mesh_x, mesh_y = torch.meshgrid(torch.arange(n_x), torch.arange(n_y), indexing='ij')
 
         x = slice_x[mesh_x]
@@ -400,10 +401,23 @@ class teacher(object):
             windows_xy.append(windows_yy)
         windows_xy = torch.tensor(np.array(windows_xy))
         x_idx = cprod[:, :, :, 0].int()
+        addim = 4
+        adim_half = int(addim/2)
+        xx_idx = torch.zeros((n_x+addim,n_y+addim,self.model.in_scale ** 2),device=self.device)
+        xx_idx[adim_half:n_x+adim_half,adim_half:n_y+adim_half,:] = x_idx
+        xx_idx[:adim_half,:adim_half,:] = x_idx[:adim_half,:adim_half,:]
+        xx_idx[n_x+adim_half:, n_y+adim_half:, :] = x_idx[n_x-adim_half:, n_y-adim_half:, :]
+        xx_idx[n_x+adim_half:, :adim_half, :] = x_idx[n_x-adim_half:, :adim_half, :]
+        xx_idx[:adim_half, n_y+adim_half:, :] = x_idx[:adim_half, n_y-adim_half:, :]
         y_idx = cprod[:, :, :, 1].int()
-        print(x_idx.shape)
-        time.sleep(1000)
-        # TODO copy in x_idx and y_idx and not later
+        yy_idx = torch.zeros((n_x+addim,n_y+addim,self.model.in_scale ** 2), device=self.device)
+        yy_idx[adim_half:n_x+adim_half,adim_half:n_y+adim_half,:] = y_idx
+        yy_idx[:adim_half,:adim_half,:] = y_idx[:adim_half,:adim_half,:]
+        yy_idx[n_x+adim_half:, n_y+adim_half:, :] = y_idx[n_x-adim_half:, n_y-adim_half:, :]
+        yy_idx[n_x+adim_half:, :adim_half, :] = y_idx[n_x-adim_half:, :adim_half, :]
+        yy_idx[:adim_half, n_y+adim_half:, :] = y_idx[:adim_half, n_y-adim_half:, :]
+        x_idx = xx_idx.int()
+        y_idx = yy_idx.int()
         central_points_xy_binary = torch.tensor(np.array(central_points_xy_binary))
         idx_center = int(self.model.in_scale ** 2 // 2)
         for i in range(0,fuel_slices.shape[0]-1):
@@ -420,7 +434,7 @@ class teacher(object):
             data_input_subslice = torch.cat([fuel_subslice_in.unsqueeze(3), r_subslice_in.unsqueeze(3),
                                              g_subslice_in.unsqueeze(3), b_subslice_in.unsqueeze(3),
                                              alpha_subslice_in.unsqueeze(3)], dim=3)
-
+            data_input_subslice = data_input_subslice
             meta_step_in = meta_binary_slices[idx_input][0]
             meta_step_in_numeric = self.meta_tensor[idx_input][0]
             meta_fuel_initial_speed_in = meta_binary_slices[idx_input][1]
@@ -454,7 +468,6 @@ class teacher(object):
                                               meta_fuel_cut_off_time_out, meta_igni_time_out,
                                               meta_ignition_temp_out, meta_viscosity_out, meta_diff_out], dim=0)
 
-
             # Note: Data for the different layers
             data_input.append(data_input_subslice)
             meta_input_h1.append(meta_input_subslice)
@@ -474,7 +487,6 @@ class teacher(object):
         self.meta_input_h3 = torch.stack(meta_input_h3, dim=0)
         self.meta_input_h4 = torch.stack(meta_input_h4, dim=0)
         self.meta_input_h5 = torch.stack(meta_input_h5, dim=0)
-
         self.data_output = torch.stack(data_output, dim=0)
         self.meta_output_h1 = torch.stack(meta_output_h1, dim=0)
         self.meta_output_h2 = torch.stack(meta_output_h2, dim=0)
@@ -482,36 +494,29 @@ class teacher(object):
         self.meta_output_h4 = torch.stack(meta_output_h4, dim=0)
         self.meta_output_h5 = torch.stack(meta_output_h5, dim=0)
 
-        (self.data_input, self.meta_input_h1, self.meta_input_h2,
-         self.meta_input_h3, self.meta_input_h4, self.meta_input_h5, self.meta_output_h1,
-         self.meta_output_h2, self.meta_output_h3, self.meta_output_h4, self.meta_output_h5) = \
-            (self.data_input.to(device),
-             self.meta_input_h1.to(device),
-             self.meta_input_h2.to(device),
-             self.meta_input_h3.to(device),
-             self.meta_input_h4.to(device),
-             self.meta_input_h5.to(device),
-             self.meta_output_h1.to(device),
-             self.meta_output_h2.to(device),
-             self.meta_output_h3.to(device),
-             self.meta_output_h4.to(device),
-             self.meta_output_h5.to(device))
-        self.data_output = self.data_output.to(device)
-        print(self.data_input.shape)
-        time.sleep(10000)
+        self.model.eval()
+        rshape = (714 * 414, 25, 5)
+        kshape = (714 , 414, 25, 5)
+        print((self.data_input.shape, self.meta_input_h1.shape, self.meta_input_h2.shape,
+               self.meta_input_h3.shape, self.meta_input_h4.shape, self.meta_input_h5.shape,
+               self.meta_output_h1.shape,
+               self.meta_output_h2.shape, self.meta_output_h3.shape, self.meta_output_h4.shape,
+               self.meta_output_h5.shape))
+        time.sleep(1000)
         for idx in range(self.data_input.shape[0]):
+            dataset = (self.data_input[idx].reshape(rshape).to(device), self.meta_input_h1[idx].unsqueeze(0).unsqueeze(0).repeat(n_x+addim,n_y+addim).reshape(rshape).to(device), self.meta_input_h2[idx].unsqueeze(0).unsqueeze(0).repeat(n_x+addim,n_y+addim).reshape(rshape).to(device),
+                       self.meta_input_h3[idx].reshape(rshape).to(device), self.meta_input_h4[idx].reshape(rshape).to(device), self.meta_input_h5[idx].reshape(rshape).to(device), self.meta_output_h1[idx].reshape(rshape).to(device),
+                       self.meta_output_h2[idx].reshape(rshape).to(device), self.meta_output_h3[idx].reshape(rshape).to(device), self.meta_output_h4[idx].reshape(rshape).to(device), self.meta_output_h5[idx].reshape(rshape).to(device))
 
-            dataset = (self.data_input, self.meta_input_h1, self.meta_input_h2,
-                       self.meta_input_h3, self.meta_input_h4, self.meta_input_h5, self.meta_output_h1,
-                       self.meta_output_h2, self.meta_output_h3, self.meta_output_h4, self.meta_output_h5)
+
             pred_r, pred_g, pred_b, pred_a = self.model(dataset)
 
-            loss_r = criterion(pred_r, self.data_output[:, 0].unsqueeze(1))
-            loss_g = criterion(pred_g, self.data_output[:, 1].unsqueeze(1))
-            loss_b = criterion(pred_b, self.data_output[:, 2].unsqueeze(1))
-            loss_alpha = criterion(pred_a, self.data_output[:, 3].unsqueeze(1))
+            loss_r = criterion(pred_r, self.data_output[idx][:, 0].unsqueeze(1))
+            loss_g = criterion(pred_g, self.data_output[idx][:, 1].unsqueeze(1))
+            loss_b = criterion(pred_b, self.data_output[idx][:, 2].unsqueeze(1))
+            loss_alpha = criterion(pred_a, self.data_output[idx][:, 3].unsqueeze(1))
 
-            loss = loss_r + loss_g + loss_b + loss_alpha  # TODO : Add Endropy loss + diversity loss + intermidiete velocity vectors loss + casual loss
+            loss = loss_r + loss_g + loss_b + loss_alpha
             self.saved_loss.append(loss.item())
             if (epoch + 1) % 10 == 0:
                 print(
