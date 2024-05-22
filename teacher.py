@@ -121,7 +121,6 @@ class teacher(object):
         for _ in range(self.batch_size):
             idx_input = random.choice(range(0, fuel_slices.shape[0]))
             idx_output = random.choice(range(0, fuel_slices.shape[0]))
-
             central_point_x = random.sample(x_range, 1)[0]
             central_point_y = random.sample(y_range, 1)[0]
             window_x = np.array(range(central_point_x - self.input_window_size, central_point_x + self.input_window_size + 1))
@@ -154,11 +153,11 @@ class teacher(object):
                                              meta_ignition_temp_in, meta_viscosity_in, meta_diff_in], dim=0)
 
             # Note : Output data
-            fuel_subslice_out = fuel_slices[idx_output][central_point_x, central_point_y].reshape(1)
-            r_subslice_out = r_slices[idx_output][central_point_x, central_point_y].reshape(1)
-            g_subslice_out = g_slices[idx_output][central_point_x, central_point_y].reshape(1)
-            b_subslice_out = b_slices[idx_output][central_point_x, central_point_y].reshape(1)
-            alpha_subslice_out = alpha_slices[idx_output][central_point_x, central_point_y].reshape(1)
+            fuel_subslice_out = fuel_slices[idx_output][slice_x, slice_y]#.reshape(1)
+            r_subslice_out = r_slices[idx_output][slice_x, slice_y]#.reshape(1)
+            g_subslice_out = g_slices[idx_output][slice_x, slice_y]#.reshape(1)
+            b_subslice_out = b_slices[idx_output][slice_x, slice_y]#.reshape(1)
+            alpha_subslice_out = alpha_slices[idx_output][slice_x, slice_y]#.reshape(1)
             data_output_subslice = torch.cat([r_subslice_out,g_subslice_out, b_subslice_out, alpha_subslice_out], dim=0)
             meta_step_out = meta_binary_slices[idx_output][0]
             meta_step_out_numeric = self.meta_tensor[idx_output][0]
@@ -236,10 +235,10 @@ class teacher(object):
                                self.meta_output_h2,self.meta_output_h3,self.meta_output_h4,self.meta_output_h5)
                     pred_r,pred_g,pred_b,pred_a = self.model(dataset)
 
-                    loss_r = criterion(pred_r, self.data_output[:,0].unsqueeze(1))
-                    loss_g = criterion(pred_g, self.data_output[:,1].unsqueeze(1))
-                    loss_b = criterion(pred_b, self.data_output[:,2].unsqueeze(1))
-                    loss_alpha = criterion(pred_a, self.data_output[:,3].unsqueeze(1))
+                    loss_r = criterion(pred_r, self.data_output[:,0:5,:])
+                    loss_g = criterion(pred_g, self.data_output[:,5:10,:])
+                    loss_b = criterion(pred_b, self.data_output[:,10:15,:])
+                    loss_alpha = criterion(pred_a, self.data_output[:,15:20,:])
 
                     loss = loss_r + loss_g + loss_b + loss_alpha # TODO : Add Endropy loss + diversity loss + intermidiete velocity vectors loss + casual loss + grad pinn rgb loss
                     self.saved_loss.append(loss.item())
@@ -380,7 +379,10 @@ class teacher(object):
 
         x = slice_x[mesh_x]
         y = slice_y[mesh_y]
-
+        addim = 4
+        adim_half = int(addim / 2)
+        nx = n_x + addim
+        ny = n_y + addim
         cprod = torch.empty(n_x, n_y, self.model.in_scale ** 2, 2)
         central_points_x_binary = torch.stack(central_point_x_binary, dim=0)
         central_points_y_binary = torch.stack(central_point_y_binary, dim=0)
@@ -401,8 +403,7 @@ class teacher(object):
             windows_xy.append(windows_yy)
         windows_xy = torch.tensor(np.array(windows_xy))
         x_idx = cprod[:, :, :, 0].int()
-        addim = 4
-        adim_half = int(addim/2)
+
         xx_idx = torch.zeros((n_x+addim,n_y+addim,self.model.in_scale ** 2),device=self.device)
         xx_idx[adim_half:n_x+adim_half,adim_half:n_y+adim_half,:] = x_idx
         xx_idx[:adim_half,:adim_half,:] = x_idx[:adim_half,:adim_half,:]
@@ -418,7 +419,22 @@ class teacher(object):
         yy_idx[:adim_half, n_y+adim_half:, :] = y_idx[:adim_half, n_y-adim_half:, :]
         x_idx = xx_idx.int()
         y_idx = yy_idx.int()
+
         central_points_xy_binary = torch.tensor(np.array(central_points_xy_binary))
+        cp_xy_bin = torch.zeros((nx,ny,central_points_xy_binary.shape[2]),device=self.device)
+        cp_xy_bin[adim_half:n_x + adim_half, adim_half:n_y + adim_half, :] = central_points_xy_binary
+        cp_xy_bin[:adim_half, :adim_half, :] = central_points_xy_binary[:adim_half, :adim_half, :]
+        cp_xy_bin[n_x + adim_half:, n_y + adim_half:, :] = central_points_xy_binary[n_x - adim_half:, n_y - adim_half:, :]
+        cp_xy_bin[n_x + adim_half:, :adim_half, :] = central_points_xy_binary[n_x - adim_half:, :adim_half, :]
+        cp_xy_bin[:adim_half, n_y + adim_half:, :] = central_points_xy_binary[:adim_half, n_y - adim_half:, :]
+
+        windows_xy = torch.tensor(np.array(windows_xy))
+        w_xy = torch.zeros((nx, ny, windows_xy.shape[2]), device=self.device)
+        w_xy[adim_half:n_x + adim_half, adim_half:n_y + adim_half, :] = windows_xy
+        w_xy[:adim_half, :adim_half, :] = windows_xy[:adim_half, :adim_half, :]
+        w_xy[n_x + adim_half:, n_y + adim_half:, :] = windows_xy[n_x - adim_half:, n_y - adim_half:,:]
+        w_xy[n_x + adim_half:, :adim_half, :] = windows_xy[n_x - adim_half:, :adim_half, :]
+        w_xy[:adim_half, n_y + adim_half:, :] = windows_xy[:adim_half, n_y - adim_half:, :]
         idx_center = int(self.model.in_scale ** 2 // 2)
         for i in range(0,fuel_slices.shape[0]-1):
             idx_input = i
@@ -429,7 +445,6 @@ class teacher(object):
             g_subslice_in = g_slices[idx_input, x_idx,y_idx]
             b_subslice_in = b_slices[idx_input, x_idx,y_idx]
             alpha_subslice_in = alpha_slices[idx_input, x_idx,y_idx]
-
 
             data_input_subslice = torch.cat([fuel_subslice_in.unsqueeze(3), r_subslice_in.unsqueeze(3),
                                              g_subslice_in.unsqueeze(3), b_subslice_in.unsqueeze(3),
@@ -467,50 +482,41 @@ class teacher(object):
             meta_output_subslice = torch.cat([meta_step_out, meta_fuel_initial_speed_out,
                                               meta_fuel_cut_off_time_out, meta_igni_time_out,
                                               meta_ignition_temp_out, meta_viscosity_out, meta_diff_out], dim=0)
-
             # Note: Data for the different layers
             data_input.append(data_input_subslice)
             meta_input_h1.append(meta_input_subslice)
             meta_input_h2.append(meta_step_in)
-            meta_input_h3.append(central_points_xy_binary)
-            meta_input_h4.append(windows_xy)
+            meta_input_h3.append(cp_xy_bin)
+            meta_input_h4.append(w_xy)
             meta_input_h5.append(meta_step_in_numeric)
             data_output.append(data_output_subslice)
             meta_output_h1.append(meta_output_subslice)
             meta_output_h2.append(meta_step_out)
-            meta_output_h3.append(central_points_xy_binary)
-            meta_output_h4.append(windows_xy)
+            meta_output_h3.append(cp_xy_bin)
+            meta_output_h4.append(w_xy)
             meta_output_h5.append(meta_step_out_numeric)
-        self.data_input = torch.stack(data_input, dim=0)
-        self.meta_input_h1 = torch.stack(meta_input_h1, dim=0)
-        self.meta_input_h2 = torch.stack(meta_input_h2, dim=0)
-        self.meta_input_h3 = torch.stack(meta_input_h3, dim=0)
-        self.meta_input_h4 = torch.stack(meta_input_h4, dim=0)
-        self.meta_input_h5 = torch.stack(meta_input_h5, dim=0)
-        self.data_output = torch.stack(data_output, dim=0)
-        self.meta_output_h1 = torch.stack(meta_output_h1, dim=0)
-        self.meta_output_h2 = torch.stack(meta_output_h2, dim=0)
-        self.meta_output_h3 = torch.stack(meta_output_h3, dim=0)
-        self.meta_output_h4 = torch.stack(meta_output_h4, dim=0)
-        self.meta_output_h5 = torch.stack(meta_output_h5, dim=0)
 
+        rshape = (nx * ny, 25, 5)
+        kshape = (nx, ny, 25, 5)
         self.model.eval()
-        rshape = (714 * 414, 25, 5)
-        kshape = (714 , 414, 25, 5)
-        print((self.data_input.shape, self.meta_input_h1.shape, self.meta_input_h2.shape,
-               self.meta_input_h3.shape, self.meta_input_h4.shape, self.meta_input_h5.shape,
-               self.meta_output_h1.shape,
-               self.meta_output_h2.shape, self.meta_output_h3.shape, self.meta_output_h4.shape,
-               self.meta_output_h5.shape))
-        time.sleep(1000)
-        for idx in range(self.data_input.shape[0]):
-            dataset = (self.data_input[idx].reshape(rshape).to(device), self.meta_input_h1[idx].unsqueeze(0).unsqueeze(0).repeat(n_x+addim,n_y+addim).reshape(rshape).to(device), self.meta_input_h2[idx].unsqueeze(0).unsqueeze(0).repeat(n_x+addim,n_y+addim).reshape(rshape).to(device),
-                       self.meta_input_h3[idx].reshape(rshape).to(device), self.meta_input_h4[idx].reshape(rshape).to(device), self.meta_input_h5[idx].reshape(rshape).to(device), self.meta_output_h1[idx].reshape(rshape).to(device),
-                       self.meta_output_h2[idx].reshape(rshape).to(device), self.meta_output_h3[idx].reshape(rshape).to(device), self.meta_output_h4[idx].reshape(rshape).to(device), self.meta_output_h5[idx].reshape(rshape).to(device))
-
+        self.model.batch_size = 295596
+        for idx in range(len(data_input)):
+            dataset = (data_input[idx].reshape(rshape).to(device),
+                       meta_input_h1[idx].unsqueeze(0).unsqueeze(0).repeat(nx,ny,1).reshape(nx * ny,len(meta_input_h1[0])).to(device),
+                       meta_input_h2[idx].unsqueeze(0).unsqueeze(0).repeat(nx,ny,1).reshape(nx * ny,len(meta_input_h2[0])).to(device),
+                       meta_input_h3[idx].reshape(nx * ny,len(meta_input_h3[0][0][0])).to(device),
+                       meta_input_h4[idx].reshape(nx * ny,len(meta_input_h4[0][0][0])).to(device),
+                       meta_input_h5[idx].unsqueeze(0).unsqueeze(0).repeat(nx,ny).reshape(nx * ny).to(device),
+                       meta_output_h1[idx].unsqueeze(0).unsqueeze(0).repeat(nx,ny,1).reshape(nx * ny,len(meta_output_h1[0])).to(device),
+                       meta_output_h2[idx].unsqueeze(0).unsqueeze(0).repeat(nx,ny,1).reshape(nx * ny,len(meta_output_h2[0])).to(device),
+                       meta_output_h3[idx].reshape(nx * ny,len(meta_input_h3[0][0][0])).to(device),
+                       meta_output_h4[idx].reshape(nx * ny,len(meta_output_h4[0][0][0])).to(device),
+                       meta_output_h5[idx].unsqueeze(0).unsqueeze(0).repeat(nx,ny).reshape(nx * ny).to(device))
 
             pred_r, pred_g, pred_b, pred_a = self.model(dataset)
-
+            print(pred_r.shape)
+            print('dupa')
+            time.sleep(10000)
             loss_r = criterion(pred_r, self.data_output[idx][:, 0].unsqueeze(1))
             loss_g = criterion(pred_g, self.data_output[idx][:, 1].unsqueeze(1))
             loss_b = criterion(pred_b, self.data_output[idx][:, 2].unsqueeze(1))
@@ -518,6 +524,4 @@ class teacher(object):
 
             loss = loss_r + loss_g + loss_b + loss_alpha
             self.saved_loss.append(loss.item())
-            if (epoch + 1) % 10 == 0:
-                print(
-                    f'Period: {self.period}/{self.no_of_periods} | Epoch: {epoch + 1}/{num_epochs}, Loss: {loss.item():.4f}')
+            print(f'Period: {self.period}/{self.no_of_periods} | Frame: {idx + 1}/{len(data_input)}, Loss: {loss.item():.4f}')
