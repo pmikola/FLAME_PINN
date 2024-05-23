@@ -118,7 +118,8 @@ class teacher(object):
         meta_output_h3 = []
         meta_output_h4 = []
         meta_output_h5 = []
-        for _ in range(self.batch_size):
+        frame = 0
+        while not frame == self.batch_size:
             idx_input = random.choice(range(0, fuel_slices.shape[0]))
             idx_output = random.choice(range(0, fuel_slices.shape[0]))
             central_point_x = random.sample(x_range, 1)[0]
@@ -152,8 +153,9 @@ class teacher(object):
                                              meta_fuel_cut_off_time_in, meta_igni_time_in,
                                              meta_ignition_temp_in, meta_viscosity_in, meta_diff_in], dim=0)
 
+
             # Note : Output data
-            fuel_subslice_out = fuel_slices[idx_output][slice_x, slice_y]#.reshape(1)
+            # fuel_subslice_out = fuel_slices[idx_output][slice_x, slice_y]#.reshape(1)
             r_subslice_out = r_slices[idx_output][slice_x, slice_y]#.reshape(1)
             g_subslice_out = g_slices[idx_output][slice_x, slice_y]#.reshape(1)
             b_subslice_out = b_slices[idx_output][slice_x, slice_y]#.reshape(1)
@@ -171,20 +173,31 @@ class teacher(object):
                                               meta_fuel_cut_off_time_out, meta_igni_time_out,
                                               meta_ignition_temp_out, meta_viscosity_out, meta_diff_out], dim=0)
 
-            # Note: Data for the different layers
-            central_points = torch.cat([central_point_x_binary, central_point_y_binary], dim=0)
-            data_input.append(data_input_subslice)
-            meta_input_h1.append(meta_input_subslice)
-            meta_input_h2.append(meta_step_in)
-            meta_input_h3.append(central_points)
-            meta_input_h4.append(torch.cat([torch.tensor(window_x),torch.tensor(window_y)]))
-            meta_input_h5.append(meta_step_in_numeric)
-            data_output.append(data_output_subslice)
-            meta_output_h1.append(meta_output_subslice)
-            meta_output_h2.append(meta_step_out)
-            meta_output_h3.append(central_points)
-            meta_output_h4.append(torch.cat([torch.tensor(window_x), torch.tensor(window_y)]))
-            meta_output_h5.append(meta_step_out_numeric)
+
+            r_in_is_zero = torch.count_nonzero(r_subslice_in)
+            r_out_is_zero = torch.count_nonzero(r_subslice_out)
+            g_in_is_zero = torch.count_nonzero(g_subslice_in)
+            g_out_is_zero = torch.count_nonzero(g_subslice_out)
+            b_in_is_zero = torch.count_nonzero(b_subslice_in)
+            b_out_is_zero = torch.count_nonzero(b_subslice_out)
+            frame +=1
+            if r_in_is_zero==r_out_is_zero and g_in_is_zero==g_out_is_zero and b_in_is_zero and b_out_is_zero:
+                frame -=1
+            else:
+                # Note: Data for the different layers
+                central_points = torch.cat([central_point_x_binary, central_point_y_binary], dim=0)
+                data_input.append(data_input_subslice)
+                meta_input_h1.append(meta_input_subslice)
+                meta_input_h2.append(meta_step_in)
+                meta_input_h3.append(central_points)
+                meta_input_h4.append(torch.cat([torch.tensor(window_x),torch.tensor(window_y)]))
+                meta_input_h5.append(meta_step_in_numeric)
+                data_output.append(data_output_subslice)
+                meta_output_h1.append(meta_output_subslice)
+                meta_output_h2.append(meta_step_out)
+                meta_output_h3.append(central_points)
+                meta_output_h4.append(torch.cat([torch.tensor(window_x), torch.tensor(window_y)]))
+                meta_output_h5.append(meta_step_out_numeric)
 
         self.data_input = torch.stack(data_input,dim=0)
         self.meta_input_h1 = torch.stack(meta_input_h1,dim=0)
@@ -211,7 +224,10 @@ class teacher(object):
                 best_loss = float('inf')
                 best_model_state = None
                 num_epochs = num_epochs
+                t = 0.
+                print_every_nth_frame=10
                 for epoch in range(num_epochs):
+                    t_start = time.perf_counter()
                     self.data_preparation()
                     (self.data_input,self.meta_input_h1,self.meta_input_h2,
                      self.meta_input_h3,self.meta_input_h4,self.meta_input_h5,self.meta_output_h1,
@@ -245,9 +261,11 @@ class teacher(object):
                     optimizer.zero_grad()
                     loss.backward(retain_graph=True)
                     optimizer.step()
-                    if (epoch+1) % 10 == 0:
-                        print(f'Period: {self.period}/{self.no_of_periods} | Epoch: {epoch+1}/{num_epochs}, Loss: {loss.item():.4f}')
-
+                    t_stop = time.perf_counter()
+                    t += t_stop - t_start
+                    if (epoch+1) % print_every_nth_frame == 0:
+                        print(f'Period: {self.period}/{self.no_of_periods} | Epoch: {epoch+1}/{num_epochs}, Loss: {loss.item():.4f}, Avg. Time pred+backprop for one slice: {round(t*1e3/print_every_nth_frame/self.batch_size,5)} [ms]')
+                        t = 0.
                     if (epoch + 1) % 10 == 0:
                         if loss.item() < best_loss:
                             best_loss = loss.item()
@@ -445,7 +463,6 @@ class teacher(object):
             g_subslice_in = g_slices[idx_input, x_idx,y_idx]
             b_subslice_in = b_slices[idx_input, x_idx,y_idx]
             alpha_subslice_in = alpha_slices[idx_input, x_idx,y_idx]
-
             data_input_subslice = torch.cat([fuel_subslice_in.unsqueeze(3), r_subslice_in.unsqueeze(3),
                                              g_subslice_in.unsqueeze(3), b_subslice_in.unsqueeze(3),
                                              alpha_subslice_in.unsqueeze(3)], dim=3)

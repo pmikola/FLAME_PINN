@@ -139,8 +139,8 @@ class Metamorph(nn.Module):
 
         x_alpha_l1 = torch.tanh(self.l1h01(alpha_l1))
         x_alpha_l2 = torch.tanh(self.l2h01(alpha_l2))
-        x = self.SpaceTimeFFTFeature(data_input, meta_input_h4, meta_input_h5, meta_output_h5)
 
+        x = self.SpaceTimeFFTFeature(data_input, meta_input_h4, meta_input_h5, meta_output_h5)
         a = self.l0h0_small(x)
         b = self.l0h0_medium(x)
         c = self.l0h0_large(x)
@@ -179,6 +179,7 @@ class Metamorph(nn.Module):
             # craftedPolynomial = nn.functional.hardtanh(craftedPolynomial, -2, 2)
             return craftedPolynomial
         elif x.dim() == 4:
+            # TODO : change this as xdim 2 and xdim3
             coefficients = h[:, 0:self.shifterCoefficients].unsqueeze(1).unsqueeze(2).unsqueeze(3)
             x_powers = torch.pow(x[0:self.batch_size, :, :, :].unsqueeze(4),
                                  self.exponents.unsqueeze(0).unsqueeze(1).unsqueeze(2))
@@ -225,20 +226,17 @@ class Metamorph(nn.Module):
         SpaceTimeEncodings = SpaceTimeEncodings.repeat(1,5,1,1)
         st = list(SpaceTimeEncodings.size())
         n = int(torch.sqrt(torch.tensor(self.m)).item())
-
         SpaceTimeEncodings = (SpaceTimeEncodings.unsqueeze(4).reshape(int(st[0]), int(st[1]), int(st[2]), n,n))
-
         SpaceTimeEncodings  = torch.tanh(nn.functional.conv3d(SpaceTimeEncodings,self.kernel_0))
         SpaceTimeEncodings = torch.tanh(nn.functional.conv3d(SpaceTimeEncodings, self.kernel_1))
         SpaceTimeEncodings = torch.tanh(nn.functional.conv3d(SpaceTimeEncodings, self.kernel_2))
-
         SpaceTimeEncodings = torch.flatten(SpaceTimeEncodings,start_dim=2)
         data = data+SpaceTimeEncodings
         # Attention :  Below is implemented simplified FNO LAYER
         # question : using only real gives better results than using real and imag in sum or concat manner?
         fft_data = torch.fft.fftshift(torch.fft.fftn(data))
         # question : is "bij,own->bin" give same outcome as "bij,own->bwj" ?
-        FFwithWeights = torch.einsum("bij,own->bin", fft_data, self.weights_fd1)
+        FFwithWeights = torch.einsum("bij,own->bin", fft_data, data*self.weights_fd1)
         data = torch.tanh(torch.fft.ifftshift(torch.fft.ifftn(FFwithWeights))).real
         # Attention :  Above is implemented simplified FNO LAYER
         return data
