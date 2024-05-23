@@ -23,6 +23,7 @@ class teacher(object):
         self.no_frame_samples,self.first_frame, self.last_frame, self.frame_skip =None, None, None, None
 
         self.data_input = None
+        self.structure_input = None
         self.meta_input_h1 = None
         self.meta_input_h2 = None
         self.meta_input_h3 = None
@@ -107,6 +108,7 @@ class teacher(object):
         y_range = range(self.fsim.N_boundary + self.input_window_size,
                         fuel_slices[0].shape[1] - self.fsim.N_boundary - self.input_window_size)
         data_input = []
+        structure_input = []
         meta_input_h1 = []
         meta_input_h2 = []
         meta_input_h3 = []
@@ -133,13 +135,12 @@ class teacher(object):
             slice_x = slice(window_x[0], window_x[-1] + 1)
             slice_y = slice(window_y[0], window_y[-1] + 1)
             # Note : Input data
-            fuel_subslice_in = fuel_slices[idx_input][slice_x, slice_y]
+            fuel_subslice_in = fuel_slices[idx_input]
             r_subslice_in = r_slices[idx_input][slice_x, slice_y]
             g_subslice_in = g_slices[idx_input][slice_x, slice_y]
             b_subslice_in = b_slices[idx_input][slice_x, slice_y]
             alpha_subslice_in = alpha_slices[idx_input][slice_x, slice_y]
-            data_input_subslice = torch.cat([fuel_subslice_in, r_subslice_in,
-                                             g_subslice_in, b_subslice_in, alpha_subslice_in], dim=0)
+            data_input_subslice = torch.cat([r_subslice_in,g_subslice_in, b_subslice_in, alpha_subslice_in], dim=0)
             meta_step_in = meta_binary_slices[idx_input][0]
             meta_step_in_numeric = self.meta_tensor[idx_input][0]
 
@@ -187,6 +188,7 @@ class teacher(object):
                 # Note: Data for the different layers
                 central_points = torch.cat([central_point_x_binary, central_point_y_binary], dim=0)
                 data_input.append(data_input_subslice)
+                structure_input.append(fuel_subslice_in)
                 meta_input_h1.append(meta_input_subslice)
                 meta_input_h2.append(meta_step_in)
                 meta_input_h3.append(central_points)
@@ -200,6 +202,7 @@ class teacher(object):
                 meta_output_h5.append(meta_step_out_numeric)
 
         self.data_input = torch.stack(data_input,dim=0)
+        self.structure_input = torch.stack(structure_input,dim=0)
         self.meta_input_h1 = torch.stack(meta_input_h1,dim=0)
         self.meta_input_h2 = torch.stack(meta_input_h2,dim=0)
         self.meta_input_h3 = torch.stack(meta_input_h3,dim=0)
@@ -229,10 +232,11 @@ class teacher(object):
                 for epoch in range(num_epochs):
                     t_start = time.perf_counter()
                     self.data_preparation()
-                    (self.data_input,self.meta_input_h1,self.meta_input_h2,
+                    (self.data_input,self.structure_input,self.meta_input_h1,self.meta_input_h2,
                      self.meta_input_h3,self.meta_input_h4,self.meta_input_h5,self.meta_output_h1,
                      self.meta_output_h2,self.meta_output_h3,self.meta_output_h4,self.meta_output_h5) =\
                                                                 (self.data_input.to(device),
+                                                                 self.structure_input.to(device),
                                                                 self.meta_input_h1.to(device),
                                                                 self.meta_input_h2.to(device),
                                                                 self.meta_input_h3.to(device),
@@ -246,7 +250,7 @@ class teacher(object):
 
 
                     self.data_output = self.data_output.to(device)
-                    dataset = (self.data_input,self.meta_input_h1,self.meta_input_h2,
+                    dataset = (self.data_input,self.structure_input,self.meta_input_h1,self.meta_input_h2,
                                self.meta_input_h3,self.meta_input_h4,self.meta_input_h5,self.meta_output_h1,
                                self.meta_output_h2,self.meta_output_h3,self.meta_output_h4,self.meta_output_h5)
                     pred_r,pred_g,pred_b,pred_a = self.model(dataset)

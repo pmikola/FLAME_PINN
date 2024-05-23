@@ -14,8 +14,8 @@ class Metamorph(nn.Module):
         self.batch_size = batch_size
         self.input_window_size = input_window_size
         self.in_scale = (1+self.input_window_size*2)
-        self.no_subslice_in_tensors = 5
-        self.in_data = 25
+        self.no_subslice_in_tensors = 4
+        self.in_data = 20
 
         # Definition of non-linear shifting activation function with parameters
         self.shifterCoefficients = 6  # No. of polynomial coefficients
@@ -70,8 +70,8 @@ class Metamorph(nn.Module):
         self.l2h1 = nn.Linear(in_features=self.dens_width, out_features=self.dens_width*self.shifterCoefficients)
 
         # Definition of intermidiet layer between lvl 0 and 1 for dimension matching
-        self.l1h01 = nn.Linear(in_features=self.dens_width, out_features=250*self.shifterCoefficients)
-        self.l2h01 = nn.Linear(in_features=self.dens_width*self.shifterCoefficients, out_features=self.flat_size*self.shifterCoefficients)
+        self.l1h01 = nn.Linear(in_features=self.dens_width, out_features=self.flat_size*self.shifterCoefficients)
+        self.l2h01 = nn.Linear(in_features=self.dens_width*self.shifterCoefficients, out_features=160*self.shifterCoefficients)
 
         # Definition of input layer 0 for lvl 0 in hierarchy
         self.l0h0_small = nn.Conv1d(in_channels=self.no_subslice_in_tensors*self.in_scale,
@@ -91,8 +91,13 @@ class Metamorph(nn.Module):
                                   out_channels=self.no_subslice_in_tensors*self.in_scale, kernel_size=3)
         self.l2h0 = nn.Conv1d(in_channels=self.no_subslice_in_tensors*self.in_scale,
                                   out_channels=int(self.no_subslice_in_tensors*self.in_scale), kernel_size=3)
-        self.l3h0 = nn.Linear(in_features=self.flat_size,out_features=int(self.flat_size/2))
+        self.l3h0 = nn.Linear(in_features=160,out_features=int(self.flat_size/2))
 
+        # Definition of the structure density distribution
+        self.l1h0s = nn.Conv1d(in_channels=714,out_channels=100,kernel_size=1)
+        self.l2h0s = nn.Conv1d(in_channels=414, out_channels=100, kernel_size=1)
+        self.l3h0s = nn.Conv1d(in_channels=100, out_channels=20, kernel_size=1)
+        self.l4h0s = nn.Conv1d(in_channels=100, out_channels=5, kernel_size=1)
         # Definition of Heads for red, green, blue and alpha output channels
         self.l4_h0_r = nn.Linear(in_features=int(self.flat_size/2),out_features=int(self.in_scale**2),bias=False)
         self.l4_h0_g = nn.Linear(in_features=int(self.flat_size/2),out_features=int(self.in_scale**2),bias=False)
@@ -114,7 +119,7 @@ class Metamorph(nn.Module):
             self.data.normal_(mean=0.0, std=1.0)
 
     def forward(self, din):
-        (data_input,meta_input_h1,meta_input_h2,meta_input_h3,
+        (data_input,structure_input,meta_input_h1,meta_input_h2,meta_input_h3,
          meta_input_h4,meta_input_h5,meta_output_h1,meta_output_h2,
          meta_output_h3,meta_output_h4,meta_output_h5) = din
         meta_central_points = torch.cat([meta_input_h3.float(), meta_output_h3.float()], dim=1)
@@ -123,6 +128,7 @@ class Metamorph(nn.Module):
         #  meta_output_h3.shape,meta_output_h4.shape,meta_output_h5.shape,meta_central_points.shape)
         # Question : Do highest hierarchy should have parameters that are learning
         #  or just be top layer without any additional coefss (regarding polyNonlinear)
+
         gamma = torch.tanh(self.l0h3(meta_central_points))
         gamma_l1 = torch.tanh(self.l1h3(gamma))
         gamma_l2 = torch.tanh(self.l2h3(gamma_l1))
@@ -140,18 +146,23 @@ class Metamorph(nn.Module):
         x_alpha_l1 = torch.tanh(self.l1h01(alpha_l1))
         x_alpha_l2 = torch.tanh(self.l2h01(alpha_l2))
 
-        x = self.SpaceTimeFFTFeature(data_input, meta_input_h4, meta_input_h5, meta_output_h5)
+        s = self.l1h0s(structure_input).permute(0, 2, 1)
+        s = torch.tanh(self.l2h0s(s).permute(0, 2, 1))
+        s = torch.tanh(self.l3h0s(s).permute(0, 2, 1))
+        s = torch.tanh( self.l4h0s(s).permute(0, 2, 1))
+        x = self.SpaceTimeFFTFeature(data_input+s, meta_input_h4, meta_input_h5, meta_output_h5)
+
         a = self.l0h0_small(x)
         b = self.l0h0_medium(x)
         c = self.l0h0_large(x)
 
         # Assumption : static relu on input to make fixed stable embedded/hidden
         #  representation - also all values for used tensor should be above 0.
-
         a = torch.tanh(a)
         b = torch.tanh(b)
         c = torch.tanh(c)
         x = torch.cat([a, b, c], dim=2)
+
 
         x = self.shapeShift(self.l1h0(x),x_alpha_l1)
         x = self.shapeShift(self.l2h0(x),x_alpha_l2)
@@ -223,7 +234,7 @@ class Metamorph(nn.Module):
         TimeEnc_step_out = (TimeEncCos_step_out + TimeEncCos_step_in) / 4
 
         SpaceTimeEncodings = PosEnc_x + PosEnc_y + TimeEnc_step_in + TimeEnc_step_out
-        SpaceTimeEncodings = SpaceTimeEncodings.repeat(1,5,1,1)
+        SpaceTimeEncodings = SpaceTimeEncodings.repeat(1,4,1,1)
         st = list(SpaceTimeEncodings.size())
         n = int(torch.sqrt(torch.tensor(self.m)).item())
         SpaceTimeEncodings = (SpaceTimeEncodings.unsqueeze(4).reshape(int(st[0]), int(st[1]), int(st[2]), n,n))
