@@ -23,6 +23,7 @@ class teacher(object):
         self.no_frame_samples,self.first_frame, self.last_frame, self.frame_skip =None, None, None, None
 
         self.data_input = None
+        self.structure_input = None
         self.meta_input_h1 = None
         self.meta_input_h2 = None
         self.meta_input_h3 = None
@@ -107,6 +108,7 @@ class teacher(object):
         y_range = range(self.fsim.N_boundary + self.input_window_size,
                         fuel_slices[0].shape[1] - self.fsim.N_boundary - self.input_window_size)
         data_input = []
+        structure_input = []
         meta_input_h1 = []
         meta_input_h2 = []
         meta_input_h3 = []
@@ -118,7 +120,8 @@ class teacher(object):
         meta_output_h3 = []
         meta_output_h4 = []
         meta_output_h5 = []
-        for _ in range(self.batch_size):
+        frame = 0
+        while not frame == self.batch_size:
             idx_input = random.choice(range(0, fuel_slices.shape[0]))
             idx_output = random.choice(range(0, fuel_slices.shape[0]))
             central_point_x = random.sample(x_range, 1)[0]
@@ -132,13 +135,12 @@ class teacher(object):
             slice_x = slice(window_x[0], window_x[-1] + 1)
             slice_y = slice(window_y[0], window_y[-1] + 1)
             # Note : Input data
-            fuel_subslice_in = fuel_slices[idx_input][slice_x, slice_y]
-            r_subslice_in = r_slices[idx_input][slice_x, slice_y]
-            g_subslice_in = g_slices[idx_input][slice_x, slice_y]
-            b_subslice_in = b_slices[idx_input][slice_x, slice_y]
-            alpha_subslice_in = alpha_slices[idx_input][slice_x, slice_y]
-            data_input_subslice = torch.cat([fuel_subslice_in, r_subslice_in,
-                                             g_subslice_in, b_subslice_in, alpha_subslice_in], dim=0)
+            fuel_subslice_in = fuel_slices[idx_input]
+            r_subslice_in = r_slices[idx_input,slice_x, slice_y]
+            g_subslice_in = g_slices[idx_input,slice_x, slice_y]
+            b_subslice_in = b_slices[idx_input,slice_x, slice_y]
+            alpha_subslice_in = alpha_slices[idx_input,slice_x, slice_y]
+            data_input_subslice = torch.cat([r_subslice_in,g_subslice_in, b_subslice_in, alpha_subslice_in], dim=0)
             meta_step_in = meta_binary_slices[idx_input][0]
             meta_step_in_numeric = self.meta_tensor[idx_input][0]
 
@@ -152,12 +154,13 @@ class teacher(object):
                                              meta_fuel_cut_off_time_in, meta_igni_time_in,
                                              meta_ignition_temp_in, meta_viscosity_in, meta_diff_in], dim=0)
 
+
             # Note : Output data
-            fuel_subslice_out = fuel_slices[idx_output][slice_x, slice_y]#.reshape(1)
-            r_subslice_out = r_slices[idx_output][slice_x, slice_y]#.reshape(1)
-            g_subslice_out = g_slices[idx_output][slice_x, slice_y]#.reshape(1)
-            b_subslice_out = b_slices[idx_output][slice_x, slice_y]#.reshape(1)
-            alpha_subslice_out = alpha_slices[idx_output][slice_x, slice_y]#.reshape(1)
+            # fuel_subslice_out = fuel_slices[idx_output][slice_x, slice_y]#.reshape(1)
+            r_subslice_out = r_slices[idx_output,slice_x, slice_y]#.reshape(1)
+            g_subslice_out = g_slices[idx_output,slice_x, slice_y]#.reshape(1)
+            b_subslice_out = b_slices[idx_output,slice_x, slice_y]#.reshape(1)
+            alpha_subslice_out = alpha_slices[idx_output,slice_x, slice_y]#.reshape(1)
             data_output_subslice = torch.cat([r_subslice_out,g_subslice_out, b_subslice_out, alpha_subslice_out], dim=0)
             meta_step_out = meta_binary_slices[idx_output][0]
             meta_step_out_numeric = self.meta_tensor[idx_output][0]
@@ -171,22 +174,63 @@ class teacher(object):
                                               meta_fuel_cut_off_time_out, meta_igni_time_out,
                                               meta_ignition_temp_out, meta_viscosity_out, meta_diff_out], dim=0)
 
-            # Note: Data for the different layers
-            central_points = torch.cat([central_point_x_binary, central_point_y_binary], dim=0)
-            data_input.append(data_input_subslice)
-            meta_input_h1.append(meta_input_subslice)
-            meta_input_h2.append(meta_step_in)
-            meta_input_h3.append(central_points)
-            meta_input_h4.append(torch.cat([torch.tensor(window_x),torch.tensor(window_y)]))
-            meta_input_h5.append(meta_step_in_numeric)
-            data_output.append(data_output_subslice)
-            meta_output_h1.append(meta_output_subslice)
-            meta_output_h2.append(meta_step_out)
-            meta_output_h3.append(central_points)
-            meta_output_h4.append(torch.cat([torch.tensor(window_x), torch.tensor(window_y)]))
-            meta_output_h5.append(meta_step_out_numeric)
+
+            r_in_is_zero = torch.count_nonzero(r_subslice_in)
+            r_out_is_zero = torch.count_nonzero(r_subslice_out)
+            g_in_is_zero = torch.count_nonzero(g_subslice_in)
+            g_out_is_zero = torch.count_nonzero(g_subslice_out)
+            b_in_is_zero = torch.count_nonzero(b_subslice_in)
+            b_out_is_zero = torch.count_nonzero(b_subslice_out)
+            a_in_is_zero = torch.count_nonzero(alpha_subslice_out)
+            a_out_is_zero = torch.count_nonzero(alpha_subslice_out)
+            r_zero = r_in_is_zero==r_out_is_zero
+            r_i0 = r_in_is_zero == 0
+            r_o0 = r_out_is_zero == 0
+            g_zero = g_in_is_zero==g_out_is_zero
+            g_i0 = g_in_is_zero == 0
+            g_o0 = g_out_is_zero == 0
+            b_zero = b_in_is_zero == b_out_is_zero
+            b_i0 = b_in_is_zero == 0
+            b_o0 = b_out_is_zero == 0
+            a_zero = a_in_is_zero == a_out_is_zero
+            a_i0 = a_in_is_zero == 0
+            a_o0 = a_out_is_zero == 0
+            rzero = r_zero and r_i0 and r_o0
+            gzero = g_zero and g_i0 and g_o0
+            bzero = b_zero and b_i0 and b_o0
+            azero = a_zero and a_i0 and a_o0
+            frame += 1
+            if  rzero and gzero and bzero and azero:
+                frame -=1
+            else:
+                # if not rzero:
+                #     plt.imshow(data_input_subslice[0:5,:].cpu().tolist())
+                #     plt.show()
+                # if not gzero:
+                #     plt.imshow(data_input_subslice[5:10, :].cpu().tolist())
+                #     plt.show()
+                # if not bzero:
+                #     plt.imshow(data_input_subslice[10:15, :].cpu().tolist())
+                #     plt.show()
+                # Note: Data for the different layers
+                central_points = torch.cat([central_point_x_binary, central_point_y_binary], dim=0)
+                data_input.append(data_input_subslice)
+                structure_input.append(fuel_subslice_in)
+                meta_input_h1.append(meta_input_subslice)
+                meta_input_h2.append(meta_step_in)
+                meta_input_h3.append(central_points)
+                meta_input_h4.append(torch.cat([torch.tensor(window_x),torch.tensor(window_y)]))
+                meta_input_h5.append(meta_step_in_numeric)
+                data_output.append(data_output_subslice)
+                meta_output_h1.append(meta_output_subslice)
+                meta_output_h2.append(meta_step_out)
+                meta_output_h3.append(central_points)
+                meta_output_h4.append(torch.cat([torch.tensor(window_x), torch.tensor(window_y)]))
+                meta_output_h5.append(meta_step_out_numeric)
+
 
         self.data_input = torch.stack(data_input,dim=0)
+        self.structure_input = torch.stack(structure_input,dim=0)
         self.meta_input_h1 = torch.stack(meta_input_h1,dim=0)
         self.meta_input_h2 = torch.stack(meta_input_h2,dim=0)
         self.meta_input_h3 = torch.stack(meta_input_h3,dim=0)
@@ -211,12 +255,15 @@ class teacher(object):
                 best_loss = float('inf')
                 best_model_state = None
                 num_epochs = num_epochs
+                t = 0.
+                print_every_nth_frame=10
                 for epoch in range(num_epochs):
                     self.data_preparation()
-                    (self.data_input,self.meta_input_h1,self.meta_input_h2,
+                    (self.data_input,self.structure_input,self.meta_input_h1,self.meta_input_h2,
                      self.meta_input_h3,self.meta_input_h4,self.meta_input_h5,self.meta_output_h1,
                      self.meta_output_h2,self.meta_output_h3,self.meta_output_h4,self.meta_output_h5) =\
                                                                 (self.data_input.to(device),
+                                                                 self.structure_input.to(device),
                                                                 self.meta_input_h1.to(device),
                                                                 self.meta_input_h2.to(device),
                                                                 self.meta_input_h3.to(device),
@@ -230,32 +277,51 @@ class teacher(object):
 
 
                     self.data_output = self.data_output.to(device)
-                    dataset = (self.data_input,self.meta_input_h1,self.meta_input_h2,
+                    dataset = (self.data_input,self.structure_input,self.meta_input_h1,self.meta_input_h2,
                                self.meta_input_h3,self.meta_input_h4,self.meta_input_h5,self.meta_output_h1,
                                self.meta_output_h2,self.meta_output_h3,self.meta_output_h4,self.meta_output_h5)
+                    t_start = time.perf_counter()
                     pred_r,pred_g,pred_b,pred_a = self.model(dataset)
+                    t_pred = time.perf_counter()
 
-                    loss_r = criterion(pred_r, self.data_output[:,0:5,:])
-                    loss_g = criterion(pred_g, self.data_output[:,5:10,:])
-                    loss_b = criterion(pred_b, self.data_output[:,10:15,:])
-                    loss_alpha = criterion(pred_a, self.data_output[:,15:20,:])
+                    grad_r_true = self.data_input[:,0:self.model.in_scale,:] - self.data_output[:,0:self.model.in_scale,:]
+                    grad_r_pred = self.data_input[:,0:self.model.in_scale,:] - pred_r
+                    loss_grad_r = criterion(grad_r_pred,grad_r_true)
+                    grad_g_true = self.data_input[:, self.model.in_scale:self.model.in_scale*2, :] - self.data_output[:, self.model.in_scale:self.model.in_scale*2, :]
+                    grad_g_pred = self.data_input[:, self.model.in_scale:self.model.in_scale*2, :] - pred_g
+                    loss_grad_g = criterion(grad_g_pred, grad_g_true)
+                    grad_b_true = self.data_input[:, self.model.in_scale*2:self.model.in_scale*3, :] - self.data_output[:, self.model.in_scale*2:self.model.in_scale*3, :]
+                    grad_b_pred = self.data_input[:, self.model.in_scale*2:self.model.in_scale*3, :] - pred_b
+                    loss_grad_b = criterion(grad_b_pred, grad_b_true)
+                    grad_a_true = self.data_input[:, self.model.in_scale*3:self.model.in_scale*4, :] - self.data_output[:, self.model.in_scale*3:self.model.in_scale*4, :]
+                    grad_a_pred = self.data_input[:, self.model.in_scale*3:self.model.in_scale*4, :] - pred_a
+                    loss_grad_a = criterion(grad_a_pred, grad_a_true)
+                    grad_loss = loss_grad_r+loss_grad_g+loss_grad_b+loss_grad_a
 
-                    loss = loss_r + loss_g + loss_b + loss_alpha # TODO : Add Endropy loss + diversity loss + intermidiete velocity vectors loss + casual loss + grad pinn rgb loss
+                    loss_r = criterion(pred_r, self.data_output[:,0:self.model.in_scale,:])
+                    loss_g = criterion(pred_g, self.data_output[:,self.model.in_scale:self.model.in_scale*2,:])
+                    loss_b = criterion(pred_b, self.data_output[:,self.model.in_scale*2:self.model.in_scale*3,:])
+                    loss_alpha = criterion(pred_a, self.data_output[:,self.model.in_scale*3:self.model.in_scale*4,:])
+                    value_loss = loss_r + loss_g + loss_b + loss_alpha
+
+                    loss = value_loss+grad_loss # TODO : Add Endropy loss + diversity loss + intermidiete velocity vectors loss + casual loss
                     self.saved_loss.append(loss.item())
                     optimizer.zero_grad()
                     loss.backward(retain_graph=True)
                     optimizer.step()
-                    if (epoch+1) % 10 == 0:
-                        print(f'Period: {self.period}/{self.no_of_periods} | Epoch: {epoch+1}/{num_epochs}, Loss: {loss.item():.4f}')
-
+                    # t_stop = time.perf_counter()
+                    t += t_pred - t_start
+                    if (epoch+1) % print_every_nth_frame == 0:
+                        print(f'Period: {self.period}/{self.no_of_periods} | Epoch: {epoch+1}/{num_epochs}, Loss: {loss.item():.4f}, Avg. Time pred for one slice: {t*1e6/print_every_nth_frame/self.batch_size:.4f} [us]')
+                        t = 0.
                     if (epoch + 1) % 10 == 0:
                         if loss.item() < best_loss:
                             best_loss = loss.item()
                             torch.save(self.model.state_dict(), 'model.pt')
-                if best_model_state is None:
-                    pass
-                else:
-                    self.model.load_state_dict(torch.load('model.pt'))
+                # if best_model_state is None:
+                #     pass
+                # else:
+                #     self.model.load_state_dict(torch.load('model.pt'))
             else:
                 pass
             return self.model
@@ -445,7 +511,6 @@ class teacher(object):
             g_subslice_in = g_slices[idx_input, x_idx,y_idx]
             b_subslice_in = b_slices[idx_input, x_idx,y_idx]
             alpha_subslice_in = alpha_slices[idx_input, x_idx,y_idx]
-
             data_input_subslice = torch.cat([fuel_subslice_in.unsqueeze(3), r_subslice_in.unsqueeze(3),
                                              g_subslice_in.unsqueeze(3), b_subslice_in.unsqueeze(3),
                                              alpha_subslice_in.unsqueeze(3)], dim=3)
