@@ -284,24 +284,24 @@ class teacher(object):
                     pred_r,pred_g,pred_b,pred_a = self.model(dataset)
                     t_pred = time.perf_counter()
 
-                    grad_r_true = self.data_input[:,0:5,:] - self.data_output[:,0:5,:]
-                    grad_r_pred = self.data_input[:,0:5,:] - pred_r
+                    grad_r_true = self.data_input[:,0:self.model.in_scale,:] - self.data_output[:,0:self.model.in_scale,:]
+                    grad_r_pred = self.data_input[:,0:self.model.in_scale,:] - pred_r
                     loss_grad_r = criterion(grad_r_pred,grad_r_true)
-                    grad_g_true = self.data_input[:, 5:10, :] - self.data_output[:, 5:10, :]
-                    grad_g_pred = self.data_input[:, 5:10, :] - pred_g
+                    grad_g_true = self.data_input[:, self.model.in_scale:self.model.in_scale*2, :] - self.data_output[:, self.model.in_scale:self.model.in_scale*2, :]
+                    grad_g_pred = self.data_input[:, self.model.in_scale:self.model.in_scale*2, :] - pred_g
                     loss_grad_g = criterion(grad_g_pred, grad_g_true)
-                    grad_b_true = self.data_input[:, 10:15, :] - self.data_output[:, 10:15, :]
-                    grad_b_pred = self.data_input[:, 10:15, :] - pred_b
+                    grad_b_true = self.data_input[:, self.model.in_scale*2:self.model.in_scale*3, :] - self.data_output[:, self.model.in_scale*2:self.model.in_scale*3, :]
+                    grad_b_pred = self.data_input[:, self.model.in_scale*2:self.model.in_scale*3, :] - pred_b
                     loss_grad_b = criterion(grad_b_pred, grad_b_true)
-                    grad_a_true = self.data_input[:, 15:20, :] - self.data_output[:, 15:20, :]
-                    grad_a_pred = self.data_input[:, 15:20, :] - pred_a
+                    grad_a_true = self.data_input[:, self.model.in_scale*3:self.model.in_scale*4, :] - self.data_output[:, self.model.in_scale*3:self.model.in_scale*4, :]
+                    grad_a_pred = self.data_input[:, self.model.in_scale*3:self.model.in_scale*4, :] - pred_a
                     loss_grad_a = criterion(grad_a_pred, grad_a_true)
                     grad_loss = loss_grad_r+loss_grad_g+loss_grad_b+loss_grad_a
 
-                    loss_r = criterion(pred_r, self.data_output[:,0:5,:])
-                    loss_g = criterion(pred_g, self.data_output[:,5:10,:])
-                    loss_b = criterion(pred_b, self.data_output[:,10:15,:])
-                    loss_alpha = criterion(pred_a, self.data_output[:,15:20,:])
+                    loss_r = criterion(pred_r, self.data_output[:,0:self.model.in_scale,:])
+                    loss_g = criterion(pred_g, self.data_output[:,self.model.in_scale:self.model.in_scale*2,:])
+                    loss_b = criterion(pred_b, self.data_output[:,self.model.in_scale*2:self.model.in_scale*3,:])
+                    loss_alpha = criterion(pred_a, self.data_output[:,self.model.in_scale*3:self.model.in_scale*4,:])
                     value_loss = loss_r + loss_g + loss_b + loss_alpha
 
                     loss = value_loss+grad_loss # TODO : Add Endropy loss + diversity loss + intermidiete velocity vectors loss + casual loss
@@ -312,7 +312,7 @@ class teacher(object):
                     # t_stop = time.perf_counter()
                     t += t_pred - t_start
                     if (epoch+1) % print_every_nth_frame == 0:
-                        print(f'Period: {self.period}/{self.no_of_periods} | Epoch: {epoch+1}/{num_epochs}, Loss: {loss.item():.4f}, Avg. Time pred for one slice: {round(t*1e6/print_every_nth_frame/self.batch_size,5)} [us]')
+                        print(f'Period: {self.period}/{self.no_of_periods} | Epoch: {epoch+1}/{num_epochs}, Loss: {loss.item():.4f}, Avg. Time pred for one slice: {t*1e6/print_every_nth_frame/self.batch_size:.4f} [us]')
                         t = 0.
                     if (epoch + 1) % 10 == 0:
                         if loss.item() < best_loss:
