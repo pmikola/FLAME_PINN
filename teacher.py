@@ -134,6 +134,7 @@ class teacher(object):
             central_point_y_binary = torch.tensor(np.array([int(d) for d in central_point_y_binary]))
             slice_x = slice(window_x[0], window_x[-1] + 1)
             slice_y = slice(window_y[0], window_y[-1] + 1)
+
             # Note : Input data
             fuel_subslice_in = fuel_slices[idx_input]
             r_subslice_in = r_slices[idx_input,slice_x, slice_y]
@@ -406,12 +407,13 @@ class teacher(object):
         meta_output_h4 = []
         meta_output_h5 = []
         # Note: IDX preparation
-        central_points_x = np.arange(self.input_window_size, fuel_slices.shape[1] - self.input_window_size)
-        central_points_y = np.arange(self.input_window_size, fuel_slices.shape[2] - self.input_window_size)
+        central_points_x = np.arange(self.input_window_size, fuel_slices.shape[1] - self.input_window_size+1)
+        central_points_y = np.arange(self.input_window_size, fuel_slices.shape[2] - self.input_window_size+1)
         central_points_x_pos = central_points_x + self.input_window_size
         central_points_x_neg = central_points_x - self.input_window_size
         central_points_y_pos = central_points_y + self.input_window_size
         central_points_y_neg = central_points_y - self.input_window_size
+
         windows_x = []
         windows_y = []
         central_point_x_binary = []
@@ -421,7 +423,7 @@ class teacher(object):
             windows_x.append(wx_range)
             central_point_x_binary.append("{0:010b}".format(central_points_x[j]))
             central_point_x_binary[j] = torch.tensor([torch.tensor(int(d), dtype=torch.int8) for d in central_point_x_binary[j]])
-            if j >= central_points_y_neg.shape[0]:
+            if j >= central_points_y_pos.shape[0]:
                 pass
             else:
                 wy_range = range(int(central_points_y_neg[j]), int(central_points_y_pos[j]) + 1)
@@ -431,89 +433,50 @@ class teacher(object):
 
         windows_x = torch.tensor(np.array(windows_x))
         windows_y = torch.tensor(np.array(windows_y))
+        wx_idx = torch.arange(0, len(windows_x),step=self.model.in_scale)
+        wy_idx = torch.arange(0, len(windows_y),step=self.model.in_scale)
 
-        wx_idx = torch.arange(0, len(windows_x))
-        wy_idx = torch.arange(0, len(windows_y))
-        # slice_x = [torch.arange(windows_x[k][0], windows_x[k][-1]+1) for k in wx_idx]
-        # slice_y = [torch.arange(windows_y[k][0], windows_y[k][-1]+1) for k in wy_idx]
+
         slice_x = torch.stack([torch.arange(w[0], w[-1] + 1) for w in [windows_x[k] for k in wx_idx]], dim=0)
         slice_y = torch.stack([torch.arange(w[0], w[-1] + 1) for w in [windows_y[k] for k in wy_idx]], dim=0)
-
-        n_x, n_y = slice_x.shape[0], slice_y.shape[0]
-
-        mesh_x, mesh_y = torch.meshgrid(torch.arange(n_x), torch.arange(n_y), indexing='ij')
-
-        x = slice_x[mesh_x]
-        y = slice_y[mesh_y]
-        addim = 4
-        adim_half = int(addim / 2)
-        nx = n_x + addim
-        ny = n_y + addim
-        cprod = torch.empty(n_x, n_y, self.model.in_scale ** 2, 2)
         central_points_x_binary = torch.stack(central_point_x_binary, dim=0)
         central_points_y_binary = torch.stack(central_point_y_binary, dim=0)
+        central_points_x_binary = central_points_x_binary[slice_x[:,0]]
+        central_points_y_binary = central_points_y_binary[slice_y[:,0]]
+
+
         central_points_xy_binary = []
-        windows_xy = []
-        for xx in range(n_x):
+        slices_xy = []
+        for xx in range(len(slice_x)):
             central_points_yy_binary = []
-            windows_yy = []
-            for yy in range(n_y):
-                x_slice = x[xx, yy, :]
-                y_slice = y[xx, yy, :]
+            for yy in range(len(slice_y)):
                 xy_binary = torch.cat([central_points_x_binary[xx], central_points_y_binary[yy]])
                 central_points_yy_binary.append(xy_binary)
-                windows_yy.append(torch.cat([windows_x[xx], windows_y[yy]]))
-                cart_prod = torch.cartesian_prod(x_slice, y_slice)
-                cprod[xx, yy, :, :] = cart_prod
+                product = torch.cartesian_prod(slice_x[xx], slice_y[yy])
+                slices_xy.append(product)
             central_points_xy_binary.append(central_points_yy_binary)
-            windows_xy.append(windows_yy)
-        windows_xy = torch.tensor(np.array(windows_xy))
-        x_idx = cprod[:, :, :, 0].int()
 
-        xx_idx = torch.zeros((n_x+addim,n_y+addim,self.model.in_scale ** 2),device=self.device)
-        xx_idx[adim_half:n_x+adim_half,adim_half:n_y+adim_half,:] = x_idx
-        xx_idx[:adim_half,:adim_half,:] = x_idx[:adim_half,:adim_half,:]
-        xx_idx[n_x+adim_half:, n_y+adim_half:, :] = x_idx[n_x-adim_half:, n_y-adim_half:, :]
-        xx_idx[n_x+adim_half:, :adim_half, :] = x_idx[n_x-adim_half:, :adim_half, :]
-        xx_idx[:adim_half, n_y+adim_half:, :] = x_idx[:adim_half, n_y-adim_half:, :]
-        y_idx = cprod[:, :, :, 1].int()
-        yy_idx = torch.zeros((n_x+addim,n_y+addim,self.model.in_scale ** 2), device=self.device)
-        yy_idx[adim_half:n_x+adim_half,adim_half:n_y+adim_half,:] = y_idx
-        yy_idx[:adim_half,:adim_half,:] = y_idx[:adim_half,:adim_half,:]
-        yy_idx[n_x+adim_half:, n_y+adim_half:, :] = y_idx[n_x-adim_half:, n_y-adim_half:, :]
-        yy_idx[n_x+adim_half:, :adim_half, :] = y_idx[n_x-adim_half:, :adim_half, :]
-        yy_idx[:adim_half, n_y+adim_half:, :] = y_idx[:adim_half, n_y-adim_half:, :]
-        x_idx = xx_idx.int()
-        y_idx = yy_idx.int()
 
-        central_points_xy_binary = torch.tensor(np.array(central_points_xy_binary))
-        cp_xy_bin = torch.zeros((nx,ny,central_points_xy_binary.shape[2]),device=self.device)
-        cp_xy_bin[adim_half:n_x + adim_half, adim_half:n_y + adim_half, :] = central_points_xy_binary
-        cp_xy_bin[:adim_half, :adim_half, :] = central_points_xy_binary[:adim_half, :adim_half, :]
-        cp_xy_bin[n_x + adim_half:, n_y + adim_half:, :] = central_points_xy_binary[n_x - adim_half:, n_y - adim_half:, :]
-        cp_xy_bin[n_x + adim_half:, :adim_half, :] = central_points_xy_binary[n_x - adim_half:, :adim_half, :]
-        cp_xy_bin[:adim_half, n_y + adim_half:, :] = central_points_xy_binary[:adim_half, n_y - adim_half:, :]
+        indexes = torch.stack(slices_xy)
+        x_idx = torch.reshape(indexes[:,:,0],(indexes.shape[0],self.model.in_scale,self.model.in_scale))
+        y_idx = torch.reshape(indexes[:, :, 1],(indexes.shape[0],self.model.in_scale,self.model.in_scale))
+        # TODO : need to finish proper indexing and after that generation in matplotlib ground truth and preds
 
-        windows_xy = torch.tensor(np.array(windows_xy))
-        w_xy = torch.zeros((nx, ny, windows_xy.shape[2]), device=self.device)
-        w_xy[adim_half:n_x + adim_half, adim_half:n_y + adim_half, :] = windows_xy
-        w_xy[:adim_half, :adim_half, :] = windows_xy[:adim_half, :adim_half, :]
-        w_xy[n_x + adim_half:, n_y + adim_half:, :] = windows_xy[n_x - adim_half:, n_y - adim_half:,:]
-        w_xy[n_x + adim_half:, :adim_half, :] = windows_xy[n_x - adim_half:, :adim_half, :]
-        w_xy[:adim_half, n_y + adim_half:, :] = windows_xy[:adim_half, n_y - adim_half:, :]
-        idx_center = int(self.model.in_scale ** 2 // 2)
         for i in range(0,fuel_slices.shape[0]-1):
             idx_input = i
             idx_output = i+1
+
             # Note : Input data
             fuel_subslice_in = fuel_slices[idx_input, x_idx,y_idx]
             r_subslice_in = r_slices[idx_input, x_idx,y_idx]
             g_subslice_in = g_slices[idx_input, x_idx,y_idx]
             b_subslice_in = b_slices[idx_input, x_idx,y_idx]
             alpha_subslice_in = alpha_slices[idx_input, x_idx,y_idx]
+
             data_input_subslice = torch.cat([fuel_subslice_in.unsqueeze(3), r_subslice_in.unsqueeze(3),
                                              g_subslice_in.unsqueeze(3), b_subslice_in.unsqueeze(3),
                                              alpha_subslice_in.unsqueeze(3)], dim=3)
+
             data_input_subslice = data_input_subslice
             meta_step_in = meta_binary_slices[idx_input][0]
             meta_step_in_numeric = self.meta_tensor[idx_input][0]
@@ -528,6 +491,7 @@ class teacher(object):
                                              meta_fuel_cut_off_time_in, meta_igni_time_in,
                                              meta_ignition_temp_in, meta_viscosity_in, meta_diff_in], dim=0)
 
+            time.sleep(1000)
             # Note : Output data
             #fuel_subslice_out = fuel_slices[idx_output,x_idx[:,:,idx_center].unsqueeze(2), y_idx[:,:,idx_center].unsqueeze(2)]
             r_subslice_out = r_slices[idx_output,x_idx[:,:,idx_center].unsqueeze(2), y_idx[:,:,idx_center].unsqueeze(2)]
@@ -549,6 +513,7 @@ class teacher(object):
                                               meta_ignition_temp_out, meta_viscosity_out, meta_diff_out], dim=0)
             # Note: Data for the different layers
             data_input.append(data_input_subslice)
+            structure_input.append(fuel_subslice_in)
             meta_input_h1.append(meta_input_subslice)
             meta_input_h2.append(meta_step_in)
             meta_input_h3.append(cp_xy_bin)
@@ -561,32 +526,5 @@ class teacher(object):
             meta_output_h4.append(w_xy)
             meta_output_h5.append(meta_step_out_numeric)
 
-        rshape = (nx * ny, 25, 5)
-        kshape = (nx, ny, 25, 5)
+
         self.model.eval()
-        self.model.batch_size = 295596
-        for idx in range(len(data_input)):
-            dataset = (data_input[idx].reshape(rshape).to(device),
-                       meta_input_h1[idx].unsqueeze(0).unsqueeze(0).repeat(nx,ny,1).reshape(nx * ny,len(meta_input_h1[0])).to(device),
-                       meta_input_h2[idx].unsqueeze(0).unsqueeze(0).repeat(nx,ny,1).reshape(nx * ny,len(meta_input_h2[0])).to(device),
-                       meta_input_h3[idx].reshape(nx * ny,len(meta_input_h3[0][0][0])).to(device),
-                       meta_input_h4[idx].reshape(nx * ny,len(meta_input_h4[0][0][0])).to(device),
-                       meta_input_h5[idx].unsqueeze(0).unsqueeze(0).repeat(nx,ny).reshape(nx * ny).to(device),
-                       meta_output_h1[idx].unsqueeze(0).unsqueeze(0).repeat(nx,ny,1).reshape(nx * ny,len(meta_output_h1[0])).to(device),
-                       meta_output_h2[idx].unsqueeze(0).unsqueeze(0).repeat(nx,ny,1).reshape(nx * ny,len(meta_output_h2[0])).to(device),
-                       meta_output_h3[idx].reshape(nx * ny,len(meta_input_h3[0][0][0])).to(device),
-                       meta_output_h4[idx].reshape(nx * ny,len(meta_output_h4[0][0][0])).to(device),
-                       meta_output_h5[idx].unsqueeze(0).unsqueeze(0).repeat(nx,ny).reshape(nx * ny).to(device))
-
-            pred_r, pred_g, pred_b, pred_a = self.model(dataset)
-            print(pred_r.shape)
-            print('dupa')
-            time.sleep(10000)
-            loss_r = criterion(pred_r, self.data_output[idx][:, 0].unsqueeze(1))
-            loss_g = criterion(pred_g, self.data_output[idx][:, 1].unsqueeze(1))
-            loss_b = criterion(pred_b, self.data_output[idx][:, 2].unsqueeze(1))
-            loss_alpha = criterion(pred_a, self.data_output[idx][:, 3].unsqueeze(1))
-
-            loss = loss_r + loss_g + loss_b + loss_alpha
-            self.saved_loss.append(loss.item())
-            print(f'Period: {self.period}/{self.no_of_periods} | Frame: {idx + 1}/{len(data_input)}, Loss: {loss.item():.4f}')
