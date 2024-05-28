@@ -46,7 +46,7 @@ for period in range(1,no_periods+1):
 
 # t.visualize_lerning()
 #
-t.examine(criterion,device)
+t.examine(criterion,device,plot=1)
 
 
 

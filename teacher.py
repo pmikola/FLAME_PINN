@@ -340,7 +340,7 @@ class teacher(object):
         plt.grid(True)
         plt.show()
 
-    def examine(self,criterion,device):
+    def examine(self,criterion,device,plot=0):
         self.model.load_state_dict(torch.load('model.pt'))
         folder_names = ['v', 'u', 'velocity_magnitude', 'fuel_density', 'oxidizer_density',
                         'product_density', 'pressure', 'temperature', 'rgb', 'alpha']
@@ -396,18 +396,6 @@ class teacher(object):
         b_slices = self.data_tensor[b_idx]
         alpha_slices = self.data_tensor[alpha_idx]
         meta_binary_slices = self.meta_binary[fdens_idx]
-        data_input = []
-        meta_input_h1 = []
-        meta_input_h2 = []
-        meta_input_h3 = []
-        meta_input_h4 = []
-        meta_input_h5 = []
-        data_output = []
-        meta_output_h1 = []
-        meta_output_h2 = []
-        meta_output_h3 = []
-        meta_output_h4 = []
-        meta_output_h5 = []
         # Note: IDX preparation
         central_points_x = np.arange(self.input_window_size, fuel_slices.shape[1] - self.input_window_size+1)
         central_points_y = np.arange(self.input_window_size, fuel_slices.shape[2] - self.input_window_size+1)
@@ -418,25 +406,30 @@ class teacher(object):
 
         windows_x = []
         windows_y = []
+
         central_point_x_binary = []
         central_point_y_binary = []
-        for j in range(0, central_points_x_pos.shape[0]):
-            wx_range = range(int(central_points_x_neg[j]), int(central_points_x_pos[j]) + 1)
-            windows_x.append(wx_range)
-            central_point_x_binary.append("{0:010b}".format(central_points_x[j]))
-            central_point_x_binary[j] = torch.tensor([torch.tensor(int(d), dtype=torch.int8) for d in central_point_x_binary[j]])
-            if j >= central_points_y_pos.shape[0]:
-                pass
-            else:
-                wy_range = range(int(central_points_y_neg[j]), int(central_points_y_pos[j]) + 1)
-                windows_y.append(wy_range)
-                central_point_y_binary.append("{0:010b}".format(central_points_y[j]))
-                central_point_y_binary[j] = torch.tensor([torch.tensor(int(d), dtype=torch.int8) for d in central_point_y_binary[j]])
+        print(int(central_points_x_pos.shape[0]//self.model.in_scale))
+        j = 0
+        for m in range(0, int(central_points_x_pos.shape[0]//self.model.in_scale)):
+            k = 0
+            for n in range(0, int(central_points_y_pos.shape[0]//self.model.in_scale)):
+                wx_range = range(int(central_points_x_neg[j]), int(central_points_x_pos[j]) + 1)
+                windows_x.append(wx_range)
+                central_point_x_binary.append("{0:010b}".format(central_points_x[j]))
+                central_point_x_binary[m] = torch.tensor([torch.tensor(int(d), dtype=torch.int8) for d in central_point_x_binary[m]])
 
+                wy_range = range(int(central_points_y_neg[k]), int(central_points_y_pos[k]) + 1)
+                windows_y.append(wy_range)
+                central_point_y_binary.append("{0:010b}".format(central_points_y[k]))
+                central_point_y_binary[n] = torch.tensor([torch.tensor(int(d), dtype=torch.int8) for d in central_point_y_binary[n]])
+                k +=self.model.in_scale
+            j+=self.model.in_scale
+        # TODO: make over again with fixed windows
         windows_x = torch.tensor(np.array(windows_x))
         windows_y = torch.tensor(np.array(windows_y))
-        wx_idx = torch.arange(0, len(windows_x),step=self.model.in_scale)
-        wy_idx = torch.arange(0, len(windows_y),step=self.model.in_scale)
+        wx_idx = torch.arange(0, len(windows_x))
+        wy_idx = torch.arange(0, len(windows_y))
 
 
         slice_x = torch.stack([torch.arange(w[0], w[-1] + 1) for w in [windows_x[k] for k in wx_idx]], dim=0)
@@ -450,13 +443,13 @@ class teacher(object):
         central_points_xy_binary = []
         slices_xy = []
         for xx in range(len(slice_x)):
-            central_points_yy_binary = []
+            # central_points_yy_binary = []
             for yy in range(len(slice_y)):
                 xy_binary = torch.cat([central_points_x_binary[xx], central_points_y_binary[yy]])
-                central_points_yy_binary.append(xy_binary)
+                central_points_xy_binary.append(xy_binary)
                 product = torch.cartesian_prod(slice_x[xx], slice_y[yy])
                 slices_xy.append(product)
-            central_points_xy_binary.append(central_points_yy_binary)
+            # central_points_xy_binary.append(central_points_yy_binary)
 
 
         indexes = torch.stack(slices_xy)
@@ -507,22 +500,79 @@ class teacher(object):
             meta_output_subslice = torch.cat([meta_step_out, meta_fuel_initial_speed_out,
                                               meta_fuel_cut_off_time_out, meta_igni_time_out,
                                               meta_ignition_temp_out, meta_viscosity_out, meta_diff_out], dim=0)
-            print(data_output_subslice.shape)
-            time.sleep(1000)
             # Note: Data for the different layers
-            data_input.append(data_input_subslice)
-            structure_input.append(fuel_subslice_in)
-            meta_input_h1.append(meta_input_subslice)
-            meta_input_h2.append(meta_step_in)
-            meta_input_h3.append(cp_xy_bin)
-            meta_input_h4.append(w_xy)
-            meta_input_h5.append(meta_step_in_numeric)
-            data_output.append(data_output_subslice)
-            meta_output_h1.append(meta_output_subslice)
-            meta_output_h2.append(meta_step_out)
-            meta_output_h3.append(cp_xy_bin)
-            meta_output_h4.append(w_xy)
-            meta_output_h5.append(meta_step_out_numeric)
+            data_input = data_input_subslice
+            structure_input = fuel_subslice_in
+            meta_input_h1 = meta_input_subslice.unsqueeze(0).repeat(data_input.shape[0],1)
+            meta_input_h2 = meta_step_in.unsqueeze(0).repeat(data_input.shape[0],1)
+            meta_input_h3 = torch.tensor(np.array(central_points_xy_binary))
+            meta_input_h4 = torch.cat([windows_x, windows_y])
+            meta_input_h5 = meta_step_in_numeric.unsqueeze(0).repeat(data_input.shape[0],1)
+            data_output = data_output_subslice
+            meta_output_h1 = meta_output_subslice.unsqueeze(0).repeat(data_input.shape[0],1)
+            meta_output_h2 = meta_step_out.unsqueeze(0).repeat(data_input.shape[0],1)
+            meta_output_h3 = torch.tensor(np.array(central_points_xy_binary))
+            meta_output_h4 = torch.cat([windows_x, windows_y])
+            meta_output_h5 = meta_step_out_numeric.unsqueeze(0).repeat(data_input.shape[0],1)
 
 
-        self.model.eval()
+            self.model.eval()
+            print(meta_input_h4.shape)
+            (data_input, structure_input, meta_input_h1, meta_input_h2,
+             meta_input_h3, meta_input_h4, meta_input_h5, meta_output_h1,
+             meta_output_h2, meta_output_h3, meta_output_h4, meta_output_h5) = \
+                (data_input.to(device),
+                 structure_input.to(device),
+                 meta_input_h1.to(device),
+                 meta_input_h2.to(device),
+                 meta_input_h3.to(device),
+                 meta_input_h4.to(device),
+                 meta_input_h5.to(device),
+                 meta_output_h1.to(device),
+                 meta_output_h2.to(device),
+                 meta_output_h3.to(device),
+                 meta_output_h4.to(device),
+                 meta_output_h5.to(device))
+
+            data_output = data_output.to(device)
+            dataset = (data_input, structure_input, meta_input_h1, meta_input_h2,
+                       meta_input_h3, meta_input_h4, meta_input_h5, meta_output_h1,
+                       meta_output_h2, meta_output_h3, meta_output_h4, meta_output_h5)
+            print(data_input.shape, structure_input.shape, meta_input_h1.shape, meta_input_h2.shape,
+                       meta_input_h3.shape, meta_input_h4.shape, meta_input_h5.shape, meta_output_h1.shape,
+                       meta_output_h2.shape, meta_output_h3.shape, meta_output_h4.shape, meta_output_h5.shape)
+            t_start = time.perf_counter()
+            pred_r, pred_g, pred_b, pred_a = self.model(dataset)
+            t_pred = time.perf_counter()
+
+            grad_r_true = self.data_input[:, 0:self.model.in_scale, :] - self.data_output[:, 0:self.model.in_scale, :]
+            grad_r_pred = self.data_input[:, 0:self.model.in_scale, :] - pred_r
+            loss_grad_r = criterion(grad_r_pred, grad_r_true)
+            grad_g_true = self.data_input[:, self.model.in_scale:self.model.in_scale * 2, :] - self.data_output[:,
+                                                                                               self.model.in_scale:self.model.in_scale * 2,
+                                                                                               :]
+            grad_g_pred = self.data_input[:, self.model.in_scale:self.model.in_scale * 2, :] - pred_g
+            loss_grad_g = criterion(grad_g_pred, grad_g_true)
+            grad_b_true = self.data_input[:, self.model.in_scale * 2:self.model.in_scale * 3, :] - self.data_output[:,
+                                                                                                   self.model.in_scale * 2:self.model.in_scale * 3,
+                                                                                                   :]
+            grad_b_pred = self.data_input[:, self.model.in_scale * 2:self.model.in_scale * 3, :] - pred_b
+            loss_grad_b = criterion(grad_b_pred, grad_b_true)
+            grad_a_true = self.data_input[:, self.model.in_scale * 3:self.model.in_scale * 4, :] - self.data_output[:,
+                                                                                                         self.model.in_scale * 3:self.model.in_scale * 4,
+                                                                                                   :]
+            grad_a_pred = self.data_input[:, self.model.in_scale * 3:self.model.in_scale * 4, :] - pred_a
+            loss_grad_a = criterion(grad_a_pred, grad_a_true)
+            grad_loss = loss_grad_r + loss_grad_g + loss_grad_b + loss_grad_a
+
+            loss_r = criterion(pred_r, self.data_output[:, 0:self.model.in_scale, :])
+            loss_g = criterion(pred_g, self.data_output[:, self.model.in_scale:self.model.in_scale * 2, :])
+            loss_b = criterion(pred_b, self.data_output[:, self.model.in_scale * 2:self.model.in_scale * 3, :])
+            loss_alpha = criterion(pred_a, self.data_output[:, self.model.in_scale * 3:self.model.in_scale * 4, :])
+            value_loss = loss_r + loss_g + loss_b + loss_alpha
+
+            loss = value_loss + grad_loss  # TODO : Add Endropy loss + diversity loss + intermidiete velocity vectors loss + casual loss
+            self.saved_loss.append(loss.item())
+
+
+
