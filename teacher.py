@@ -159,10 +159,12 @@ class teacher(object):
             # Note : Output data
             # fuel_subslice_out = fuel_slices[idx_output][slice_x, slice_y]#.reshape(1)
             r_subslice_out = r_slices[idx_output,slice_x, slice_y]#.reshape(1)
+
             g_subslice_out = g_slices[idx_output,slice_x, slice_y]#.reshape(1)
             b_subslice_out = b_slices[idx_output,slice_x, slice_y]#.reshape(1)
             alpha_subslice_out = alpha_slices[idx_output,slice_x, slice_y]#.reshape(1)
             data_output_subslice = torch.cat([r_subslice_out,g_subslice_out, b_subslice_out, alpha_subslice_out], dim=0)
+
             meta_step_out = meta_binary_slices[idx_output][0]
             meta_step_out_numeric = self.meta_tensor[idx_output][0]
             meta_fuel_initial_speed_out = meta_binary_slices[idx_output][1]
@@ -461,7 +463,6 @@ class teacher(object):
         x_idx = torch.reshape(indexes[:,:,0],(indexes.shape[0],self.model.in_scale,self.model.in_scale))
         y_idx = torch.reshape(indexes[:, :, 1],(indexes.shape[0],self.model.in_scale,self.model.in_scale))
         # TODO : need to finish proper indexing and after that generation in matplotlib ground truth and preds
-
         for i in range(0,fuel_slices.shape[0]-1):
             idx_input = i
             idx_output = i+1
@@ -473,11 +474,7 @@ class teacher(object):
             b_subslice_in = b_slices[idx_input, x_idx,y_idx]
             alpha_subslice_in = alpha_slices[idx_input, x_idx,y_idx]
 
-            data_input_subslice = torch.cat([fuel_subslice_in.unsqueeze(3), r_subslice_in.unsqueeze(3),
-                                             g_subslice_in.unsqueeze(3), b_subslice_in.unsqueeze(3),
-                                             alpha_subslice_in.unsqueeze(3)], dim=3)
-
-            data_input_subslice = data_input_subslice
+            data_input_subslice = torch.cat([r_subslice_in,g_subslice_in, b_subslice_in,alpha_subslice_in], dim=1)
             meta_step_in = meta_binary_slices[idx_input][0]
             meta_step_in_numeric = self.meta_tensor[idx_input][0]
             meta_fuel_initial_speed_in = meta_binary_slices[idx_input][1]
@@ -491,15 +488,14 @@ class teacher(object):
                                              meta_fuel_cut_off_time_in, meta_igni_time_in,
                                              meta_ignition_temp_in, meta_viscosity_in, meta_diff_in], dim=0)
 
-            time.sleep(1000)
+
             # Note : Output data
             #fuel_subslice_out = fuel_slices[idx_output,x_idx[:,:,idx_center].unsqueeze(2), y_idx[:,:,idx_center].unsqueeze(2)]
-            r_subslice_out = r_slices[idx_output,x_idx[:,:,idx_center].unsqueeze(2), y_idx[:,:,idx_center].unsqueeze(2)]
-            g_subslice_out = g_slices[idx_output,x_idx[:,:,idx_center].unsqueeze(2), y_idx[:,:,idx_center].unsqueeze(2)]
-            b_subslice_out = b_slices[idx_output,x_idx[:,:,idx_center].unsqueeze(2), y_idx[:,:,idx_center].unsqueeze(2)]
-            alpha_subslice_out = alpha_slices[idx_output,x_idx[:,:,idx_center].unsqueeze(2), y_idx[:,:,idx_center].unsqueeze(2)]
-            data_output_subslice = torch.cat([r_subslice_out.unsqueeze(3), g_subslice_out.unsqueeze(3), b_subslice_out.unsqueeze(3), alpha_subslice_out.unsqueeze(3)],
-                                             dim=3)
+            r_subslice_out = r_slices[idx_output,x_idx,y_idx]
+            g_subslice_out = g_slices[idx_output,x_idx,y_idx]
+            b_subslice_out = b_slices[idx_output,x_idx,y_idx]
+            alpha_subslice_out = alpha_slices[idx_output,x_idx,y_idx]
+            data_output_subslice = torch.cat([r_subslice_out, g_subslice_out, b_subslice_out, alpha_subslice_out],dim=1)
             meta_step_out = meta_binary_slices[idx_output][0]
             meta_step_out_numeric = self.meta_tensor[idx_output][0]
             meta_fuel_initial_speed_out = meta_binary_slices[idx_output][1]
@@ -511,6 +507,8 @@ class teacher(object):
             meta_output_subslice = torch.cat([meta_step_out, meta_fuel_initial_speed_out,
                                               meta_fuel_cut_off_time_out, meta_igni_time_out,
                                               meta_ignition_temp_out, meta_viscosity_out, meta_diff_out], dim=0)
+            print(data_output_subslice.shape)
+            time.sleep(1000)
             # Note: Data for the different layers
             data_input.append(data_input_subslice)
             structure_input.append(fuel_subslice_in)

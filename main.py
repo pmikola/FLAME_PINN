@@ -19,7 +19,7 @@ random.seed(2024)
 
 no_frame_samples = 15
 batch_size = 256
-input_window_size = 4
+input_window_size = 16
 
 no_frames = 1000
 first_frame,last_frame,frame_skip = 0,no_frames,10

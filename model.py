@@ -72,8 +72,8 @@ class Metamorph(nn.Module):
         self.l2h1 = nn.Linear(in_features=self.dens_width, out_features=self.dens_width*self.shifterCoefficients)
 
         # Definition of intermidiet layer between lvl 0 and 1 for dimension matching
-        self.l1h01 = nn.Linear(in_features=self.dens_width, out_features=(self.in_scale*self.input_window_size)*self.in_scale*self.shifterCoefficients)
-        self.l2h01 = nn.Linear(in_features=self.dens_width*self.shifterCoefficients, out_features=(self.in_scale*self.input_window_size)*self.in_scale*self.shifterCoefficients)
+        self.l1h01 = nn.Linear(in_features=self.dens_width, out_features=(self.in_scale**2) * self.shifterCoefficients*self.no_subslice_in_tensors)
+        self.l2h01 = nn.Linear(in_features=self.dens_width*self.shifterCoefficients, out_features=(self.in_scale**2) * self.shifterCoefficients*self.no_subslice_in_tensors)
 
         # Definition of input layer 0 for lvl 0 in hierarchy
         # rmv of 3 paralled layers for conv 1d k=1,2,3
@@ -87,7 +87,7 @@ class Metamorph(nn.Module):
                                   out_channels=self.no_subslice_in_tensors*self.in_scale, kernel_size=1)
         self.l2h0 = nn.Conv1d(in_channels=self.no_subslice_in_tensors*self.in_scale,
                                   out_channels=int(self.no_subslice_in_tensors*self.in_scale), kernel_size=1)
-        self.l3h0 = nn.Linear(in_features=324,out_features=int(self.flat_size/2))
+        self.l3h0 = nn.Linear(in_features=self.no_subslice_in_tensors*self.in_scale**2,out_features=int(self.flat_size/2))
 
         # Definition of the structure density distribution
         self.l1h0s = nn.Conv1d(in_channels=714,out_channels=200,kernel_size=1)
@@ -150,7 +150,9 @@ class Metamorph(nn.Module):
         # sfft = torch.tanh(self.l5h0s(s))
         x = self.SpaceTimeFFTFeature(data_input, meta_input_h4, meta_input_h5, meta_output_h5)
         x = x + s
+
         x = self.shapeShift(self.l1h0(x),x_alpha_l1)
+
         x = self.shapeShift(self.l2h0(x),x_alpha_l2)
         x = torch.flatten(x,start_dim=1)
         x = torch.tanh(self.l3h0(x))
