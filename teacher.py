@@ -407,54 +407,40 @@ class teacher(object):
         windows_x = []
         windows_y = []
 
-        central_point_x_binary = []
-        central_point_y_binary = []
-        print(int(central_points_x_pos.shape[0]//self.model.in_scale))
+        central_points_x_binary = []
+        central_points_y_binary = []
+
         j = 0
         for m in range(0, int(central_points_x_pos.shape[0]//self.model.in_scale)):
             k = 0
             for n in range(0, int(central_points_y_pos.shape[0]//self.model.in_scale)):
-                wx_range = range(int(central_points_x_neg[j]), int(central_points_x_pos[j]) + 1)
+                # TODO : make torch.narrow for tensor indexing
+                wx_range = slice(int(central_points_x_neg[j]), int(central_points_x_pos[j]) + 1)
                 windows_x.append(wx_range)
-                central_point_x_binary.append("{0:010b}".format(central_points_x[j]))
-                central_point_x_binary[m] = torch.tensor([torch.tensor(int(d), dtype=torch.int8) for d in central_point_x_binary[m]])
+                central_point_x_binary_pre = "{0:010b}".format(central_points_x[j])
+                central_points_x_binary.append(torch.tensor([torch.tensor(int(d), dtype=torch.int8) for d in central_point_x_binary_pre]))
 
-                wy_range = range(int(central_points_y_neg[k]), int(central_points_y_pos[k]) + 1)
+                wy_range = slice(int(central_points_y_neg[k]), int(central_points_y_pos[k]) + 1)
                 windows_y.append(wy_range)
-                central_point_y_binary.append("{0:010b}".format(central_points_y[k]))
-                central_point_y_binary[n] = torch.tensor([torch.tensor(int(d), dtype=torch.int8) for d in central_point_y_binary[n]])
+                central_point_y_binary_pre = "{0:010b}".format(central_points_y[k])
+                central_points_y_binary.append(torch.tensor([torch.tensor(int(d), dtype=torch.int8) for d in central_point_y_binary_pre]))
+
                 k +=self.model.in_scale
             j+=self.model.in_scale
-        # TODO: make over again with fixed windows
-        windows_x = torch.tensor(np.array(windows_x))
-        windows_y = torch.tensor(np.array(windows_y))
-        wx_idx = torch.arange(0, len(windows_x))
-        wy_idx = torch.arange(0, len(windows_y))
 
-
-        slice_x = torch.stack([torch.arange(w[0], w[-1] + 1) for w in [windows_x[k] for k in wx_idx]], dim=0)
-        slice_y = torch.stack([torch.arange(w[0], w[-1] + 1) for w in [windows_y[k] for k in wy_idx]], dim=0)
-        central_points_x_binary = torch.stack(central_point_x_binary, dim=0)
-        central_points_y_binary = torch.stack(central_point_y_binary, dim=0)
-        central_points_x_binary = central_points_x_binary[slice_x[:,0]]
-        central_points_y_binary = central_points_y_binary[slice_y[:,0]]
-
+        central_points_x_binary = torch.tensor(np.array(central_points_x_binary))
+        central_points_y_binary = torch.tensor(np.array(central_points_y_binary))
 
         central_points_xy_binary = []
-        slices_xy = []
-        for xx in range(len(slice_x)):
+
+        for xx in range(len(windows_x)):
             # central_points_yy_binary = []
-            for yy in range(len(slice_y)):
+            for yy in range(len(windows_y)):
                 xy_binary = torch.cat([central_points_x_binary[xx], central_points_y_binary[yy]])
                 central_points_xy_binary.append(xy_binary)
-                product = torch.cartesian_prod(slice_x[xx], slice_y[yy])
-                slices_xy.append(product)
-            # central_points_xy_binary.append(central_points_yy_binary)
 
-
-        indexes = torch.stack(slices_xy)
-        x_idx = torch.reshape(indexes[:,:,0],(indexes.shape[0],self.model.in_scale,self.model.in_scale))
-        y_idx = torch.reshape(indexes[:, :, 1],(indexes.shape[0],self.model.in_scale,self.model.in_scale))
+        x_idx = windows_x
+        y_idx = windows_y
         # TODO : need to finish proper indexing and after that generation in matplotlib ground truth and preds
         for i in range(0,fuel_slices.shape[0]-1):
             idx_input = i
@@ -462,6 +448,7 @@ class teacher(object):
 
             # Note : Input data
             fuel_subslice_in = fuel_slices[idx_input, x_idx,y_idx]
+            print(fuel_subslice_in.shape)
             r_subslice_in = r_slices[idx_input, x_idx,y_idx]
             g_subslice_in = g_slices[idx_input, x_idx,y_idx]
             b_subslice_in = b_slices[idx_input, x_idx,y_idx]
