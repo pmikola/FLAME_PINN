@@ -414,13 +414,12 @@ class teacher(object):
         for m in range(0, int(central_points_x_pos.shape[0]//self.model.in_scale)):
             k = 0
             for n in range(0, int(central_points_y_pos.shape[0]//self.model.in_scale)):
-                # TODO : make torch.narrow for tensor indexing
-                wx_range = slice(int(central_points_x_neg[j]), int(central_points_x_pos[j]) + 1)
+                wx_range = [int(central_points_x_neg[j]), int(central_points_x_pos[j]) + 1]
                 windows_x.append(wx_range)
                 central_point_x_binary_pre = "{0:010b}".format(central_points_x[j])
                 central_points_x_binary.append(torch.tensor([torch.tensor(int(d), dtype=torch.int8) for d in central_point_x_binary_pre]))
 
-                wy_range = slice(int(central_points_y_neg[k]), int(central_points_y_pos[k]) + 1)
+                wy_range = [int(central_points_y_neg[k]), int(central_points_y_pos[k]) + 1]
                 windows_y.append(wy_range)
                 central_point_y_binary_pre = "{0:010b}".format(central_points_y[k])
                 central_points_y_binary.append(torch.tensor([torch.tensor(int(d), dtype=torch.int8) for d in central_point_y_binary_pre]))
@@ -430,7 +429,6 @@ class teacher(object):
 
         central_points_x_binary = torch.tensor(np.array(central_points_x_binary))
         central_points_y_binary = torch.tensor(np.array(central_points_y_binary))
-
         central_points_xy_binary = []
 
         for xx in range(len(windows_x)):
@@ -439,22 +437,47 @@ class teacher(object):
                 xy_binary = torch.cat([central_points_x_binary[xx], central_points_y_binary[yy]])
                 central_points_xy_binary.append(xy_binary)
 
-        x_idx = windows_x
-        y_idx = windows_y
+        x_idx = torch.tensor(np.array(windows_x))
+        y_idx = torch.tensor(np.array(windows_y))
+
+        x_idx_start = torch.LongTensor(np.array([sublist[0] for sublist in x_idx]))
+        x_idx_end = torch.LongTensor(np.array([sublist[1] for sublist in x_idx]))
+        y_idx_start = torch.LongTensor(np.array([sublist[0] for sublist in y_idx]))
+        y_idx_end = torch.LongTensor(np.array([sublist[1] for sublist in y_idx]))
         # TODO : need to finish proper indexing and after that generation in matplotlib ground truth and preds
         for i in range(0,fuel_slices.shape[0]-1):
             idx_input = i
             idx_output = i+1
 
             # Note : Input data
-            fuel_subslice_in = fuel_slices[idx_input, x_idx,y_idx]
-            print(fuel_subslice_in.shape)
-            r_subslice_in = r_slices[idx_input, x_idx,y_idx]
-            g_subslice_in = g_slices[idx_input, x_idx,y_idx]
-            b_subslice_in = b_slices[idx_input, x_idx,y_idx]
-            alpha_subslice_in = alpha_slices[idx_input, x_idx,y_idx]
+            fsin = []
+            rsin = []
+            gsin = []
+            bsin = []
+            asin = []
+            rsout = []
+            gsout = []
+            bsout = []
+            asout = []
+            for ii in range(len(x_idx_start)):
+                fsin.append(fuel_slices[idx_input, x_idx_start[ii]:x_idx_end[ii],y_idx_start[ii]:y_idx_end[ii]])
+                rsin.append(r_slices[idx_input, x_idx_start[ii]:x_idx_end[ii],y_idx_start[ii]:y_idx_end[ii]])
+                gsin.append(g_slices[idx_input, x_idx_start[ii]:x_idx_end[ii],y_idx_start[ii]:y_idx_end[ii]])
+                bsin.append(b_slices[idx_input, x_idx_start[ii]:x_idx_end[ii],y_idx_start[ii]:y_idx_end[ii]])
+                asin.append(alpha_slices[idx_input, x_idx_start[ii]:x_idx_end[ii],y_idx_start[ii]:y_idx_end[ii]])
 
+                rsout.append(r_slices[idx_output, x_idx_start[ii]:x_idx_end[ii], y_idx_start[ii]:y_idx_end[ii]])
+                gsout.append(g_slices[idx_output, x_idx_start[ii]:x_idx_end[ii], y_idx_start[ii]:y_idx_end[ii]])
+                bsout.append(b_slices[idx_output, x_idx_start[ii]:x_idx_end[ii], y_idx_start[ii]:y_idx_end[ii]])
+                asout.append(alpha_slices[idx_output, x_idx_start[ii]:x_idx_end[ii], y_idx_start[ii]:y_idx_end[ii]])
+
+            fuel_subslice_in =  torch.stack(fsin,dim=0)
+            r_subslice_in = torch.stack(rsin,dim=0)
+            g_subslice_in = torch.stack(gsin,dim=0)
+            b_subslice_in = torch.stack(bsin,dim=0)
+            alpha_subslice_in = torch.stack(asin,dim=0)
             data_input_subslice = torch.cat([r_subslice_in,g_subslice_in, b_subslice_in,alpha_subslice_in], dim=1)
+
             meta_step_in = meta_binary_slices[idx_input][0]
             meta_step_in_numeric = self.meta_tensor[idx_input][0]
             meta_fuel_initial_speed_in = meta_binary_slices[idx_input][1]
@@ -467,14 +490,12 @@ class teacher(object):
             meta_input_subslice = torch.cat([meta_step_in, meta_fuel_initial_speed_in,
                                              meta_fuel_cut_off_time_in, meta_igni_time_in,
                                              meta_ignition_temp_in, meta_viscosity_in, meta_diff_in], dim=0)
-
-
             # Note : Output data
-            #fuel_subslice_out = fuel_slices[idx_output,x_idx[:,:,idx_center].unsqueeze(2), y_idx[:,:,idx_center].unsqueeze(2)]
-            r_subslice_out = r_slices[idx_output,x_idx,y_idx]
-            g_subslice_out = g_slices[idx_output,x_idx,y_idx]
-            b_subslice_out = b_slices[idx_output,x_idx,y_idx]
-            alpha_subslice_out = alpha_slices[idx_output,x_idx,y_idx]
+            r_subslice_out = torch.stack(rsout,dim=0)
+            g_subslice_out = torch.stack(gsout,dim=0)
+            b_subslice_out = torch.stack(bsout,dim=0)
+            alpha_subslice_out = torch.stack(asout,dim=0)
+
             data_output_subslice = torch.cat([r_subslice_out, g_subslice_out, b_subslice_out, alpha_subslice_out],dim=1)
             meta_step_out = meta_binary_slices[idx_output][0]
             meta_step_out_numeric = self.meta_tensor[idx_output][0]
@@ -493,13 +514,13 @@ class teacher(object):
             meta_input_h1 = meta_input_subslice.unsqueeze(0).repeat(data_input.shape[0],1)
             meta_input_h2 = meta_step_in.unsqueeze(0).repeat(data_input.shape[0],1)
             meta_input_h3 = torch.tensor(np.array(central_points_xy_binary))
-            meta_input_h4 = torch.cat([windows_x, windows_y])
+            meta_input_h4 = torch.cat([windows_x, windows_y],dim=0)
             meta_input_h5 = meta_step_in_numeric.unsqueeze(0).repeat(data_input.shape[0],1)
             data_output = data_output_subslice
             meta_output_h1 = meta_output_subslice.unsqueeze(0).repeat(data_input.shape[0],1)
             meta_output_h2 = meta_step_out.unsqueeze(0).repeat(data_input.shape[0],1)
             meta_output_h3 = torch.tensor(np.array(central_points_xy_binary))
-            meta_output_h4 = torch.cat([windows_x, windows_y])
+            meta_output_h4 = torch.cat([windows_x, windows_y],dim=0)
             meta_output_h5 = meta_step_out_numeric.unsqueeze(0).repeat(data_input.shape[0],1)
 
 
