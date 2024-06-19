@@ -241,7 +241,7 @@ class Metamorph(nn.Module):
         extracted_data_modes = fft_data[:,:self.modes]
         padded_data_modes = torch.zeros_like(fft_data)
         padded_data_modes[:, :self.modes] = extracted_data_modes
-        # question : is "bij,own->bin" give same outcome as "bij,own->bwj" ?
+        # question : is "bij,own->bin" give same outcome as "bij,own->bwj"?
         FFwithWeights = torch.einsum("bij,own->bin", padded_data_modes, self.weights_data_fft)
 
         # print(SpaceTimeEncodings.shape)

@@ -247,6 +247,10 @@ class teacher(object):
         self.meta_output_h4 = torch.stack(meta_output_h4,dim=0)
         self.meta_output_h5 = torch.stack(meta_output_h5,dim=0)
 
+        # print(self.data_input.shape, self.structure_input.shape, self.meta_input_h1.shape, self.meta_input_h2.shape,
+        #       self.meta_input_h3.shape, self.meta_input_h4.shape, self.meta_input_h5.shape, self.meta_output_h1.shape,
+        #       self.meta_output_h2.shape, self.meta_output_h3.shape, self.meta_output_h4.shape, self.meta_output_h5.shape)
+
 
     def learning_phase(self,no_frame_samples, batch_size, input_window_size, first_frame, last_frame,
                                       frame_skip,criterion,optimizer,device,learning=1,num_epochs=1500):
@@ -411,16 +415,16 @@ class teacher(object):
         central_points_y_binary = []
 
         j = 0
-        for m in range(0, int(central_points_x_pos.shape[0]//self.model.in_scale)):
+        for m in range(0, int(central_points_x_pos.shape[0]//self.model.in_scale+1)):
             k = 0
-            for n in range(0, int(central_points_y_pos.shape[0]//self.model.in_scale)):
-                wx_range = np.array(range(int(central_points_x_neg[j]),int(central_points_x_pos[j]) + 1))
+            for n in range(0, int(central_points_y_pos.shape[0]//self.model.in_scale+1)):
+                wx_range = np.array(range(int(central_points_x_neg[j]),int(central_points_x_pos[j]) + 2))
 
                 windows_x.append(wx_range)
                 central_point_x_binary_pre = "{0:010b}".format(central_points_x[j])
                 central_points_x_binary.append(torch.tensor([torch.tensor(int(d), dtype=torch.int8) for d in central_point_x_binary_pre]))
 
-                wy_range = np.array(range(int(central_points_y_neg[k]),int(central_points_y_pos[k]) + 1))
+                wy_range = np.array(range(int(central_points_y_neg[k]),int(central_points_y_pos[k]) + 2))
                 windows_y.append(wy_range)
                 central_point_y_binary_pre = "{0:010b}".format(central_points_y[k])
                 central_points_y_binary.append(torch.tensor([torch.tensor(int(d), dtype=torch.int8) for d in central_point_y_binary_pre]))
@@ -431,12 +435,10 @@ class teacher(object):
         central_points_x_binary = torch.tensor(np.array(central_points_x_binary))
         central_points_y_binary = torch.tensor(np.array(central_points_y_binary))
         central_points_xy_binary = []
+        for v in range(len(central_points_x_binary)):
+            xy_binary = torch.cat([central_points_x_binary[v], central_points_y_binary[v]])
+            central_points_xy_binary.append(xy_binary)
 
-        for xx in range(len(windows_x)):
-            # central_points_yy_binary = []
-            for yy in range(len(windows_y)):
-                xy_binary = torch.cat([central_points_x_binary[xx], central_points_y_binary[yy]])
-                central_points_xy_binary.append(xy_binary)
 
         x_idx = torch.tensor(np.array(windows_x))
         y_idx = torch.tensor(np.array(windows_y))
@@ -445,7 +447,7 @@ class teacher(object):
         x_idx_end = torch.LongTensor(np.array([sublist[-1] for sublist in x_idx]))
         y_idx_start = torch.LongTensor(np.array([sublist[0] for sublist in y_idx]))
         y_idx_end = torch.LongTensor(np.array([sublist[-1] for sublist in y_idx]))
-
+        t = 0.
         # TODO : need to finish proper indexing and after that generation in matplotlib ground truth and preds
         for i in range(0,fuel_slices.shape[0]-1):
             idx_input = i
@@ -462,7 +464,7 @@ class teacher(object):
             bsout = []
             asout = []
             for ii in range(len(x_idx_start)):
-                fsin.append(fuel_slices[idx_input, x_idx_start[ii]:x_idx_end[ii],y_idx_start[ii]:y_idx_end[ii]])
+                fsin.append(fuel_slices[idx_input])
                 rsin.append(r_slices[idx_input, x_idx_start[ii]:x_idx_end[ii],y_idx_start[ii]:y_idx_end[ii]])
                 gsin.append(g_slices[idx_input, x_idx_start[ii]:x_idx_end[ii],y_idx_start[ii]:y_idx_end[ii]])
                 bsin.append(b_slices[idx_input, x_idx_start[ii]:x_idx_end[ii],y_idx_start[ii]:y_idx_end[ii]])
@@ -472,6 +474,7 @@ class teacher(object):
                 gsout.append(g_slices[idx_output, x_idx_start[ii]:x_idx_end[ii], y_idx_start[ii]:y_idx_end[ii]])
                 bsout.append(b_slices[idx_output, x_idx_start[ii]:x_idx_end[ii], y_idx_start[ii]:y_idx_end[ii]])
                 asout.append(alpha_slices[idx_output, x_idx_start[ii]:x_idx_end[ii], y_idx_start[ii]:y_idx_end[ii]])
+
 
             fuel_subslice_in =  torch.stack(fsin,dim=0)
             r_subslice_in = torch.stack(rsin,dim=0)
@@ -516,20 +519,19 @@ class teacher(object):
             meta_input_h1 = meta_input_subslice.unsqueeze(0).repeat(data_input.shape[0],1)
             meta_input_h2 = meta_step_in.unsqueeze(0).repeat(data_input.shape[0],1)
             meta_input_h3 = torch.tensor(np.array(central_points_xy_binary))
-            meta_input_h4 = torch.cat([x_idx, y_idx],dim=1)
+            meta_input_h4 = torch.cat([x_idx[:,0:-1], y_idx[:,0:-1]],dim=1)
 
-            meta_input_h5 = meta_step_in_numeric.unsqueeze(0).repeat(data_input.shape[0],1)
+            meta_input_h5 = meta_step_in_numeric.repeat(data_input.shape[0],1).squeeze(1)
             data_output = data_output_subslice
             meta_output_h1 = meta_output_subslice.unsqueeze(0).repeat(data_input.shape[0],1)
             meta_output_h2 = meta_step_out.unsqueeze(0).repeat(data_input.shape[0],1)
             meta_output_h3 = torch.tensor(np.array(central_points_xy_binary))
-            meta_output_h4 = torch.cat([x_idx, y_idx],dim=1)
-            meta_output_h5 = meta_step_out_numeric.unsqueeze(0).repeat(data_input.shape[0],1)
+            meta_output_h4 = torch.cat([x_idx[:,0:-1], y_idx[:,0:-1]],dim=1)
+            meta_output_h5 = meta_step_out_numeric.repeat(data_input.shape[0],1).squeeze(1)
 
-
+            self.model.batch_size = data_input.shape[0]
             self.model.eval()
-            print(fuel_subslice_in.shape)
-            time.sleep(1000)
+
             (data_input, structure_input, meta_input_h1, meta_input_h2,
              meta_input_h3, meta_input_h4, meta_input_h5, meta_output_h1,
              meta_output_h2, meta_output_h3, meta_output_h4, meta_output_h5) = \
@@ -557,34 +559,42 @@ class teacher(object):
             pred_r, pred_g, pred_b, pred_a = self.model(dataset)
             t_pred = time.perf_counter()
 
-            grad_r_true = self.data_input[:, 0:self.model.in_scale, :] - self.data_output[:, 0:self.model.in_scale, :]
-            grad_r_pred = self.data_input[:, 0:self.model.in_scale, :] - pred_r
-            loss_grad_r = criterion(grad_r_pred, grad_r_true)
-            grad_g_true = self.data_input[:, self.model.in_scale:self.model.in_scale * 2, :] - self.data_output[:,
-                                                                                               self.model.in_scale:self.model.in_scale * 2,
-                                                                                               :]
-            grad_g_pred = self.data_input[:, self.model.in_scale:self.model.in_scale * 2, :] - pred_g
-            loss_grad_g = criterion(grad_g_pred, grad_g_true)
-            grad_b_true = self.data_input[:, self.model.in_scale * 2:self.model.in_scale * 3, :] - self.data_output[:,
-                                                                                                   self.model.in_scale * 2:self.model.in_scale * 3,
-                                                                                                   :]
-            grad_b_pred = self.data_input[:, self.model.in_scale * 2:self.model.in_scale * 3, :] - pred_b
-            loss_grad_b = criterion(grad_b_pred, grad_b_true)
-            grad_a_true = self.data_input[:, self.model.in_scale * 3:self.model.in_scale * 4, :] - self.data_output[:,
-                                                                                                         self.model.in_scale * 3:self.model.in_scale * 4,
-                                                                                                   :]
-            grad_a_pred = self.data_input[:, self.model.in_scale * 3:self.model.in_scale * 4, :] - pred_a
-            loss_grad_a = criterion(grad_a_pred, grad_a_true)
-            grad_loss = loss_grad_r + loss_grad_g + loss_grad_b + loss_grad_a
+            t = t_pred - t_start
+            # print(f'Pred Time: {t*1e6:.4f} [us]')
+            r_h = np.array([]).reshape(396,0)
+            for m in range(0, int(central_points_x_pos.shape[0] // self.model.in_scale+1)):
+                r_v = np.array([]).reshape(0,33)
+                for n in range(0, int(central_points_y_pos.shape[0] // self.model.in_scale+1)):
+                    r_v = np.vstack([r_v,pred_r[n].cpu().detach().numpy()])
+                r_h = np.hstack([r_h,r_v])
 
-            loss_r = criterion(pred_r, self.data_output[:, 0:self.model.in_scale, :])
-            loss_g = criterion(pred_g, self.data_output[:, self.model.in_scale:self.model.in_scale * 2, :])
-            loss_b = criterion(pred_b, self.data_output[:, self.model.in_scale * 2:self.model.in_scale * 3, :])
-            loss_alpha = criterion(pred_a, self.data_output[:, self.model.in_scale * 3:self.model.in_scale * 4, :])
-            value_loss = loss_r + loss_g + loss_b + loss_alpha
+            plt.imshow(r_h)
+            plt.show()
+            # grad_r_true = data_input[:, 0:self.model.in_scale, :] - data_output[:, 0:self.model.in_scale, :]
+            # grad_r_pred = data_input[:, 0:self.model.in_scale, :] - pred_r
+            # loss_grad_r = criterion(grad_r_pred, grad_r_true)
+            # grad_g_true = data_input[:, self.model.in_scale:self.model.in_scale * 2, :] - data_output[:,self.model.in_scale:self.model.in_scale * 2,:]
+            # grad_g_pred = data_input[:, self.model.in_scale:self.model.in_scale * 2, :] - pred_g
+            # loss_grad_g = criterion(grad_g_pred, grad_g_true)
+            # grad_b_true = data_input[:, self.model.in_scale * 2:self.model.in_scale * 3, :] - data_output[:,
+            #                                                                                        self.model.in_scale * 2:self.model.in_scale * 3,
+            #                                                                                        :]
+            # grad_b_pred = data_input[:, self.model.in_scale * 2:self.model.in_scale * 3, :] - pred_b
+            # loss_grad_b = criterion(grad_b_pred, grad_b_true)
+            # grad_a_true = data_input[:, self.model.in_scale * 3:self.model.in_scale * 4, :] - data_output[:,self.model.in_scale * 3:self.model.in_scale * 4,:]
+            # grad_a_pred = data_input[:, self.model.in_scale * 3:self.model.in_scale * 4, :] - pred_a
+            # loss_grad_a = criterion(grad_a_pred, grad_a_true)
+            # grad_loss = loss_grad_r + loss_grad_g + loss_grad_b + loss_grad_a
+            #
+            # loss_r = criterion(pred_r, data_output[:, 0:self.model.in_scale, :])
+            # loss_g = criterion(pred_g, data_output[:, self.model.in_scale:self.model.in_scale * 2, :])
+            # loss_b = criterion(pred_b, data_output[:, self.model.in_scale * 2:self.model.in_scale * 3, :])
+            # loss_alpha = criterion(pred_a, data_output[:, self.model.in_scale * 3:self.model.in_scale * 4, :])
+            # value_loss = loss_r + loss_g + loss_b + loss_alpha
+            #
+            # loss = value_loss + grad_loss  # TODO : Add Endropy loss + diversity loss + intermidiete velocity vectors loss + casual loss
+            # self.saved_loss.append(loss.item())
 
-            loss = value_loss + grad_loss  # TODO : Add Endropy loss + diversity loss + intermidiete velocity vectors loss + casual loss
-            self.saved_loss.append(loss.item())
 
 
 
