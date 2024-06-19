@@ -568,7 +568,7 @@ class teacher(object):
                     r_h = np.hstack([r_v,pred_r[n].cpu().detach().numpy()])
                 r_v = np.vstack([r_h,r_v])
 
-            plt.imshow(r_h)
+            plt.imshow(r_v)
             plt.show()
             # grad_r_true = data_input[:, 0:self.model.in_scale, :] - data_output[:, 0:self.model.in_scale, :]
             # grad_r_pred = data_input[:, 0:self.model.in_scale, :] - pred_r
