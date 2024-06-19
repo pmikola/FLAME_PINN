@@ -566,7 +566,7 @@ class teacher(object):
                 r_h = np.array([]).reshape(33,0)
                 for n in range(0, int(central_points_y_pos.shape[0] // self.model.in_scale+1)):
                     r_h = np.hstack([r_v,pred_r[n].cpu().detach().numpy()])
-                r_v = np.vstack([r_h,r_v])
+                r_v = np.vstack([r_v,r_h])
 
             plt.imshow(r_v)
             plt.show()
