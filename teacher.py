@@ -552,21 +552,21 @@ class teacher(object):
             dataset = (data_input, structure_input, meta_input_h1, meta_input_h2,
                        meta_input_h3, meta_input_h4, meta_input_h5, meta_output_h1,
                        meta_output_h2, meta_output_h3, meta_output_h4, meta_output_h5)
-            print(data_input.shape, structure_input.shape, meta_input_h1.shape, meta_input_h2.shape,
-                       meta_input_h3.shape, meta_input_h4.shape, meta_input_h5.shape, meta_output_h1.shape,
-                       meta_output_h2.shape, meta_output_h3.shape, meta_output_h4.shape, meta_output_h5.shape)
+            # print(data_input.shape, structure_input.shape, meta_input_h1.shape, meta_input_h2.shape,
+            #            meta_input_h3.shape, meta_input_h4.shape, meta_input_h5.shape, meta_output_h1.shape,
+            #            meta_output_h2.shape, meta_output_h3.shape, meta_output_h4.shape, meta_output_h5.shape)
             t_start = time.perf_counter()
             pred_r, pred_g, pred_b, pred_a = self.model(dataset)
             t_pred = time.perf_counter()
 
             t = t_pred - t_start
             # print(f'Pred Time: {t*1e6:.4f} [us]')
-            r_h = np.array([]).reshape(396,0)
+            r_v = np.array([]).reshape(0,396)
             for m in range(0, int(central_points_x_pos.shape[0] // self.model.in_scale+1)):
-                r_v = np.array([]).reshape(0,33)
+                r_h = np.array([]).reshape(33,0)
                 for n in range(0, int(central_points_y_pos.shape[0] // self.model.in_scale+1)):
-                    r_v = np.vstack([r_v,pred_r[n].cpu().detach().numpy()])
-                r_h = np.hstack([r_h,r_v])
+                    r_h = np.hstack([r_v,pred_r[n].cpu().detach().numpy()])
+                r_v = np.vstack([r_h,r_v])
 
             plt.imshow(r_h)
             plt.show()
