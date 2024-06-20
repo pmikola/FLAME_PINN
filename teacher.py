@@ -304,7 +304,6 @@ class teacher(object):
                     grad_a_pred = self.data_input[:, self.model.in_scale*3:self.model.in_scale*4, :] - pred_a
                     loss_grad_a = criterion(grad_a_pred, grad_a_true)
                     grad_loss = loss_grad_r+loss_grad_g+loss_grad_b+loss_grad_a
-
                     loss_r = criterion(pred_r, self.data_output[:,0:self.model.in_scale,:])
                     loss_g = criterion(pred_g, self.data_output[:,self.model.in_scale:self.model.in_scale*2,:])
                     loss_b = criterion(pred_b, self.data_output[:,self.model.in_scale*2:self.model.in_scale*3,:])
@@ -561,14 +560,31 @@ class teacher(object):
 
             t = t_pred - t_start
             # print(f'Pred Time: {t*1e6:.4f} [us]')
-            r_v = np.array([]).reshape(0,396)
-            for m in range(0, int(central_points_x_pos.shape[0] // self.model.in_scale+1)):
-                r_h = np.array([]).reshape(33,0)
-                for n in range(0, int(central_points_y_pos.shape[0] // self.model.in_scale+1)):
-                    r_h = np.hstack([r_v,pred_r[n].cpu().detach().numpy()])
-                r_v = np.vstack([r_v,r_h])
 
-            plt.imshow(r_v)
+            v = int(central_points_x_pos.shape[0] // self.model.in_scale + 1)
+            h = int(central_points_y_pos.shape[0] // self.model.in_scale + 1)
+            r_v = np.array([]).reshape(0, h * self.model.in_scale)
+            g_v = np.array([]).reshape(0, h * self.model.in_scale)
+            b_v = np.array([]).reshape(0, h * self.model.in_scale)
+            a_v = np.array([]).reshape(0, h * self.model.in_scale)
+            for m in range(0, v):
+                r_h = np.array([]).reshape(self.model.in_scale,0)
+                g_h = np.array([]).reshape(self.model.in_scale,0)
+                b_h = np.array([]).reshape(self.model.in_scale,0)
+                a_h = np.array([]).reshape(self.model.in_scale,0)
+                for n in range(0, h):
+                    r_h = np.hstack([r_h,pred_r[n+m*h].cpu().detach().numpy()])
+                    g_h = np.hstack([g_h,pred_r[n+m*h].cpu().detach().numpy()])
+                    b_h = np.hstack([b_h,pred_r[n+m*h].cpu().detach().numpy()])
+                    a_h = np.hstack([a_h,pred_r[n+m*h].cpu().detach().numpy()])
+
+                r_v = np.clip(abs(np.vstack([r_v,r_h])),0.,1.)
+                g_v = np.clip(abs(np.vstack([g_v, g_h])),0.,1.)
+                b_v = np.clip(abs(np.vstack([b_v, b_h])),0.,1.)
+                a_v = np.clip(abs(np.vstack([a_v, a_h])),0.,1.)
+
+            prediction = np.dstack([r_v,g_v,b_v,a_v])
+            plt.imshow(prediction)
             plt.show()
             # grad_r_true = data_input[:, 0:self.model.in_scale, :] - data_output[:, 0:self.model.in_scale, :]
             # grad_r_pred = data_input[:, 0:self.model.in_scale, :] - pred_r
