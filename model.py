@@ -26,7 +26,7 @@ class Metamorph(nn.Module):
 
         # Definition of intermediate layer/parameters that transforms input into Fourier Feature with positional encoding and TODO: gaussian Gate
         self.modes = 12  # No o of modes for SpaceTime Encoding
-        self.ii = torch.arange(start=1, end=self.modes + 1, step=1, device=self.device)
+        self.ii = torch.arange(start=0, end=self.modes, step=1, device=self.device)
 
         self.weights_data_fft = nn.Parameter(torch.rand(1, self.no_subslice_in_tensors * self.in_scale, self.in_scale, dtype=torch.cfloat))
         self.weights_space_time_encoding_fft = nn.Parameter(torch.rand(1,self.no_subslice_in_tensors * self.in_scale, self.in_scale, self.modes, dtype=torch.cfloat))
@@ -143,10 +143,10 @@ class Metamorph(nn.Module):
         x_alpha_l1 = torch.tanh(self.l1h01(alpha_l1))
         x_alpha_l2 = torch.tanh(self.l2h01(alpha_l2))
 
-        s = self.l1h0s(structure_input).permute(0, 2, 1)
+        s = torch.tanh(self.l1h0s(structure_input).permute(0, 2, 1))
         s = torch.tanh(self.l2h0s(s).permute(0, 2, 1))
         s = torch.tanh(self.l3h0s(s).permute(0, 2, 1))
-        s = torch.tanh( self.l4h0s(s).permute(0, 2, 1))
+        s = torch.tanh(self.l4h0s(s).permute(0, 2, 1))
         # sfft = torch.tanh(self.l5h0s(s))
         x = self.SpaceTimeFFTFeature(data_input, meta_input_h4, meta_input_h5, meta_output_h5)
         x = x + s
@@ -155,7 +155,7 @@ class Metamorph(nn.Module):
 
         x = self.shapeShift(self.l2h0(x),x_alpha_l2)
         x = torch.flatten(x,start_dim=1)
-        x = torch.tanh(self.l3h0(x))
+        x = self.l3h0(x)
 
         r = self.l4_h0_r(x).reshape(self.batch_size,self.in_scale,self.in_scale)
         g = self.l4_h0_g(x).reshape(self.batch_size,self.in_scale,self.in_scale)

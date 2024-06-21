@@ -5,7 +5,7 @@ import time
 
 import numpy as np
 import torch
-from matplotlib import pyplot as plt
+from matplotlib import pyplot as plt, animation
 
 
 class teacher(object):
@@ -351,6 +351,7 @@ class teacher(object):
         meta_tensor = []
         meta_binary = []
         field_names = []
+
         for name in folder_names:
             if os.path.exists(name):
                 for i in range(self.first_frame, self.last_frame, self.frame_skip):
@@ -447,7 +448,15 @@ class teacher(object):
         y_idx_start = torch.LongTensor(np.array([sublist[0] for sublist in y_idx]))
         y_idx_end = torch.LongTensor(np.array([sublist[-1] for sublist in y_idx]))
         t = 0.
-        # TODO : need to finish proper indexing and after that generation in matplotlib ground truth and preds
+        ims = []
+        fig = plt.figure(figsize=(10, 6))
+        grid = (1, 2)
+        ax1 = plt.subplot2grid(grid, (0, 0))
+        ax2 = plt.subplot2grid(grid, (0, 1))
+        # ax3 = plt.subplot2grid(grid, (1, 0))
+        # ax4 = plt.subplot2grid(grid, (1, 1))
+        for ax in [ax1, ax2]:#, ax3, ax4]:
+            ax.set_axis_off()
         for i in range(0,fuel_slices.shape[0]-1):
             idx_input = i
             idx_output = i+1
@@ -547,7 +556,7 @@ class teacher(object):
                  meta_output_h4.to(device),
                  meta_output_h5.to(device))
 
-            data_output = data_output.to(device)
+            # data_output = data_output.to(device)
             dataset = (data_input, structure_input, meta_input_h1, meta_input_h2,
                        meta_input_h3, meta_input_h4, meta_input_h5, meta_output_h1,
                        meta_output_h2, meta_output_h3, meta_output_h4, meta_output_h5)
@@ -563,29 +572,53 @@ class teacher(object):
 
             v = int(central_points_x_pos.shape[0] // self.model.in_scale + 1)
             h = int(central_points_y_pos.shape[0] // self.model.in_scale + 1)
-            r_v = np.array([]).reshape(0, h * self.model.in_scale)
-            g_v = np.array([]).reshape(0, h * self.model.in_scale)
-            b_v = np.array([]).reshape(0, h * self.model.in_scale)
-            a_v = np.array([]).reshape(0, h * self.model.in_scale)
+
+            r_v_true = np.array([]).reshape(0, h * self.model.in_scale)
+            g_v_true = np.array([]).reshape(0, h * self.model.in_scale)
+            b_v_true = np.array([]).reshape(0, h * self.model.in_scale)
+            a_v_true = np.array([]).reshape(0, h * self.model.in_scale)
+
+            r_v_pred = np.array([]).reshape(0, h * self.model.in_scale)
+            g_v_pred = np.array([]).reshape(0, h * self.model.in_scale)
+            b_v_pred = np.array([]).reshape(0, h * self.model.in_scale)
+            a_v_pred = np.array([]).reshape(0, h * self.model.in_scale)
             for m in range(0, v):
-                r_h = np.array([]).reshape(self.model.in_scale,0)
-                g_h = np.array([]).reshape(self.model.in_scale,0)
-                b_h = np.array([]).reshape(self.model.in_scale,0)
-                a_h = np.array([]).reshape(self.model.in_scale,0)
+                r_h_true = np.array([]).reshape(self.model.in_scale, 0)
+                g_h_true = np.array([]).reshape(self.model.in_scale, 0)
+                b_h_true = np.array([]).reshape(self.model.in_scale, 0)
+                a_h_true = np.array([]).reshape(self.model.in_scale, 0)
+
+                r_h_pred = np.array([]).reshape(self.model.in_scale, 0)
+                g_h_pred = np.array([]).reshape(self.model.in_scale, 0)
+                b_h_pred = np.array([]).reshape(self.model.in_scale, 0)
+                a_h_pred = np.array([]).reshape(self.model.in_scale, 0)
                 for n in range(0, h):
-                    r_h = np.hstack([r_h,pred_r[n+m*h].cpu().detach().numpy()])
-                    g_h = np.hstack([g_h,pred_r[n+m*h].cpu().detach().numpy()])
-                    b_h = np.hstack([b_h,pred_r[n+m*h].cpu().detach().numpy()])
-                    a_h = np.hstack([a_h,pred_r[n+m*h].cpu().detach().numpy()])
+                    r_h_true = np.hstack([r_h_true, r_subslice_out[n + m * h].cpu().detach().numpy()])
+                    g_h_true = np.hstack([g_h_true, g_subslice_out[n + m * h].cpu().detach().numpy()])
+                    b_h_true = np.hstack([b_h_true, b_subslice_out[n + m * h].cpu().detach().numpy()])
+                    a_h_true = np.hstack([a_h_true, alpha_subslice_out[n + m * h].cpu().detach().numpy()])
 
-                r_v = np.clip(abs(np.vstack([r_v,r_h])),0.,1.)
-                g_v = np.clip(abs(np.vstack([g_v, g_h])),0.,1.)
-                b_v = np.clip(abs(np.vstack([b_v, b_h])),0.,1.)
-                a_v = np.clip(abs(np.vstack([a_v, a_h])),0.,1.)
+                    r_h_pred = np.hstack([r_h_pred, pred_r[n + m * h].cpu().detach().numpy()])
+                    g_h_pred = np.hstack([g_h_pred, pred_g[n + m * h].cpu().detach().numpy()])
+                    b_h_pred = np.hstack([b_h_pred, pred_b[n + m * h].cpu().detach().numpy()])
+                    a_h_pred = np.hstack([a_h_pred, pred_a[n + m * h].cpu().detach().numpy()])
 
-            prediction = np.dstack([r_v,g_v,b_v,a_v])
-            plt.imshow(prediction)
-            plt.show()
+                r_v_true = np.clip(abs(np.vstack([r_v_true, r_h_true])), 0., 1.)
+                g_v_true = np.clip(abs(np.vstack([g_v_true, g_h_true])), 0., 1.)
+                b_v_true = np.clip(abs(np.vstack([b_v_true, b_h_true])), 0., 1.)
+                a_v_true = np.clip(abs(np.vstack([a_v_true, a_h_true])), 0., 1.)
+
+                r_v_pred = np.clip(abs(np.vstack([r_v_pred, r_h_pred])), 0., 1.)
+                g_v_pred = np.clip(abs(np.vstack([g_v_pred, g_h_pred])), 0., 1.)
+                b_v_pred = np.clip(abs(np.vstack([b_v_pred, b_h_pred])), 0., 1.)
+                a_v_pred = np.clip(abs(np.vstack([a_v_pred, a_h_pred])), 0., 1.)
+            # print(r_v_pred.shape,r_subslice_out.shape)
+            ground_truth = np.dstack([g_v_true, b_v_true, r_v_true,a_v_true])
+            prediction = np.dstack([g_v_pred, b_v_pred, r_v_pred,a_v_pred])
+            rgb_pred_anim = ax1.imshow(prediction)
+            rgb_true_anim = ax2.imshow(ground_truth)
+            ims.append([rgb_pred_anim, rgb_true_anim])
+
             # grad_r_true = data_input[:, 0:self.model.in_scale, :] - data_output[:, 0:self.model.in_scale, :]
             # grad_r_pred = data_input[:, 0:self.model.in_scale, :] - pred_r
             # loss_grad_r = criterion(grad_r_pred, grad_r_true)
@@ -610,6 +643,10 @@ class teacher(object):
             #
             # loss = value_loss + grad_loss  # TODO : Add Endropy loss + diversity loss + intermidiete velocity vectors loss + casual loss
             # self.saved_loss.append(loss.item())
+        ani = animation.ArtistAnimation(fig, ims, interval=1, blit=True, repeat_delay=100)
+        plt.show()
+
+
 
 
 
