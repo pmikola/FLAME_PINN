@@ -313,7 +313,7 @@ class teacher(object):
                     loss = value_loss+grad_loss # TODO : Add Endropy loss + diversity loss + intermidiete velocity vectors loss + casual loss
                     self.saved_loss.append(loss.item())
                     optimizer.zero_grad()
-                    loss.backward(retain_graph=True)
+                    loss.backward()
                     optimizer.step()
                     # t_stop = time.perf_counter()
                     t += t_pred - t_start
