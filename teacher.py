@@ -263,6 +263,7 @@ class teacher(object):
                 best_model_state = None
                 num_epochs = num_epochs
                 t = 0.
+                grad_counter = 0
                 print_every_nth_frame=10
                 for epoch in range(num_epochs):
                     self.data_preparation()
@@ -317,6 +318,16 @@ class teacher(object):
                     optimizer.step()
                     # t_stop = time.perf_counter()
                     t += t_pred - t_start
+
+                    if len(self.saved_loss) > 100:
+                        gloss = np.array(self.saved_loss)[-25:-1]
+                        gloss = abs(np.sum(np.gradient(gloss)))
+                        if gloss > 0.1: grad_counter +=1
+                        else: grad_counter = 0
+                        if grad_counter == 10:
+                            for param_group in optimizer.param_groups:
+                                param_group['lr'] = param_group['lr']*0.999
+                            grad_counter = 0
                     if (epoch+1) % print_every_nth_frame == 0:
                         print(f'Period: {self.period}/{self.no_of_periods} | Epoch: {epoch+1}/{num_epochs}, Loss: {loss.item():.4f}, Avg. Time pred for one slice: {t*1e6/print_every_nth_frame/self.batch_size:.4f} [us]')
                         t = 0.
@@ -568,7 +579,7 @@ class teacher(object):
             t_pred = time.perf_counter()
 
             t = t_pred - t_start
-            # print(f'Pred Time: {t*1e6:.4f} [us]')
+            print(f'Pred Time: {t*1e6:.4f} [us]')
 
             v = int(central_points_x_pos.shape[0] // self.model.in_scale + 1)
             h = int(central_points_y_pos.shape[0] // self.model.in_scale + 1)
