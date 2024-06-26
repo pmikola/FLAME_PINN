@@ -635,8 +635,9 @@ class teacher(object):
             rgb_pred_anim = ax1.imshow(prediction)
             rgb_true_anim = ax2.imshow(ground_truth)
 
-            rms = np.sqrt(abs(prediction**2 - ground_truth**2))
+            rms = np.mean(np.sqrt(abs(prediction**2 - ground_truth**2)),axis=2)
             rms_anim = ax3.imshow(rms)
+
             ims.append([rgb_pred_anim, rgb_true_anim,rms_anim,title_pred,title_true,title_rms])
 
             # grad_r_true = data_input[:, 0:self.model.in_scale, :] - data_output[:, 0:self.model.in_scale, :]
@@ -665,6 +666,7 @@ class teacher(object):
             # self.saved_loss.append(loss.item())
         ani = animation.ArtistAnimation(fig, ims, interval=1, blit=True, repeat_delay=100)
         # ani.save("flame_animation_ground_t_vs_preds.gif")
+        fig.colorbar(rms_anim, ax=ax3)
         plt.show()
 
 
