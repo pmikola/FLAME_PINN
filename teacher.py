@@ -461,13 +461,16 @@ class teacher(object):
         t = 0.
         ims = []
         fig = plt.figure(figsize=(10, 6))
-        grid = (1, 2)
+        grid = (1, 3)
         ax1 = plt.subplot2grid(grid, (0, 0))
         ax2 = plt.subplot2grid(grid, (0, 1))
+        ax3 = plt.subplot2grid(grid, (0, 2))
         # ax3 = plt.subplot2grid(grid, (1, 0))
         # ax4 = plt.subplot2grid(grid, (1, 1))
-        for ax in [ax1, ax2]:#, ax3, ax4]:
+        for ax in [ax1, ax2,ax3]:
             ax.set_axis_off()
+
+
         for i in range(0,fuel_slices.shape[0]-1):
             idx_input = i
             idx_output = i+1
@@ -626,9 +629,15 @@ class teacher(object):
             # print(r_v_pred.shape,r_subslice_out.shape)
             ground_truth = np.dstack([g_v_true, b_v_true, r_v_true,a_v_true])
             prediction = np.dstack([g_v_pred, b_v_pred, r_v_pred,a_v_pred])
+            title_pred = ax1.set_title("Prediction")
+            title_true = ax2.set_title("Ground Truth")
+            title_rms = ax3.set_title("rms")
             rgb_pred_anim = ax1.imshow(prediction)
             rgb_true_anim = ax2.imshow(ground_truth)
-            ims.append([rgb_pred_anim, rgb_true_anim])
+
+            rms = np.sqrt(abs(prediction**2 - ground_truth**2))
+            rms_anim = ax3.imshow(rms)
+            ims.append([rgb_pred_anim, rgb_true_anim,rms_anim,title_pred,title_true,title_rms])
 
             # grad_r_true = data_input[:, 0:self.model.in_scale, :] - data_output[:, 0:self.model.in_scale, :]
             # grad_r_pred = data_input[:, 0:self.model.in_scale, :] - pred_r
@@ -655,6 +664,7 @@ class teacher(object):
             # loss = value_loss + grad_loss  # TODO : Add Endropy loss + diversity loss + intermidiete velocity vectors loss + casual loss
             # self.saved_loss.append(loss.item())
         ani = animation.ArtistAnimation(fig, ims, interval=1, blit=True, repeat_delay=100)
+        # ani.save("flame_animation_ground_t_vs_preds.gif")
         plt.show()
 
 
