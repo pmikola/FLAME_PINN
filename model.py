@@ -76,7 +76,7 @@ class Metamorph(nn.Module):
         self.l2h01 = nn.Linear(in_features=self.dens_width*self.shifterCoefficients, out_features=(self.in_scale**2) * self.shifterCoefficients*self.no_subslice_in_tensors)
 
         # Definition of input layer 0 for lvl 0 in hierarchy
-        # rmv of 3 paralled layers for conv 1d k=1,2,3
+        # rmv of 3 paralleled layers for conv 1d k=1,2,3
         # Question : if we change same input to fft (k space) representation and
         #  change configuration of input not by kernel size but by modes
         #  from fft with learnable parameters - do we will have better results?
@@ -87,19 +87,20 @@ class Metamorph(nn.Module):
                                   out_channels=self.no_subslice_in_tensors*self.in_scale, kernel_size=1)
         self.l2h0 = nn.Conv1d(in_channels=self.no_subslice_in_tensors*self.in_scale,
                                   out_channels=int(self.no_subslice_in_tensors*self.in_scale), kernel_size=1)
-        self.l3h0 = nn.Linear(in_features=self.no_subslice_in_tensors*self.in_scale**2,out_features=int(self.flat_size/2))
+        self.l3h0 = nn.Linear(in_features=int(self.no_subslice_in_tensors*self.in_scale**2),out_features=int(self.flat_size/2))
 
         # Definition of the structure density distribution
-        self.l1h0s = nn.Conv1d(in_channels=714,out_channels=200,kernel_size=1)
-        self.l2h0s = nn.Conv1d(in_channels=414, out_channels=200, kernel_size=1)
-        self.l3h0s = nn.Conv1d(in_channels=200, out_channels=self.in_scale*self.no_subslice_in_tensors, kernel_size=1)
-        self.l4h0s = nn.Conv1d(in_channels=200, out_channels=self.in_scale, kernel_size=1)
+        self.l0h0s = nn.Conv1d(in_channels=self.in_scale,
+                              out_channels=self.no_subslice_in_tensors * self.in_scale, kernel_size=1)
+        self.l1h0s = nn.Conv1d(in_channels=self.no_subslice_in_tensors * self.in_scale,
+                              out_channels=int(self.no_subslice_in_tensors * self.in_scale), kernel_size=1)
 
-        # Definition of Heads for red, green, blue and alpha output channels
+        # Definition of Heads for red, green, blue, alpha and structure output channels
         self.l4_h0_r = nn.Linear(in_features=int(self.flat_size/2),out_features=int(self.in_scale**2),bias=True)
         self.l4_h0_g = nn.Linear(in_features=int(self.flat_size/2),out_features=int(self.in_scale**2),bias=True)
         self.l4_h0_b = nn.Linear(in_features=int(self.flat_size/2),out_features=int(self.in_scale**2),bias=True)
         self.l4_h0_a = nn.Linear(in_features=int(self.flat_size/2),out_features=int(self.in_scale**2),bias=True)
+        self.l4_h0_s = nn.Linear(in_features=int(self.flat_size/2),out_features=int(self.in_scale**2),bias=True)
 
         self.init_weights()
     def init_weights(self):
@@ -143,25 +144,23 @@ class Metamorph(nn.Module):
         x_alpha_l1 = torch.tanh(self.l1h01(alpha_l1))
         x_alpha_l2 = torch.tanh(self.l2h01(alpha_l2))
 
-        #s = torch.tanh(self.l1h0s(structure_input).permute(0, 2, 1))
-        #s = torch.tanh(self.l2h0s(s).permute(0, 2, 1))
-        #s = torch.tanh(self.l3h0s(s).permute(0, 2, 1))
-        #s = torch.tanh(self.l4h0s(s).permute(0, 2, 1))
-        # sfft = torch.tanh(self.l5h0s(s))
-        x = self.SpaceTimeFFTFeature(data_input, meta_input_h4, meta_input_h5, meta_output_h5)
-        x = x #+ s
 
+        x = self.SpaceTimeFFTFeature(data_input, meta_input_h4, meta_input_h5, meta_output_h5)
         x = self.shapeShift(self.l1h0(x),x_alpha_l1)
         x = self.shapeShift(self.l2h0(x),x_alpha_l2)
 
+        s = self.l0h0s(structure_input)
+        s = self.l1h0s(s)
+        x = x+s
         x = torch.flatten(x,start_dim=1)
+        # print(x.shape)
         x = torch.tanh(self.l3h0(x))
-
         r = self.l4_h0_r(x).reshape(self.batch_size,self.in_scale,self.in_scale)
         g = self.l4_h0_g(x).reshape(self.batch_size,self.in_scale,self.in_scale)
         b = self.l4_h0_b(x).reshape(self.batch_size,self.in_scale,self.in_scale)
         a = self.l4_h0_a(x).reshape(self.batch_size,self.in_scale,self.in_scale)
-        return r,g,b,a
+        s = self.l4_h0_s(x).reshape(self.batch_size, self.in_scale, self.in_scale)
+        return r,g,b,a,s
 
 
     def shapeShift(self,x, h):
@@ -266,7 +265,7 @@ class Metamorph(nn.Module):
         iFFWW = torch.fft.ifftn(fft_dataWSpaceTime, norm='forward')
         iFFWW_real = iFFWW.real
         iFFWW_imag = iFFWW.imag
-
+        # print(self.weights_data.shape,data.shape)
         skip = self.weights_data*data
         ifft_data = iFFWW_real+iFFWW_imag
         #ifft_space_time_encoding = iSTFFWW_real + iSTFFWW_imag

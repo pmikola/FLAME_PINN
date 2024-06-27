@@ -11,6 +11,7 @@ from matplotlib import pyplot as plt, animation
 class teacher(object):
     def __init__(self,model,device):
         super(teacher, self).__init__()
+
         self.model = model
         self.device = device
         self.fsim = None
@@ -30,6 +31,7 @@ class teacher(object):
         self.meta_input_h4 = None
         self.meta_input_h5 = None
         self.data_output = None
+        self.structure_output = None
         self.meta_output_h1 = None
         self.meta_output_h2 = None
         self.meta_output_h3 = None
@@ -115,6 +117,7 @@ class teacher(object):
         meta_input_h4 = []
         meta_input_h5 = []
         data_output = []
+        structure_output = []
         meta_output_h1 = []
         meta_output_h2 = []
         meta_output_h3 = []
@@ -136,7 +139,7 @@ class teacher(object):
             slice_y = slice(window_y[0], window_y[-1] + 1)
 
             # Note : Input data
-            fuel_subslice_in = fuel_slices[idx_input]
+            fuel_subslice_in = fuel_slices[idx_input,slice_x, slice_y]
             r_subslice_in = r_slices[idx_input,slice_x, slice_y]
             g_subslice_in = g_slices[idx_input,slice_x, slice_y]
             b_subslice_in = b_slices[idx_input,slice_x, slice_y]
@@ -157,9 +160,8 @@ class teacher(object):
 
 
             # Note : Output data
-            # fuel_subslice_out = fuel_slices[idx_output][slice_x, slice_y]#.reshape(1)
+            fuel_subslice_out = fuel_slices[idx_output,slice_x, slice_y]#.reshape(1)
             r_subslice_out = r_slices[idx_output,slice_x, slice_y]#.reshape(1)
-
             g_subslice_out = g_slices[idx_output,slice_x, slice_y]#.reshape(1)
             b_subslice_out = b_slices[idx_output,slice_x, slice_y]#.reshape(1)
             alpha_subslice_out = alpha_slices[idx_output,slice_x, slice_y]#.reshape(1)
@@ -186,6 +188,8 @@ class teacher(object):
             b_out_is_zero = torch.count_nonzero(b_subslice_out)
             a_in_is_zero = torch.count_nonzero(alpha_subslice_out)
             a_out_is_zero = torch.count_nonzero(alpha_subslice_out)
+            f_in_is_zero = torch.count_nonzero(fuel_subslice_out)
+            f_out_is_zero = torch.count_nonzero(fuel_subslice_out)
             r_zero = r_in_is_zero==r_out_is_zero
             r_i0 = r_in_is_zero == 0
             r_o0 = r_out_is_zero == 0
@@ -198,12 +202,16 @@ class teacher(object):
             a_zero = a_in_is_zero == a_out_is_zero
             a_i0 = a_in_is_zero == 0
             a_o0 = a_out_is_zero == 0
+            f_zero = f_in_is_zero == f_out_is_zero
+            f_i0 = f_in_is_zero == 0
+            f_o0 = f_out_is_zero == 0
             rzero = r_zero and r_i0 and r_o0
             gzero = g_zero and g_i0 and g_o0
             bzero = b_zero and b_i0 and b_o0
             azero = a_zero and a_i0 and a_o0
+            fzero = f_zero and f_i0 and f_o0
             frame += 1
-            if  rzero and gzero and bzero and azero:
+            if  rzero and gzero and bzero and azero and fzero:
                 frame -=1
             else:
                 # if not rzero:
@@ -225,6 +233,7 @@ class teacher(object):
                 meta_input_h4.append(torch.cat([torch.tensor(window_x),torch.tensor(window_y)]))
                 meta_input_h5.append(meta_step_in_numeric)
                 data_output.append(data_output_subslice)
+                structure_output.append(fuel_subslice_out)
                 meta_output_h1.append(meta_output_subslice)
                 meta_output_h2.append(meta_step_out)
                 meta_output_h3.append(central_points)
@@ -241,6 +250,7 @@ class teacher(object):
         self.meta_input_h5 = torch.stack(meta_input_h5,dim=0)
 
         self.data_output = torch.stack(data_output,dim=0)
+        self.structure_output = torch.stack(structure_output, dim=0)
         self.meta_output_h1 = torch.stack(meta_output_h1,dim=0)
         self.meta_output_h2 = torch.stack(meta_output_h2,dim=0)
         self.meta_output_h3 = torch.stack(meta_output_h3,dim=0)
@@ -271,7 +281,7 @@ class teacher(object):
                      self.meta_input_h3,self.meta_input_h4,self.meta_input_h5,self.meta_output_h1,
                      self.meta_output_h2,self.meta_output_h3,self.meta_output_h4,self.meta_output_h5) =\
                                                                 (self.data_input.to(device),
-                                                                 self.structure_input.to(device),
+                                                                self.structure_input.to(device),
                                                                 self.meta_input_h1.to(device),
                                                                 self.meta_input_h2.to(device),
                                                                 self.meta_input_h3.to(device),
@@ -289,7 +299,7 @@ class teacher(object):
                                self.meta_input_h3,self.meta_input_h4,self.meta_input_h5,self.meta_output_h1,
                                self.meta_output_h2,self.meta_output_h3,self.meta_output_h4,self.meta_output_h5)
                     t_start = time.perf_counter()
-                    pred_r,pred_g,pred_b,pred_a = self.model(dataset)
+                    pred_r,pred_g,pred_b,pred_a,pred_s = self.model(dataset)
                     t_pred = time.perf_counter()
 
                     grad_r_true = self.data_input[:,0:self.model.in_scale,:] - self.data_output[:,0:self.model.in_scale,:]
@@ -304,12 +314,16 @@ class teacher(object):
                     grad_a_true = self.data_input[:, self.model.in_scale*3:self.model.in_scale*4, :] - self.data_output[:, self.model.in_scale*3:self.model.in_scale*4, :]
                     grad_a_pred = self.data_input[:, self.model.in_scale*3:self.model.in_scale*4, :] - pred_a
                     loss_grad_a = criterion(grad_a_pred, grad_a_true)
-                    grad_loss = loss_grad_r+loss_grad_g+loss_grad_b+loss_grad_a
+                    grad_s_true = self.structure_input - self.structure_output
+                    grad_s_pred = self.structure_input - pred_s
+                    loss_grad_s = criterion(grad_s_pred, grad_s_true)
+                    grad_loss = loss_grad_r+loss_grad_g+loss_grad_b+loss_grad_a+loss_grad_s
                     loss_r = criterion(pred_r, self.data_output[:,0:self.model.in_scale,:])
                     loss_g = criterion(pred_g, self.data_output[:,self.model.in_scale:self.model.in_scale*2,:])
                     loss_b = criterion(pred_b, self.data_output[:,self.model.in_scale*2:self.model.in_scale*3,:])
                     loss_alpha = criterion(pred_a, self.data_output[:,self.model.in_scale*3:self.model.in_scale*4,:])
-                    value_loss = loss_r + loss_g + loss_b + loss_alpha
+                    loss_s = criterion(pred_s, self.structure_output)
+                    value_loss = loss_r + loss_g + loss_b + loss_alpha+loss_s
 
                     loss = value_loss+grad_loss # TODO : Add Endropy loss + diversity loss + intermidiete velocity vectors loss + casual loss
                     self.saved_loss.append(loss.item())
@@ -405,7 +419,6 @@ class teacher(object):
         b_idx = rgb_idx[f_dens_pos * 2:f_dens_pos * 3]#[frame_samples]
         alpha_idx = np.array([i for i, x in enumerate(self.field_names) if x == "alpha"])#[frame_samples]
         fuel_slices = self.data_tensor[fdens_idx]
-
         r_slices = self.data_tensor[r_idx]
         g_slices = self.data_tensor[g_idx]
         b_slices = self.data_tensor[b_idx]
@@ -424,11 +437,13 @@ class teacher(object):
 
         central_points_x_binary = []
         central_points_y_binary = []
+        m_iter = int(central_points_x_pos.shape[0] // self.model.in_scale + 1)
+        n_iter = int(central_points_y_pos.shape[0] // self.model.in_scale + 1)
 
         j = 0
-        for m in range(0, int(central_points_x_pos.shape[0]//self.model.in_scale+1)):
+        for m in range(0, m_iter):
             k = 0
-            for n in range(0, int(central_points_y_pos.shape[0]//self.model.in_scale+1)):
+            for n in range(0, n_iter):
                 wx_range = np.array(range(int(central_points_x_neg[j]),int(central_points_x_pos[j]) + 2))
 
                 windows_x.append(wx_range)
@@ -436,11 +451,12 @@ class teacher(object):
                 central_points_x_binary.append(torch.tensor([torch.tensor(int(d), dtype=torch.int8) for d in central_point_x_binary_pre]))
 
                 wy_range = np.array(range(int(central_points_y_neg[k]),int(central_points_y_pos[k]) + 2))
+
                 windows_y.append(wy_range)
                 central_point_y_binary_pre = "{0:010b}".format(central_points_y[k])
                 central_points_y_binary.append(torch.tensor([torch.tensor(int(d), dtype=torch.int8) for d in central_point_y_binary_pre]))
-
                 k +=self.model.in_scale
+
             j+=self.model.in_scale
 
         central_points_x_binary = torch.tensor(np.array(central_points_x_binary))
@@ -453,9 +469,9 @@ class teacher(object):
 
         x_idx = torch.tensor(np.array(windows_x))
         y_idx = torch.tensor(np.array(windows_y))
-
         x_idx_start = torch.LongTensor(np.array([sublist[0] for sublist in x_idx]))
         x_idx_end = torch.LongTensor(np.array([sublist[-1] for sublist in x_idx]))
+
         y_idx_start = torch.LongTensor(np.array([sublist[0] for sublist in y_idx]))
         y_idx_end = torch.LongTensor(np.array([sublist[-1] for sublist in y_idx]))
         t = 0.
@@ -481,17 +497,20 @@ class teacher(object):
             gsin = []
             bsin = []
             asin = []
+
+            fsout = []
             rsout = []
             gsout = []
             bsout = []
             asout = []
             for ii in range(len(x_idx_start)):
-                fsin.append(fuel_slices[idx_input])
+                fsin.append(fuel_slices[idx_input, x_idx_start[ii]:x_idx_end[ii],y_idx_start[ii]:y_idx_end[ii]])
                 rsin.append(r_slices[idx_input, x_idx_start[ii]:x_idx_end[ii],y_idx_start[ii]:y_idx_end[ii]])
                 gsin.append(g_slices[idx_input, x_idx_start[ii]:x_idx_end[ii],y_idx_start[ii]:y_idx_end[ii]])
                 bsin.append(b_slices[idx_input, x_idx_start[ii]:x_idx_end[ii],y_idx_start[ii]:y_idx_end[ii]])
                 asin.append(alpha_slices[idx_input, x_idx_start[ii]:x_idx_end[ii],y_idx_start[ii]:y_idx_end[ii]])
 
+                fsout.append(fuel_slices[idx_output, x_idx_start[ii]:x_idx_end[ii], y_idx_start[ii]:y_idx_end[ii]])
                 rsout.append(r_slices[idx_output, x_idx_start[ii]:x_idx_end[ii], y_idx_start[ii]:y_idx_end[ii]])
                 gsout.append(g_slices[idx_output, x_idx_start[ii]:x_idx_end[ii], y_idx_start[ii]:y_idx_end[ii]])
                 bsout.append(b_slices[idx_output, x_idx_start[ii]:x_idx_end[ii], y_idx_start[ii]:y_idx_end[ii]])
@@ -518,6 +537,7 @@ class teacher(object):
                                              meta_fuel_cut_off_time_in, meta_igni_time_in,
                                              meta_ignition_temp_in, meta_viscosity_in, meta_diff_in], dim=0)
             # Note : Output data
+            f_subslice_out = torch.stack(fsout, dim=0)
             r_subslice_out = torch.stack(rsout,dim=0)
             g_subslice_out = torch.stack(gsout,dim=0)
             b_subslice_out = torch.stack(bsout,dim=0)
@@ -578,7 +598,7 @@ class teacher(object):
             #            meta_input_h3.shape, meta_input_h4.shape, meta_input_h5.shape, meta_output_h1.shape,
             #            meta_output_h2.shape, meta_output_h3.shape, meta_output_h4.shape, meta_output_h5.shape)
             t_start = time.perf_counter()
-            pred_r, pred_g, pred_b, pred_a = self.model(dataset)
+            pred_r, pred_g, pred_b, pred_a,pred_s = self.model(dataset)
             t_pred = time.perf_counter()
 
             t = t_pred - t_start
