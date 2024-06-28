@@ -65,7 +65,7 @@ class teacher(object):
                     if name == 'rgb':
                         ptfile = torch.load(name+'\\'+'t{}.pt'.format(i))
                         for j in range(0,3):
-                            data_tensor.append(ptfile['data'][:,:,j]/255.)
+                            data_tensor.append(ptfile['data'][:,:,j]/255)
                             meta_tensor.append(ptfile['metadata'])
                             field_names.append(ptfile['name'])
                     else:
@@ -76,7 +76,6 @@ class teacher(object):
 
         self.data_tensor = torch.stack(data_tensor,dim=0)
         self.meta_tensor = torch.stack(meta_tensor,dim=0)
-
         for i in range(self.meta_tensor.shape[0]):
             meta_temp = []
             for j in range(self.meta_tensor.shape[1]):
@@ -93,11 +92,14 @@ class teacher(object):
         fdens_idx = np.array([i for i, x in enumerate(self.field_names) if x == "fuel_density"])
         frame_samples = random.sample(list(set(fdens_idx)), k=self.no_frame_samples)
         f_dens_pos = len(fdens_idx)
-        fdens_idx = fdens_idx[frame_samples]
+        fdens_idx = frame_samples
+        # TODO : RGB is not 000000,111111,222222 but 012,012,012,012...
         rgb_idx = np.array([i for i, x in enumerate(self.field_names) if x == "rgb"])
-        r_idx = rgb_idx[0:f_dens_pos][frame_samples]
-        g_idx = rgb_idx[f_dens_pos:f_dens_pos * 2][frame_samples]
-        b_idx = rgb_idx[f_dens_pos * 2:f_dens_pos * 3][frame_samples]
+        r_idx = rgb_idx[::3][frame_samples]
+        g_idx = (rgb_idx[::3]+1)[frame_samples]
+        b_idx = (rgb_idx[::3]+2)[frame_samples]
+        # fs = np.array(frame_samples)+150
+
         alpha_idx = np.array([i for i, x in enumerate(self.field_names) if x == "alpha"])[frame_samples]
         fuel_slices = self.data_tensor[fdens_idx]
         r_slices = self.data_tensor[r_idx]
@@ -105,6 +107,11 @@ class teacher(object):
         b_slices = self.data_tensor[b_idx]
         alpha_slices = self.data_tensor[alpha_idx]
         meta_binary_slices = self.meta_binary[fdens_idx]
+
+        # gt = np.stack((r_slices[0].cpu().numpy(), g_slices[0].cpu().numpy(), b_slices[0].cpu().numpy()), axis=2)
+        # print(gt.shape)
+        # plt.imshow(gt.astype(np.uint8) , alpha=alpha_slices[0].cpu().numpy())
+        # plt.show()
         x_range = range(self.fsim.N_boundary + self.input_window_size,
                         fuel_slices[0].shape[0] - self.fsim.N_boundary - self.input_window_size)
         y_range = range(self.fsim.N_boundary + self.input_window_size,
@@ -414,9 +421,9 @@ class teacher(object):
 
         #fdens_idx = fdens_idx[frame_samples]
         rgb_idx = np.array([i for i, x in enumerate(self.field_names) if x == "rgb"])
-        r_idx = rgb_idx[0:f_dens_pos]#[frame_samples]
-        g_idx = rgb_idx[f_dens_pos:f_dens_pos * 2]#[frame_samples]
-        b_idx = rgb_idx[f_dens_pos * 2:f_dens_pos * 3]#[frame_samples]
+        r_idx = rgb_idx[::3]#[frame_samples]
+        g_idx = rgb_idx[::3]+1#[frame_samples]
+        b_idx = rgb_idx[::3]+2#[frame_samples]
         alpha_idx = np.array([i for i, x in enumerate(self.field_names) if x == "alpha"])#[frame_samples]
         fuel_slices = self.data_tensor[fdens_idx]
         r_slices = self.data_tensor[r_idx]
@@ -424,56 +431,61 @@ class teacher(object):
         b_slices = self.data_tensor[b_idx]
         alpha_slices = self.data_tensor[alpha_idx]
         meta_binary_slices = self.meta_binary[fdens_idx]
+
         # Note: IDX preparation
         central_points_x = np.arange(self.input_window_size, fuel_slices.shape[1] - self.input_window_size+1)
         central_points_y = np.arange(self.input_window_size, fuel_slices.shape[2] - self.input_window_size+1)
+
         central_points_x_pos = central_points_x + self.input_window_size
         central_points_x_neg = central_points_x - self.input_window_size
         central_points_y_pos = central_points_y + self.input_window_size
         central_points_y_neg = central_points_y - self.input_window_size
+
 
         windows_x = []
         windows_y = []
 
         central_points_x_binary = []
         central_points_y_binary = []
-        m_iter = int(central_points_x_pos.shape[0] // self.model.in_scale + 1)
-        n_iter = int(central_points_y_pos.shape[0] // self.model.in_scale + 1)
-
+        v = int(central_points_x_pos.shape[0] / self.model.in_scale + 1)
+        h = int(central_points_y_pos.shape[0] / self.model.in_scale + 1)
         j = 0
-        for m in range(0, m_iter):
+        for m in range(0, v):
             k = 0
-            for n in range(0, n_iter):
-                wx_range = np.array(range(int(central_points_x_neg[j]),int(central_points_x_pos[j]) + 2))
-
+            for n in range(0, h):
+                # print(int(central_points_x_neg[j]),int(central_points_x_pos[j]))
+                # print(int(central_points_y_neg[j]), int(central_points_y_pos[j]))
+                # time.sleep(0.3)
+                wx_range = np.array(range(int(central_points_x_neg[j]),int(central_points_x_pos[j]) +2))
                 windows_x.append(wx_range)
                 central_point_x_binary_pre = "{0:010b}".format(central_points_x[j])
                 central_points_x_binary.append(torch.tensor([torch.tensor(int(d), dtype=torch.int8) for d in central_point_x_binary_pre]))
-
                 wy_range = np.array(range(int(central_points_y_neg[k]),int(central_points_y_pos[k]) + 2))
-
                 windows_y.append(wy_range)
                 central_point_y_binary_pre = "{0:010b}".format(central_points_y[k])
                 central_points_y_binary.append(torch.tensor([torch.tensor(int(d), dtype=torch.int8) for d in central_point_y_binary_pre]))
                 k +=self.model.in_scale
-
             j+=self.model.in_scale
+
 
         central_points_x_binary = torch.tensor(np.array(central_points_x_binary))
         central_points_y_binary = torch.tensor(np.array(central_points_y_binary))
         central_points_xy_binary = []
-        for v in range(len(central_points_x_binary)):
-            xy_binary = torch.cat([central_points_x_binary[v], central_points_y_binary[v]])
+        for g in range(len(central_points_x_binary)):
+            xy_binary = torch.cat([central_points_x_binary[g], central_points_y_binary[g]])
             central_points_xy_binary.append(xy_binary)
 
 
         x_idx = torch.tensor(np.array(windows_x))
         y_idx = torch.tensor(np.array(windows_y))
-        x_idx_start = torch.LongTensor(np.array([sublist[0] for sublist in x_idx]))
-        x_idx_end = torch.LongTensor(np.array([sublist[-1] for sublist in x_idx]))
-
-        y_idx_start = torch.LongTensor(np.array([sublist[0] for sublist in y_idx]))
-        y_idx_end = torch.LongTensor(np.array([sublist[-1] for sublist in y_idx]))
+        x_idx_start = np.array([sublist[0] for sublist in x_idx])
+        x_idx_end = np.array([sublist[-1] for sublist in x_idx])
+        # print('START\n',x_idx_start[0:150],x_idx_start[-150:-1],'START \n')
+        # print('STOP \n',x_idx_end[0:150], x_idx_end[-150:-1],'STOP \n')
+        y_idx_start = np.array([sublist[0] for sublist in y_idx])
+        y_idx_end = np.array([sublist[-1] for sublist in y_idx])
+        # print('START\n', y_idx_start[0:150], y_idx_start[-150:-1], 'START \n')
+        # print('STOP \n', y_idx_end[0:150], y_idx_end[-150:-1], 'STOP \n')
         t = 0.
         ims = []
         fig = plt.figure(figsize=(10, 6))
@@ -503,6 +515,7 @@ class teacher(object):
             gsout = []
             bsout = []
             asout = []
+
             for ii in range(len(x_idx_start)):
                 fsin.append(fuel_slices[idx_input, x_idx_start[ii]:x_idx_end[ii],y_idx_start[ii]:y_idx_end[ii]])
                 rsin.append(r_slices[idx_input, x_idx_start[ii]:x_idx_end[ii],y_idx_start[ii]:y_idx_end[ii]])
@@ -523,7 +536,6 @@ class teacher(object):
             b_subslice_in = torch.stack(bsin,dim=0)
             alpha_subslice_in = torch.stack(asin,dim=0)
             data_input_subslice = torch.cat([r_subslice_in,g_subslice_in, b_subslice_in,alpha_subslice_in], dim=1)
-
             meta_step_in = meta_binary_slices[idx_input][0]
             meta_step_in_numeric = self.meta_tensor[idx_input][0]
             meta_fuel_initial_speed_in = meta_binary_slices[idx_input][1]
@@ -599,13 +611,11 @@ class teacher(object):
             #            meta_output_h2.shape, meta_output_h3.shape, meta_output_h4.shape, meta_output_h5.shape)
             t_start = time.perf_counter()
             pred_r, pred_g, pred_b, pred_a,pred_s = self.model(dataset)
+
             t_pred = time.perf_counter()
 
             t = t_pred - t_start
             print(f'Pred Time: {t*1e6:.4f} [us]')
-
-            v = int(central_points_x_pos.shape[0] // self.model.in_scale + 1)
-            h = int(central_points_y_pos.shape[0] // self.model.in_scale + 1)
 
             r_v_true = np.array([]).reshape(0, h * self.model.in_scale)
             g_v_true = np.array([]).reshape(0, h * self.model.in_scale)
@@ -616,6 +626,7 @@ class teacher(object):
             g_v_pred = np.array([]).reshape(0, h * self.model.in_scale)
             b_v_pred = np.array([]).reshape(0, h * self.model.in_scale)
             a_v_pred = np.array([]).reshape(0, h * self.model.in_scale)
+            idx = 0
             for m in range(0, v):
                 r_h_true = np.array([]).reshape(self.model.in_scale, 0)
                 g_h_true = np.array([]).reshape(self.model.in_scale, 0)
@@ -627,38 +638,76 @@ class teacher(object):
                 b_h_pred = np.array([]).reshape(self.model.in_scale, 0)
                 a_h_pred = np.array([]).reshape(self.model.in_scale, 0)
                 for n in range(0, h):
-                    r_h_true = np.hstack([r_h_true, r_subslice_out[n + m * h].cpu().detach().numpy()])
-                    g_h_true = np.hstack([g_h_true, g_subslice_out[n + m * h].cpu().detach().numpy()])
-                    b_h_true = np.hstack([b_h_true, b_subslice_out[n + m * h].cpu().detach().numpy()])
-                    a_h_true = np.hstack([a_h_true, alpha_subslice_out[n + m * h].cpu().detach().numpy()])
+                    iter_index = idx#(n + m * h)
+                    r_h_true = np.hstack([r_h_true, r_subslice_out[iter_index].cpu().detach().numpy()])
+                    g_h_true = np.hstack([g_h_true, g_subslice_out[iter_index].cpu().detach().numpy()])
+                    b_h_true = np.hstack([b_h_true, b_subslice_out[iter_index].cpu().detach().numpy()])
+                    a_h_true = np.hstack([a_h_true, alpha_subslice_out[iter_index].cpu().detach().numpy()])
 
-                    r_h_pred = np.hstack([r_h_pred, pred_r[n + m * h].cpu().detach().numpy()])
-                    g_h_pred = np.hstack([g_h_pred, pred_g[n + m * h].cpu().detach().numpy()])
-                    b_h_pred = np.hstack([b_h_pred, pred_b[n + m * h].cpu().detach().numpy()])
-                    a_h_pred = np.hstack([a_h_pred, pred_a[n + m * h].cpu().detach().numpy()])
+                    r_h_pred = np.hstack([r_h_pred, pred_r[iter_index].cpu().detach().numpy()])
+                    g_h_pred = np.hstack([g_h_pred, pred_g[iter_index].cpu().detach().numpy()])
+                    b_h_pred = np.hstack([b_h_pred, pred_b[iter_index].cpu().detach().numpy()])
+                    a_h_pred = np.hstack([a_h_pred, pred_a[iter_index].cpu().detach().numpy()])
+                    idx+=1
+                r_v_true = np.vstack([r_v_true, r_h_true])
+                g_v_true = np.vstack([g_v_true, g_h_true])
+                b_v_true = np.vstack([b_v_true, b_h_true])
+                a_v_true = np.vstack([a_v_true, a_h_true])
 
-                r_v_true = np.clip(abs(np.vstack([r_v_true, r_h_true])), 0., 1.)
-                g_v_true = np.clip(abs(np.vstack([g_v_true, g_h_true])), 0., 1.)
-                b_v_true = np.clip(abs(np.vstack([b_v_true, b_h_true])), 0., 1.)
-                a_v_true = np.clip(abs(np.vstack([a_v_true, a_h_true])), 0., 1.)
 
                 r_v_pred = np.clip(abs(np.vstack([r_v_pred, r_h_pred])), 0., 1.)
                 g_v_pred = np.clip(abs(np.vstack([g_v_pred, g_h_pred])), 0., 1.)
                 b_v_pred = np.clip(abs(np.vstack([b_v_pred, b_h_pred])), 0., 1.)
                 a_v_pred = np.clip(abs(np.vstack([a_v_pred, a_h_pred])), 0., 1.)
-            # print(r_v_pred.shape,r_subslice_out.shape)
-            ground_truth = np.dstack([g_v_true, b_v_true, r_v_true,a_v_true])
-            prediction = np.dstack([g_v_pred, b_v_pred, r_v_pred,a_v_pred])
+
+            # r_v_true = []
+            # g_v_true = []
+            # b_v_true = []
+            # a_v_true = []
+            # idx = 0
+            # # print(v,h)
+            # for m in range(0, v):
+            #     r_h_true = []
+            #     g_h_true = []
+            #     b_h_true = []
+            #     a_h_true = []
+            #     for n in range(0, h):
+            #         r_h_true.append(r_subslice_out[idx].cpu())
+            #         g_h_true.append(g_subslice_out[idx].cpu())
+            #         b_h_true.append(b_subslice_out[idx].cpu())
+            #         a_h_true.append(alpha_subslice_out[idx].cpu())
+            #         idx += 1
+            #     r_v_true.append(r_h_true)
+            #     g_v_true.append(g_h_true)
+            #     b_v_true.append(b_h_true)
+            #     a_v_true.append(a_h_true)
+            # r_v_true = np.array(r_v_true)
+            # g_v_true = np.array(g_v_true)
+            # b_v_true = np.array(b_v_true)
+            # a_v_true = np.array(a_v_true)
+            #
+            # # print(r_v_true.shape)
+            # r_v_true = r_v_true.transpose(0, 2, 1, 3).reshape(47 * 15, 27 * 15)
+            # g_v_true = g_v_true.transpose(0, 2, 1, 3).reshape(47 * 15, 27 * 15)
+            # b_v_true = b_v_true.transpose(0, 2, 1, 3).reshape(47 * 15, 27 * 15)
+            # a_v_true = a_v_true.transpose(0, 2, 1, 3).reshape(47 * 15, 27 * 15)
+            # print(r_v_true.shape)
+
+            prediction = np.stack((r_v_pred, g_v_pred, b_v_pred), axis=2)
+            ground_truth = np.stack((r_v_true, g_v_true, b_v_true),axis=2)
+
             title_pred = ax1.set_title("Prediction")
             title_true = ax2.set_title("Ground Truth")
             title_rms = ax3.set_title("rms")
-            rgb_pred_anim = ax1.imshow(prediction)
-            rgb_true_anim = ax2.imshow(ground_truth)
+
+            rgb_pred_anim = ax1.imshow(prediction.astype(np.uint8)*255,alpha=a_v_pred)
+            rgb_true_anim = ax2.imshow(ground_truth.astype(np.uint8)*255,alpha=a_v_true)
 
             rms = np.mean(np.sqrt(abs(prediction**2 - ground_truth**2)),axis=2)
             rms_anim = ax3.imshow(rms)
 
             ims.append([rgb_pred_anim, rgb_true_anim,rms_anim,title_pred,title_true,title_rms])
+            ims.append([ rgb_true_anim,title_pred,title_true,title_rms])
 
             # grad_r_true = data_input[:, 0:self.model.in_scale, :] - data_output[:, 0:self.model.in_scale, :]
             # grad_r_pred = data_input[:, 0:self.model.in_scale, :] - pred_r
