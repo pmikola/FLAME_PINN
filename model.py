@@ -200,7 +200,6 @@ class Metamorph(nn.Module):
         cos_mask = (space_time == 0)
         sin_mask = (space_time == 1)
         encoded_sequences = cos_mask.float() * cos_values + sin_mask.float() * sin_values
-        print(encoded_sequences.shape)
         fft_space_time_encoding = torch.fft.fftn(encoded_sequences, norm='forward')[:,:self.modes]
 
         # Attention :  Below is implemented simplified FNO LAYER
