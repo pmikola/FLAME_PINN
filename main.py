@@ -27,7 +27,7 @@ model = Metamorph(no_frame_samples, batch_size, input_window_size, device).to(de
 t = teacher(model, device)
 t.fsim = fl.flame_sim(no_frames=no_frames,frame_skip=frame_skip)
 criterion = nn.MSELoss(reduction='mean')
-optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-5, amsgrad=True)
+optimizer = torch.optim.Adam(model.parameters(), lr=5e-4, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-5, amsgrad=True)
 
 # Note: Eon > Era > Period > Epoch
 no_periods = 1
@@ -44,7 +44,7 @@ for period in range(1,no_periods+1):
                      last_frame,frame_skip*2,criterion,optimizer,device,learning=1,num_epochs=1000)
     # t.fsim.simulate(simulate=0,delete_data=1)
 
-# t.visualize_lerning()
+t.visualize_lerning()
 #
 t.examine(criterion,device,plot=1)
 

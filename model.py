@@ -25,12 +25,17 @@ class Metamorph(nn.Module):
                                       device=self.device)  # Check : from 0 to n or from 1 to n +1?
 
         # Definition of intermediate layer/parameters that transforms input into Fourier Feature with positional encoding and TODO: gaussian Gate
-        self.modes = 16  # No o of modes for SpaceTime Encoding
+        self.modes = 32  # No o of modes for SpaceTime Encoding
         self.ii = torch.arange(start=0, end=self.modes, step=1, device=self.device)
 
-        self.weights_data_fft = nn.Parameter(torch.rand(1, self.no_subslice_in_tensors * self.in_scale, self.in_scale, dtype=torch.cfloat))
-        self.weights_space_time_encoding_fft = nn.Parameter(torch.rand(1,self.no_subslice_in_tensors * self.in_scale, self.in_scale, self.modes, dtype=torch.cfloat))
-        self.weights_data = nn.Parameter(torch.rand(1, self.no_subslice_in_tensors * self.in_scale, self.in_scale, dtype=torch.float))
+        self.weights_data_0 = nn.Parameter(torch.rand(1, self.no_subslice_in_tensors * self.in_scale, self.in_scale, dtype=torch.float))
+        self.weights_data_1 = nn.Parameter(torch.rand(1, self.no_subslice_in_tensors * self.in_scale, self.in_scale, dtype=torch.float))
+        self.weights_data_2 = nn.Parameter(torch.rand(1, self.no_subslice_in_tensors * self.in_scale, self.in_scale, dtype=torch.float))
+
+        self.weights_data_fft_0 = nn.Parameter(torch.rand(1, self.no_subslice_in_tensors * self.in_scale, self.in_scale, dtype=torch.cfloat))
+        self.weights_data_fft_1 = nn.Parameter(torch.rand(1, self.no_subslice_in_tensors * self.in_scale, self.in_scale, dtype=torch.cfloat))
+        self.weights_data_fft_2 = nn.Parameter(torch.rand(1, self.no_subslice_in_tensors * self.in_scale, self.in_scale, dtype=torch.cfloat))
+
 
         # Problem with the kernels below when changing size that are used in FFT
         # self.kernel_0 = torch.zeros(self.in_data, self.in_data, 1, 2, 2, device=self.device)
@@ -59,7 +64,6 @@ class Metamorph(nn.Module):
         self.l0h3 = nn.Linear(in_features=self.no_meta_h3, out_features=self.dens_width*self.shifterCoefficients)
         self.l1h3 = nn.Linear(in_features=self.dens_width*self.shifterCoefficients, out_features=self.dens_width*(self.shifterCoefficients**2))
         self.l2h3 = nn.Linear(in_features=self.dens_width*(self.shifterCoefficients**2), out_features=self.dens_width*(self.shifterCoefficients**3))
-
 
         # Definition of layer 0,1,2 for lvl 2 in hierarchy
         self.l0h2 = nn.Linear(in_features=self.no_meta_h2, out_features=self.dens_width*self.shifterCoefficients)
@@ -145,7 +149,10 @@ class Metamorph(nn.Module):
         x_alpha_l2 = torch.tanh(self.l2h01(alpha_l2))
 
 
-        x = self.SpaceTimeFFTFeature(data_input, meta_input_h4, meta_input_h5, meta_output_h5)
+        x = self.SpaceTimeFFTFeature(data_input,self.weights_data_0,self.weights_data_fft_0, meta_central_points, meta_step)
+        #xx = self.SpaceTimeFFTFeature(x,self.weights_data_1,self.weights_data_fft_1, meta_central_points, meta_step)
+        #xxx = self.SpaceTimeFFTFeature(xx,self.weights_data_2,self.weights_data_fft_2, meta_central_points, meta_step)+x
+
         x = self.shapeShift(self.l1h0(x),x_alpha_l1)
         x = self.shapeShift(self.l2h0(x),x_alpha_l2)
 
@@ -185,91 +192,32 @@ class Metamorph(nn.Module):
         else:
             raise ValueError("Unsupported input dimensions")
 
-    def SpaceTimeFFTFeature(self,data,meta_space,meta_step_in,meta_step_out):
-        # print(self.weights_fd1.shape)
-        # print(data.shape)
-        # x_grid, y_grid = torch.meshgrid(meta_space[0, 0:self.in_scale], meta_space[0, self.in_scale:], indexing='ij')
-        # x_grid = x_grid.unsqueeze(0)
-        # y_grid = y_grid.unsqueeze(0)
-        #
-        # for b in range(1,self.batch_size):
-        #     xx_grid,yy_grid = torch.meshgrid(meta_space[b,0:self.in_scale],meta_space[0,self.in_scale:],indexing='ij')
-        #     xx_grid = xx_grid.unsqueeze(0)
-        #     yy_grid = yy_grid.unsqueeze(0)
-        #     x_grid = torch.cat([x_grid,xx_grid],dim=0)
-        #     y_grid = torch.cat([y_grid,yy_grid],dim=0)
-        #
-        # # NOTE : SPACE CODING
-        # fseries_space_x = torch.pow(x_grid.unsqueeze(3), (2 * self.ii // 2))
-        # fseries_space_y = torch.pow(y_grid.unsqueeze(3), (2 * self.ii // 2))
-        # PosEncSin_x = torch.sin(fseries_space_x)
-        # PosEncSin_y = torch.sin(fseries_space_y)
-        # PosEncCos_x = torch.cos(fseries_space_x)
-        # PosEncCos_y = torch.cos(fseries_space_y)
-        # PosEnc_x = (PosEncCos_x + PosEncSin_x)/4
-        # PosEnc_y = (PosEncCos_y + PosEncSin_y)/4
-        #
-        # # NOTE : TIME CODING
-        # fseries_step_in = torch.pow(meta_step_in.unsqueeze(1).unsqueeze(1).unsqueeze(1), (2 * self.ii // 2))
-        # fseries_step_out = torch.pow(meta_step_out.unsqueeze(1).unsqueeze(1).unsqueeze(1), (2 * self.ii // 2))
-        # TimePosEncSin_step_in = torch.sin(fseries_step_in)
-        # TimeEncSin_step_out = torch.sin(fseries_step_out)
-        # TimeEncCos_step_in = torch.cos(fseries_step_in)
-        # TimeEncCos_step_out = torch.cos(fseries_step_out)
-        # TimeEnc_step_in = (TimeEncSin_step_out + TimePosEncSin_step_in)/4
-        # TimeEnc_step_out = (TimeEncCos_step_out + TimeEncCos_step_in)/4
-        #
-        # TimeEnc = TimeEnc_step_in + TimeEnc_step_out
-        # PosEnc = PosEnc_x + PosEnc_y
-        # SpaceTimeEncodings = TimeEnc + PosEnc
-        # # STER = torch.mean(SpaceTimeEncodings, dim=3).repeat(1,4,1)
-        # # data = data + STER
-        #print(data.shape,torch.mean(SpaceTimeEncodings,dim=3).shape,fseries_space_x.shape,fseries_step_in.shape)
-        # print(SpaceTimeEncodings.shape)
-        # SpaceTimeEncodings = SpaceTimeEncodings.repeat(1,4,1,1)
-        # st = list(SpaceTimeEncodings.size())
-        # n = int(torch.sqrt(torch.tensor(self.modes)).item())
-        # print(SpaceTimeEncodings.shape)
-
-        # SpaceTimeEncodings = (SpaceTimeEncodings.unsqueeze(4).reshape(int(st[0]), int(st[1]), int(st[2]), n,n))
-        # SpaceTimeEncodings  = torch.tanh(nn.functional.conv3d(SpaceTimeEncodings,self.kernel_0))
-        # SpaceTimeEncodings = torch.tanh(nn.functional.conv3d(SpaceTimeEncodings, self.kernel_1))
-        # SpaceTimeEncodings = torch.tanh(nn.functional.conv3d(SpaceTimeEncodings, self.kernel_2))
-        #SpaceTimeEncodings = torch.flatten(SpaceTimeEncodings,start_dim=2)
-        # data_space_time = data#+SpaceTimeEncodings
+    def SpaceTimeFFTFeature(self,data,weights_data,weights_data_fft, meta_central_points, meta_step):
+        space_time = torch.cat([meta_central_points,meta_step],dim=1)
+        sequence_sums = space_time.sum(dim=1)
+        cos_values = torch.cos(sequence_sums).unsqueeze(1)
+        sin_values = torch.sin(sequence_sums).unsqueeze(1)
+        cos_mask = (space_time == 0)
+        sin_mask = (space_time == 1)
+        encoded_sequences = cos_mask.float() * cos_values + sin_mask.float() * sin_values
+        print(encoded_sequences.shape)
+        fft_space_time_encoding = torch.fft.fftn(encoded_sequences, norm='forward')[:,:self.modes]
 
         # Attention :  Below is implemented simplified FNO LAYER
         # # question : using only real gives better results than using real and imag in sum or concat manner?
         fft_data = torch.fft.fftn(data,norm='forward')
-        extracted_data_modes = fft_data[:,:self.modes]
+        extracted_data_modes = fft_data[:,:self.modes] + fft_space_time_encoding.unsqueeze(2)
         padded_data_modes = torch.zeros_like(fft_data)
         padded_data_modes[:, :self.modes] = extracted_data_modes
         # question : is "bij,own->bin" give same outcome as "bij,own->bwj"?
-        FFwithWeights = torch.einsum("bij,own->bin", padded_data_modes, self.weights_data_fft)
+        FFwithWeights = torch.einsum("bij,own->bin", padded_data_modes, weights_data_fft)
+        fft_dataWSpaceTime = FFwithWeights
 
-        # print(SpaceTimeEncodings.shape)
-        #fft_space_time_encoding = torch.fft.fftn(SpaceTimeEncodings, norm='forward')
-        #extracted_space_time_encoding_modes = fft_space_time_encoding[:, :self.modes]
-        #padded_space_time_encoding_modes = torch.zeros_like(fft_space_time_encoding)
-        #padded_space_time_encoding_modes[:, :self.modes] = extracted_space_time_encoding_modes
-        #SpaceTimeEncFFwithWeights = torch.einsum("bijm,owkn->bwi", padded_space_time_encoding_modes, self.weights_space_time_encoding_fft)
-
-        # plt.imshow(fft_data[4].real.cpu().tolist())
-        # plt.show()
-        # iSTFFWW = torch.fft.ifftn(SpaceTimeEncFFwithWeights, norm='forward')
-        # iSTFFWW_real = iSTFFWW.real
-        # iSTFFWW_imag = iSTFFWW.imag
-        fft_dataWSpaceTime = FFwithWeights#+SpaceTimeEncFFwithWeights
-        # plt.imshow(SpaceTimeEncFFwithWeights[4].real.cpu().tolist())
-        # plt.show()
         iFFWW = torch.fft.ifftn(fft_dataWSpaceTime, norm='forward')
         iFFWW_real = iFFWW.real
         iFFWW_imag = iFFWW.imag
-        # print(self.weights_data.shape,data.shape)
-        skip = self.weights_data*data
         ifft_data = iFFWW_real+iFFWW_imag
-        #ifft_space_time_encoding = iSTFFWW_real + iSTFFWW_imag
-        data = torch.tanh(skip+ifft_data)#+ifft_space_time_encoding)
+        data = torch.tanh(weights_data+ifft_data)#+data
         # Attention :  Above is implemented simplified FNO LAYER
         # data = torch.tanh(data)
         return data

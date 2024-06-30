@@ -281,6 +281,7 @@ class teacher(object):
                 num_epochs = num_epochs
                 t = 0.
                 grad_counter = 0
+                noise_amplitude = 1
                 print_every_nth_frame=10
                 for epoch in range(num_epochs):
                     self.data_preparation()
@@ -302,6 +303,8 @@ class teacher(object):
 
 
                     self.data_output = self.data_output.to(device)
+                    self.data_input = self.data_input + (torch.randn_like(self.data_input)*2-0.5)*noise_amplitude
+                    self.structure_input = self.structure_input + (torch.randn_like(self.structure_input)*2-0.5)*noise_amplitude
                     dataset = (self.data_input,self.structure_input,self.meta_input_h1,self.meta_input_h2,
                                self.meta_input_h3,self.meta_input_h4,self.meta_input_h5,self.meta_output_h1,
                                self.meta_output_h2,self.meta_output_h3,self.meta_output_h4,self.meta_output_h5)
@@ -348,6 +351,7 @@ class teacher(object):
                         if grad_counter == 10:
                             for param_group in optimizer.param_groups:
                                 param_group['lr'] = param_group['lr']*0.999
+                                noise_amplitude = noise_amplitude*0.999
                             grad_counter = 0
                     if (epoch+1) % print_every_nth_frame == 0:
                         print(f'Period: {self.period}/{self.no_of_periods} | Epoch: {epoch+1}/{num_epochs}, Loss: {loss.item():.4f}, Avg. Time pred for one slice: {t*1e6/print_every_nth_frame/self.batch_size:.4f} [us]')
@@ -611,7 +615,6 @@ class teacher(object):
             #            meta_output_h2.shape, meta_output_h3.shape, meta_output_h4.shape, meta_output_h5.shape)
             t_start = time.perf_counter()
             pred_r, pred_g, pred_b, pred_a,pred_s = self.model(dataset)
-
             t_pred = time.perf_counter()
 
             t = t_pred - t_start
@@ -660,38 +663,6 @@ class teacher(object):
                 b_v_pred = np.clip(abs(np.vstack([b_v_pred, b_h_pred])), 0., 1.)
                 a_v_pred = np.clip(abs(np.vstack([a_v_pred, a_h_pred])), 0., 1.)
 
-            # r_v_true = []
-            # g_v_true = []
-            # b_v_true = []
-            # a_v_true = []
-            # idx = 0
-            # # print(v,h)
-            # for m in range(0, v):
-            #     r_h_true = []
-            #     g_h_true = []
-            #     b_h_true = []
-            #     a_h_true = []
-            #     for n in range(0, h):
-            #         r_h_true.append(r_subslice_out[idx].cpu())
-            #         g_h_true.append(g_subslice_out[idx].cpu())
-            #         b_h_true.append(b_subslice_out[idx].cpu())
-            #         a_h_true.append(alpha_subslice_out[idx].cpu())
-            #         idx += 1
-            #     r_v_true.append(r_h_true)
-            #     g_v_true.append(g_h_true)
-            #     b_v_true.append(b_h_true)
-            #     a_v_true.append(a_h_true)
-            # r_v_true = np.array(r_v_true)
-            # g_v_true = np.array(g_v_true)
-            # b_v_true = np.array(b_v_true)
-            # a_v_true = np.array(a_v_true)
-            #
-            # # print(r_v_true.shape)
-            # r_v_true = r_v_true.transpose(0, 2, 1, 3).reshape(47 * 15, 27 * 15)
-            # g_v_true = g_v_true.transpose(0, 2, 1, 3).reshape(47 * 15, 27 * 15)
-            # b_v_true = b_v_true.transpose(0, 2, 1, 3).reshape(47 * 15, 27 * 15)
-            # a_v_true = a_v_true.transpose(0, 2, 1, 3).reshape(47 * 15, 27 * 15)
-            # print(r_v_true.shape)
 
             prediction = np.stack((r_v_pred, g_v_pred, b_v_pred), axis=2)
             ground_truth = np.stack((r_v_true, g_v_true, b_v_true),axis=2)
@@ -707,7 +678,7 @@ class teacher(object):
             rms_anim = ax3.imshow(rms)
 
             ims.append([rgb_pred_anim, rgb_true_anim,rms_anim,title_pred,title_true,title_rms])
-            ims.append([ rgb_true_anim,title_pred,title_true,title_rms])
+            # ims.append([rgb_true_anim,title_pred,title_true,title_rms])
 
             # grad_r_true = data_input[:, 0:self.model.in_scale, :] - data_output[:, 0:self.model.in_scale, :]
             # grad_r_pred = data_input[:, 0:self.model.in_scale, :] - pred_r
