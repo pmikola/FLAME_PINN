@@ -281,7 +281,7 @@ class teacher(object):
                 num_epochs = num_epochs
                 t = 0.
                 grad_counter = 0
-                noise_amplitude = 1
+                noise_amplitude = 1.
                 print_every_nth_frame=10
                 for epoch in range(num_epochs):
                     self.data_preparation()
@@ -350,7 +350,10 @@ class teacher(object):
                         else: grad_counter = 0
                         if grad_counter == 10:
                             for param_group in optimizer.param_groups:
-                                param_group['lr'] = param_group['lr']*0.999
+                                param_group['lr'] = param_group['lr']*0.99
+                                if param_group['lr'] < 1e-5:
+                                    param_group['lr'] = 5e-4
+                                    print('lr back to starting point')
                                 noise_amplitude = noise_amplitude*0.999
                             grad_counter = 0
                     if (epoch+1) % print_every_nth_frame == 0:

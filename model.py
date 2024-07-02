@@ -36,6 +36,7 @@ class Metamorph(nn.Module):
         self.weights_data_fft_1 = nn.Parameter(torch.rand(1, self.no_subslice_in_tensors * self.in_scale, self.in_scale, dtype=torch.cfloat))
         self.weights_data_fft_2 = nn.Parameter(torch.rand(1, self.no_subslice_in_tensors * self.in_scale, self.in_scale, dtype=torch.cfloat))
 
+        self.multiplier = (torch.arange(start=1,end=105,step=1)**2).to(self.device)
 
         # Problem with the kernels below when changing size that are used in FFT
         # self.kernel_0 = torch.zeros(self.in_data, self.in_data, 1, 2, 2, device=self.device)
@@ -58,7 +59,7 @@ class Metamorph(nn.Module):
         self.no_meta_h2 = 32 * 2
         self.no_meta_h1 = 224 * 2
         self.dens_width = 10 * self.shifterCoefficients
-        self.flat_size = 200
+        self.flat_size = 400
 
         # Definition of layer 0,1,2 for lvl 3 in hierarchy
         self.l0h3 = nn.Linear(in_features=self.no_meta_h3, out_features=self.dens_width*self.shifterCoefficients)
@@ -148,16 +149,15 @@ class Metamorph(nn.Module):
         x_alpha_l1 = torch.tanh(self.l1h01(alpha_l1))
         x_alpha_l2 = torch.tanh(self.l2h01(alpha_l2))
 
-
         x = self.SpaceTimeFFTFeature(data_input,self.weights_data_0,self.weights_data_fft_0, meta_central_points, meta_step)
-        #xx = self.SpaceTimeFFTFeature(x,self.weights_data_1,self.weights_data_fft_1, meta_central_points, meta_step)
-        #xxx = self.SpaceTimeFFTFeature(xx,self.weights_data_2,self.weights_data_fft_2, meta_central_points, meta_step)+x
+        x = self.SpaceTimeFFTFeature(x,self.weights_data_1,self.weights_data_fft_1, meta_central_points, meta_step)
+        x = self.SpaceTimeFFTFeature(x,self.weights_data_2,self.weights_data_fft_2, meta_central_points, meta_step)
 
         x = self.shapeShift(self.l1h0(x),x_alpha_l1)
         x = self.shapeShift(self.l2h0(x),x_alpha_l2)
 
-        s = self.l0h0s(structure_input)
-        s = self.l1h0s(s)
+        s = torch.tanh(self.l0h0s(structure_input))
+        s = torch.tanh(self.l1h0s(s))
         x = x+s
         x = torch.flatten(x,start_dim=1)
         # print(x.shape)
@@ -194,29 +194,31 @@ class Metamorph(nn.Module):
 
     def SpaceTimeFFTFeature(self,data,weights_data,weights_data_fft, meta_central_points, meta_step):
         space_time = torch.cat([meta_central_points,meta_step],dim=1)
-        sequence_sums = space_time.sum(dim=1)
-        cos_values = torch.cos(sequence_sums).unsqueeze(1)
-        sin_values = torch.sin(sequence_sums).unsqueeze(1)
-        cos_mask = (space_time == 0)
-        sin_mask = (space_time == 1)
-        encoded_sequences = cos_mask.float() * cos_values + sin_mask.float() * sin_values
-        fft_space_time_encoding = torch.fft.fftn(encoded_sequences, norm='forward')[:,:self.modes]
+        sequence_sums = space_time*self.multiplier
+        cos_values = torch.cos(sequence_sums)#.unsqueeze(1)
+        sin_values = torch.sin(sequence_sums)#.unsqueeze(1)
+        # cos_mask = (space_time == 0)
+        # sin_mask = (space_time == 1)
+        # encoded_sequences = cos_mask.float() * cos_values + sin_mask.float() * sin_values
+        encoded_sequences = cos_values + sin_values
+        fft_space_time_encoding = torch.fft.fftn(encoded_sequences, norm='backward')[:,:self.modes]
 
         # Attention :  Below is implemented simplified FNO LAYER
         # # question : using only real gives better results than using real and imag in sum or concat manner?
-        fft_data = torch.fft.fftn(data,norm='forward')
-        extracted_data_modes = fft_data[:,:self.modes] + fft_space_time_encoding.unsqueeze(2)
-        padded_data_modes = torch.zeros_like(fft_data)
-        padded_data_modes[:, :self.modes] = extracted_data_modes
+        fft_data = torch.fft.fftn(data,norm='backward')
+        padded_space_time_encoding_modes = torch.zeros_like(fft_data)
+        padded_space_time_encoding_modes[:, :self.modes] = fft_space_time_encoding.unsqueeze(2)
+        padded_data_modes = fft_data + padded_space_time_encoding_modes
         # question : is "bij,own->bin" give same outcome as "bij,own->bwj"?
         FFwithWeights = torch.einsum("bij,own->bin", padded_data_modes, weights_data_fft)
         fft_dataWSpaceTime = FFwithWeights
 
-        iFFWW = torch.fft.ifftn(fft_dataWSpaceTime, norm='forward')
+        iFFWW = torch.fft.ifftn(fft_dataWSpaceTime, norm='backward')
         iFFWW_real = iFFWW.real
         iFFWW_imag = iFFWW.imag
         ifft_data = iFFWW_real+iFFWW_imag
-        data = torch.tanh(weights_data+ifft_data)#+data
+        skip_connection  = torch.tanh(weights_data*data)
+        data = torch.tanh(ifft_data)+skip_connection
         # Attention :  Above is implemented simplified FNO LAYER
         # data = torch.tanh(data)
         return data
