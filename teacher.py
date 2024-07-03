@@ -679,7 +679,7 @@ class teacher(object):
 
             rms = np.mean(np.sqrt(abs(prediction**2 - ground_truth**2)),axis=2)
             rms_anim = ax3.imshow(rms)
-
+            fig.colorbar(rms_anim, ax=ax3)
             ims.append([rgb_pred_anim, rgb_true_anim,rms_anim,title_pred,title_true,title_rms])
             # ims.append([rgb_true_anim,title_pred,title_true,title_rms])
 
@@ -709,7 +709,7 @@ class teacher(object):
             # self.saved_loss.append(loss.item())
         ani = animation.ArtistAnimation(fig, ims, interval=1, blit=True, repeat_delay=100)
         # ani.save("flame_animation_ground_t_vs_preds.gif")
-        fig.colorbar(rms_anim, ax=ax3)
+        #fig.colorbar(rms_anim, ax=ax3)
         plt.show()
 
 

@@ -21,11 +21,11 @@ class Metamorph(nn.Module):
 
         # Definition of non-linear shifting activation function with parameters
         self.shifterCoefficients = 6  # No. of polynomial coefficients
-        self.exponents = torch.arange(0, self.shifterCoefficients, 1,
+        self.exponents = torch.arange(1, self.shifterCoefficients+1, 1,
                                       device=self.device)  # Check : from 0 to n or from 1 to n +1?
 
         # Definition of intermediate layer/parameters that transforms input into Fourier Feature with positional encoding and TODO: gaussian Gate
-        self.modes = 32  # No o of modes for SpaceTime Encoding
+        self.modes = 15  # No o of modes for SpaceTime Encoding
         self.ii = torch.arange(start=0, end=self.modes, step=1, device=self.device)
 
         self.weights_data_0 = nn.Parameter(torch.rand(1, self.no_subslice_in_tensors * self.in_scale, self.in_scale, dtype=torch.float))
@@ -86,6 +86,22 @@ class Metamorph(nn.Module):
         #  change configuration of input not by kernel size but by modes
         #  from fft with learnable parameters - do we will have better results?
         # TODO : check if above query gives better result
+        self.l0h0r = nn.Conv1d(in_channels=self.in_scale,
+                               out_channels=self.no_subslice_in_tensors * self.in_scale, kernel_size=1)
+        self.l1h0r = nn.Conv1d(in_channels=self.no_subslice_in_tensors * self.in_scale,
+                               out_channels=int(self.no_subslice_in_tensors * self.in_scale), kernel_size=1)
+        self.l0h0g = nn.Conv1d(in_channels=self.in_scale,
+                               out_channels=self.no_subslice_in_tensors * self.in_scale, kernel_size=1)
+        self.l1h0g = nn.Conv1d(in_channels=self.no_subslice_in_tensors * self.in_scale,
+                               out_channels=int(self.no_subslice_in_tensors * self.in_scale), kernel_size=1)
+        self.l0h0b = nn.Conv1d(in_channels=self.in_scale,
+                               out_channels=self.no_subslice_in_tensors * self.in_scale, kernel_size=1)
+        self.l1h0b = nn.Conv1d(in_channels=self.no_subslice_in_tensors * self.in_scale,
+                               out_channels=int(self.no_subslice_in_tensors * self.in_scale), kernel_size=1)
+        self.l0h0a = nn.Conv1d(in_channels=self.in_scale,
+                               out_channels=self.no_subslice_in_tensors * self.in_scale, kernel_size=1)
+        self.l1h0a = nn.Conv1d(in_channels=self.no_subslice_in_tensors * self.in_scale,
+                               out_channels=int(self.no_subslice_in_tensors * self.in_scale), kernel_size=1)
 
         # Definition of input layer 1,2,3 for lvl 0 in hierarchy
         self.l1h0= nn.Conv1d(in_channels=self.no_subslice_in_tensors*self.in_scale,
@@ -149,16 +165,24 @@ class Metamorph(nn.Module):
         x_alpha_l1 = torch.tanh(self.l1h01(alpha_l1))
         x_alpha_l2 = torch.tanh(self.l2h01(alpha_l2))
 
-        x = self.SpaceTimeFFTFeature(data_input,self.weights_data_0,self.weights_data_fft_0, meta_central_points, meta_step)
+        r = torch.tanh(self.l0h0r(data_input[:, 0:self.in_scale, :]))
+        r = torch.tanh(self.l1h0r(r))
+        g = torch.tanh(self.l0h0g(data_input[:, self.in_scale:self.in_scale * 2, :]))
+        g = torch.tanh(self.l1h0g(g))
+        b = torch.tanh(self.l0h0b(data_input[:, self.in_scale * 2:self.in_scale * 3, :]))
+        b = torch.tanh(self.l1h0b(b))
+        a = torch.tanh(self.l0h0a(data_input[:, self.in_scale * 3:self.in_scale * 4, :]))
+        a = torch.tanh(self.l1h0a(a))
+        s = torch.tanh(self.l0h0s(structure_input))
+        s = torch.tanh(self.l1h0s(s))
+        x = r * g * b * a * s + data_input
+
+        x = self.SpaceTimeFFTFeature(x,self.weights_data_0,self.weights_data_fft_0, meta_central_points, meta_step)
         x = self.SpaceTimeFFTFeature(x,self.weights_data_1,self.weights_data_fft_1, meta_central_points, meta_step)
         x = self.SpaceTimeFFTFeature(x,self.weights_data_2,self.weights_data_fft_2, meta_central_points, meta_step)
 
-        x = self.shapeShift(self.l1h0(x),x_alpha_l1)
-        x = self.shapeShift(self.l2h0(x),x_alpha_l2)
-
-        s = torch.tanh(self.l0h0s(structure_input))
-        s = torch.tanh(self.l1h0s(s))
-        x = x+s
+        x = self.shapeShift(self.l1h0(x), x_alpha_l1)
+        x = self.shapeShift(self.l2h0(x), x_alpha_l2)
         x = torch.flatten(x,start_dim=1)
         # print(x.shape)
         x = torch.tanh(self.l3h0(x))
@@ -201,11 +225,11 @@ class Metamorph(nn.Module):
         # sin_mask = (space_time == 1)
         # encoded_sequences = cos_mask.float() * cos_values + sin_mask.float() * sin_values
         encoded_sequences = cos_values + sin_values
-        fft_space_time_encoding = torch.fft.fftn(encoded_sequences, norm='backward')[:,:self.modes]
+        fft_space_time_encoding = torch.fft.fftn(encoded_sequences, norm='ortho')[:,:self.modes]
 
         # Attention :  Below is implemented simplified FNO LAYER
         # # question : using only real gives better results than using real and imag in sum or concat manner?
-        fft_data = torch.fft.fftn(data,norm='backward')
+        fft_data = torch.fft.fftn(data,norm='ortho')
         padded_space_time_encoding_modes = torch.zeros_like(fft_data)
         padded_space_time_encoding_modes[:, :self.modes] = fft_space_time_encoding.unsqueeze(2)
         padded_data_modes = fft_data + padded_space_time_encoding_modes
@@ -213,12 +237,12 @@ class Metamorph(nn.Module):
         FFwithWeights = torch.einsum("bij,own->bin", padded_data_modes, weights_data_fft)
         fft_dataWSpaceTime = FFwithWeights
 
-        iFFWW = torch.fft.ifftn(fft_dataWSpaceTime, norm='backward')
+        iFFWW = torch.fft.ifftn(fft_dataWSpaceTime, norm='ortho')
         iFFWW_real = iFFWW.real
         iFFWW_imag = iFFWW.imag
         ifft_data = iFFWW_real+iFFWW_imag
-        skip_connection  = torch.tanh(weights_data*data)
-        data = torch.tanh(ifft_data)+skip_connection
+        #skip_connection  = torch.tanh(weights_data*data)
+        data = torch.tanh(ifft_data)#+skip_connection
         # Attention :  Above is implemented simplified FNO LAYER
         # data = torch.tanh(data)
         return data
