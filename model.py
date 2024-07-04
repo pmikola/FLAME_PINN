@@ -77,8 +77,8 @@ class Metamorph(nn.Module):
         self.l2h1 = nn.Linear(in_features=self.dens_width, out_features=self.dens_width*self.shifterCoefficients)
 
         # Definition of intermidiet layer between lvl 0 and 1 for dimension matching
-        self.l1h01 = nn.Linear(in_features=self.dens_width, out_features=(self.in_scale**2) * self.shifterCoefficients*self.no_subslice_in_tensors)
-        self.l2h01 = nn.Linear(in_features=self.dens_width*self.shifterCoefficients, out_features=(self.in_scale**2) * self.shifterCoefficients*self.no_subslice_in_tensors)
+        self.l1h01 = nn.Linear(in_features=self.dens_width, out_features=(self.in_scale**2) * self.shifterCoefficients*5)
+        self.l2h01 = nn.Linear(in_features=self.dens_width*self.shifterCoefficients, out_features=(self.in_scale**2) * self.shifterCoefficients*5)
 
         # Definition of input layer 0 for lvl 0 in hierarchy
         # rmv of 3 paralleled layers for conv 1d k=1,2,3
@@ -114,11 +114,15 @@ class Metamorph(nn.Module):
         self.l1h0a = nn.Conv1d(in_channels=self.in_scale,
                                out_channels=int(self.in_scale), kernel_size=1)
         # Definition of input layer 1,2,3 for lvl 0 in hierarchy
-        self.l1h0= nn.Conv1d(in_channels=(self.no_subslice_in_tensors+1)*self.in_scale,
-                                  out_channels=self.no_subslice_in_tensors*self.in_scale, kernel_size=1)
-        self.l2h0 = nn.Conv1d(in_channels=self.no_subslice_in_tensors*self.in_scale,
-                                  out_channels=int(self.no_subslice_in_tensors*self.in_scale), kernel_size=1)
-        self.l3h0 = nn.Linear(in_features=int(self.no_subslice_in_tensors*self.in_scale**2),out_features=int(self.flat_size/2))
+        # self.l1h0= nn.Conv1d(in_channels=(self.no_subslice_in_tensors+1)*self.in_scale,
+        #                           out_channels=self.no_subslice_in_tensors*self.in_scale, kernel_size=1)
+        # self.l2h0 = nn.Conv1d(in_channels=self.no_subslice_in_tensors*self.in_scale,
+        #                           out_channels=int(self.no_subslice_in_tensors*self.in_scale), kernel_size=1)
+        self.l1h0 = nn.Linear(in_features=int(self.in_scale ** 2)*5,
+                  out_features=int(self.in_scale ** 2)*5)
+        self.l2h0 = nn.Linear(in_features=int(self.in_scale ** 2)*5,
+                  out_features=int(self.in_scale ** 2)*5)
+        self.l3h0 = nn.Linear(in_features=int(self.in_scale ** 2)*5,out_features=int(self.flat_size/2))
 
         # Definition of the structure density distribution
         self.l0h0s = nn.Conv1d(in_channels=self.in_scale,
@@ -179,52 +183,55 @@ class Metamorph(nn.Module):
         r_along_y = data_input[:, 0:self.in_scale, :].transpose(1, 2).contiguous().view(self.batch_size, self.in_scale * self.in_scale)
         r_along_x = torch.tanh(self.l0h0rx(r_along_x))
         r_along_y = torch.tanh(self.l0h0ry(r_along_y))
-        r = r_along_x*r_along_y
 
         g_along_x = data_input[:, self.in_scale:self.in_scale * 2, :].view(self.batch_size, self.in_scale * self.in_scale)
         g_along_y = data_input[:, self.in_scale:self.in_scale * 2, :].transpose(1, 2).contiguous().view(self.batch_size,self.in_scale * self.in_scale)
         g_along_x = torch.tanh(self.l0h0gx(g_along_x))
         g_along_y = torch.tanh(self.l0h0gy(g_along_y))
-        g = g_along_x * g_along_y
 
         b_along_x = data_input[:, self.in_scale * 2:self.in_scale * 3, :].view(self.batch_size, self.in_scale * self.in_scale)
         b_along_y = data_input[:, self.in_scale * 2:self.in_scale * 3, :].transpose(1, 2).contiguous().view(self.batch_size,self.in_scale * self.in_scale)
         b_along_x = torch.tanh(self.l0h0bx(b_along_x))
         b_along_y = torch.tanh(self.l0h0by(b_along_y))
-        b = b_along_x * b_along_y
 
         a_along_x = data_input[:, self.in_scale * 3:self.in_scale * 4, :].view(self.batch_size, self.in_scale * self.in_scale)
         a_along_y = data_input[:, self.in_scale * 3:self.in_scale * 4, :].transpose(1, 2).contiguous().view(self.batch_size,self.in_scale * self.in_scale)
         a_along_x = torch.tanh(self.l0h0ax(a_along_x))
         a_along_y = torch.tanh(self.l0h0ay(a_along_y))
-        a = a_along_x * a_along_y
 
         s_along_x = structure_input.view(self.batch_size, self.in_scale * self.in_scale)
         s_along_y = structure_input.transpose(1, 2).contiguous().view(self.batch_size,self.in_scale * self.in_scale)
         s_along_x = torch.tanh(self.l0h0sx(s_along_x))
         s_along_y = torch.tanh(self.l0h0sy(s_along_y))
-        s = s_along_x * s_along_y
 
-        r = torch.tanh(self.l0h0r(r.reshape(self.batch_size,self.in_scale,self.in_scale)))
-        r = torch.tanh(self.l1h0r(r))
-        g = torch.tanh(self.l0h0g(g.reshape(self.batch_size,self.in_scale,self.in_scale)))
-        g = torch.tanh(self.l1h0g(g))
-        b = torch.tanh(self.l0h0b(b.reshape(self.batch_size,self.in_scale,self.in_scale)))
-        b = torch.tanh(self.l1h0b(b))
-        a = torch.tanh(self.l0h0a(a.reshape(self.batch_size,self.in_scale,self.in_scale)))
-        a = torch.tanh(self.l1h0a(a))
-        s = torch.tanh(self.l0h0s(s.reshape(self.batch_size,self.in_scale,self.in_scale)))
-        s = torch.tanh(self.l1h0s(s))
+        rr = r_along_x * r_along_y
+        gg = g_along_x * g_along_y
+        bb = b_along_x * b_along_y
+        aa = a_along_x * a_along_y
+        ss = s_along_x * s_along_y
 
-        rgba_prod = torch.cat([r, g , b , a, s],dim=1)
-        x = self.SpaceTimeFFTFeature(torch.cat([data_input,s],dim=1),self.weights_data_0,self.weights_data_fft_0, meta_central_points, meta_step)
-        x = self.SpaceTimeFFTFeature(x,self.weights_data_1,self.weights_data_fft_1, meta_central_points, meta_step)
-        x = self.SpaceTimeFFTFeature(x,self.weights_data_2,self.weights_data_fft_2, meta_central_points, meta_step)
+        # r = torch.tanh(self.l0h0r(r.reshape(self.batch_size,self.in_scale,self.in_scale)))
+        # r = torch.tanh(self.l1h0r(r))
+        # g = torch.tanh(self.l0h0g(g.reshape(self.batch_size,self.in_scale,self.in_scale)))
+        # g = torch.tanh(self.l1h0g(g))
+        # b = torch.tanh(self.l0h0b(b.reshape(self.batch_size,self.in_scale,self.in_scale)))
+        # b = torch.tanh(self.l1h0b(b))
+        # a = torch.tanh(self.l0h0a(a.reshape(self.batch_size,self.in_scale,self.in_scale)))
+        # a = torch.tanh(self.l1h0a(a))
+        # s = torch.tanh(self.l0h0s(s.reshape(self.batch_size,self.in_scale,self.in_scale)))
+        # s = torch.tanh(self.l1h0s(s))
+        #rgba_prod = rr * gg * bb * aa * ss
+        rgbas = torch.cat([rr, gg , bb , aa , ss],dim=1)
+        # print(rgbas_prod.shape)
+        # x = self.SpaceTimeFFTFeature(torch.cat([data_input,structure_input],dim=1),self.weights_data_0,self.weights_data_fft_0, meta_central_points, meta_step)
+        # x = self.SpaceTimeFFTFeature(x,self.weights_data_1,self.weights_data_fft_1, meta_central_points, meta_step)
+        # x = self.SpaceTimeFFTFeature(x,self.weights_data_2,self.weights_data_fft_2, meta_central_points, meta_step)
+        # x = torch.flatten(x,start_dim=1)
 
-        x = rgba_prod + x
+        x = rgbas #+ x
         x = self.shapeShift(self.l1h0(x), x_alpha_l1)
         x = self.shapeShift(self.l2h0(x), x_alpha_l2)
-        x = torch.flatten(x,start_dim=1)
+        # x = torch.flatten(x,start_dim=1)
         # print(x.shape)
         x = torch.tanh(self.l3h0(x))
         r = self.l4_h0_r(x).reshape(self.batch_size,self.in_scale,self.in_scale)
@@ -246,6 +253,7 @@ class Metamorph(nn.Module):
             coefficients = h.reshape(self.batch_size,x.shape[1],self.shifterCoefficients)
             x_powers = torch.pow(x[0:self.batch_size, :].unsqueeze(2), self.exponents.unsqueeze(0).unsqueeze(1))
             craftedPolynomial = torch.sum(coefficients * x_powers, dim=2)
+            #print(craftedPolynomial.max())
             # craftedPolynomial = nn.functional.hardtanh(craftedPolynomial, -2, 2)
             return craftedPolynomial
         elif x.dim() == 4:
@@ -266,11 +274,11 @@ class Metamorph(nn.Module):
         # sin_mask = (space_time == 1)
         # encoded_sequences = cos_mask.float() * cos_values + sin_mask.float() * sin_values
         encoded_sequences = cos_values + sin_values
-        fft_space_time_encoding = torch.fft.fftn(encoded_sequences, norm='ortho')[:,:self.modes]
+        fft_space_time_encoding = torch.fft.fftn(encoded_sequences, norm='forward')[:,:self.modes]
 
         # Attention :  Below is implemented simplified FNO LAYER
         # # question : using only real gives better results than using real and imag in sum or concat manner?
-        fft_data = torch.fft.fftn(data,norm='ortho')
+        fft_data = torch.fft.fftn(data,norm='forward')
         padded_space_time_encoding_modes = torch.zeros_like(fft_data)
         padded_space_time_encoding_modes[:, :self.modes] = fft_space_time_encoding.unsqueeze(2)
         padded_data_modes = fft_data + padded_space_time_encoding_modes
@@ -278,7 +286,7 @@ class Metamorph(nn.Module):
         FFwithWeights = torch.einsum("bij,own->bin", padded_data_modes, weights_data_fft)
         fft_dataWSpaceTime = FFwithWeights
 
-        iFFWW = torch.fft.ifftn(fft_dataWSpaceTime, norm='ortho')
+        iFFWW = torch.fft.ifftn(fft_dataWSpaceTime, norm='forward')
         iFFWW_real = iFFWW.real
         iFFWW_imag = iFFWW.imag
         ifft_data = iFFWW_real+iFFWW_imag
