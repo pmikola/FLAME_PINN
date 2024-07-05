@@ -122,7 +122,7 @@ class Metamorph(nn.Module):
                   out_features=int(self.in_scale ** 2)*5)
         self.l2h0 = nn.Linear(in_features=int(self.in_scale ** 2)*5,
                   out_features=int(self.in_scale ** 2)*5)
-        self.l3h0 = nn.Linear(in_features=int(self.in_scale ** 2)*5,out_features=int(self.flat_size/2))
+        self.l3h0 = nn.Linear(in_features=int(self.in_scale ** 2)*5,out_features=int(self.flat_size))
 
         # Definition of the structure density distribution
         self.l0h0s = nn.Conv1d(in_channels=self.in_scale,
@@ -131,11 +131,17 @@ class Metamorph(nn.Module):
                               out_channels=int(self.in_scale), kernel_size=1)
 
         # Definition of Heads for red, green, blue, alpha and structure output channels
-        self.l4_h0_r = nn.Linear(in_features=int(self.flat_size/2),out_features=int(self.in_scale**2),bias=True)
-        self.l4_h0_g = nn.Linear(in_features=int(self.flat_size/2),out_features=int(self.in_scale**2),bias=True)
-        self.l4_h0_b = nn.Linear(in_features=int(self.flat_size/2),out_features=int(self.in_scale**2),bias=True)
-        self.l4_h0_a = nn.Linear(in_features=int(self.flat_size/2),out_features=int(self.in_scale**2),bias=True)
-        self.l4_h0_s = nn.Linear(in_features=int(self.flat_size/2),out_features=int(self.in_scale**2),bias=True)
+        self.l4_h0_r = nn.Linear(in_features=int(self.flat_size), out_features=int(self.flat_size / 2), bias=True)
+        self.l4_h0_g = nn.Linear(in_features=int(self.flat_size), out_features=int(self.flat_size / 2), bias=True)
+        self.l4_h0_b = nn.Linear(in_features=int(self.flat_size), out_features=int(self.flat_size / 2), bias=True)
+        self.l4_h0_a = nn.Linear(in_features=int(self.flat_size), out_features=int(self.flat_size / 2), bias=True)
+        self.l4_h0_s = nn.Linear(in_features=int(self.flat_size), out_features=int(self.flat_size / 2), bias=True)
+
+        self.l5_h0_r = nn.Linear(in_features=int(self.flat_size/2),out_features=int(self.in_scale**2),bias=True)
+        self.l5_h0_g = nn.Linear(in_features=int(self.flat_size/2),out_features=int(self.in_scale**2),bias=True)
+        self.l5_h0_b = nn.Linear(in_features=int(self.flat_size/2),out_features=int(self.in_scale**2),bias=True)
+        self.l5_h0_a = nn.Linear(in_features=int(self.flat_size/2),out_features=int(self.in_scale**2),bias=True)
+        self.l5_h0_s = nn.Linear(in_features=int(self.flat_size/2),out_features=int(self.in_scale**2),bias=True)
 
         self.init_weights()
     def init_weights(self):
@@ -231,14 +237,22 @@ class Metamorph(nn.Module):
         x = rgbas #+ x
         x = self.shapeShift(self.l1h0(x), x_alpha_l1)
         x = self.shapeShift(self.l2h0(x), x_alpha_l2)
+
         # x = torch.flatten(x,start_dim=1)
         # print(x.shape)
         x = torch.tanh(self.l3h0(x))
-        r = self.l4_h0_r(x).reshape(self.batch_size,self.in_scale,self.in_scale)
-        g = self.l4_h0_g(x).reshape(self.batch_size,self.in_scale,self.in_scale)
-        b = self.l4_h0_b(x).reshape(self.batch_size,self.in_scale,self.in_scale)
-        a = self.l4_h0_a(x).reshape(self.batch_size,self.in_scale,self.in_scale)
-        s = self.l4_h0_s(x).reshape(self.batch_size, self.in_scale, self.in_scale)
+
+        r = torch.tanh(self.l4_h0_r(x))
+        g = torch.tanh(self.l4_h0_g(x))
+        b = torch.tanh(self.l4_h0_b(x))
+        a = torch.tanh(self.l4_h0_a(x))
+        s = torch.tanh(self.l4_h0_s(x))
+
+        r = self.l5_h0_r(r).reshape(self.batch_size, self.in_scale, self.in_scale)
+        g = self.l5_h0_g(g).reshape(self.batch_size, self.in_scale, self.in_scale)
+        b = self.l5_h0_b(b).reshape(self.batch_size, self.in_scale, self.in_scale)
+        a = self.l5_h0_a(a).reshape(self.batch_size, self.in_scale, self.in_scale)
+        s = self.l5_h0_s(s).reshape(self.batch_size, self.in_scale, self.in_scale)
         return r,g,b,a,s
 
 
