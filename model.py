@@ -25,16 +25,16 @@ class Metamorph(nn.Module):
                                       device=self.device)  # Check : from 0 to n or from 1 to n +1?
 
         # Definition of intermediate layer/parameters that transforms input into Fourier Feature with positional encoding and TODO: gaussian Gate
-        self.modes = 60  # No o of modes for SpaceTime Encoding
+        self.modes = 75  # No o of modes for SpaceTime Encoding
         self.ii = torch.arange(start=0, end=self.modes, step=1, device=self.device)
 
-        self.weights_data_0 = nn.Parameter(torch.rand(1, self.no_subslice_in_tensors * self.in_scale, self.in_scale, dtype=torch.float))
-        self.weights_data_1 = nn.Parameter(torch.rand(1, self.no_subslice_in_tensors * self.in_scale, self.in_scale, dtype=torch.float))
-        self.weights_data_2 = nn.Parameter(torch.rand(1, self.no_subslice_in_tensors * self.in_scale, self.in_scale, dtype=torch.float))
+        self.weights_data_0 = nn.Parameter(torch.rand(1, 5 * self.in_scale, self.in_scale, dtype=torch.float))
+        self.weights_data_1 = nn.Parameter(torch.rand(1, 5 * self.in_scale, self.in_scale, dtype=torch.float))
+        self.weights_data_2 = nn.Parameter(torch.rand(1, 5 * self.in_scale, self.in_scale, dtype=torch.float))
 
-        self.weights_data_fft_0 = nn.Parameter(torch.rand(1, self.no_subslice_in_tensors * self.in_scale, self.in_scale, dtype=torch.cfloat))
-        self.weights_data_fft_1 = nn.Parameter(torch.rand(1, self.no_subslice_in_tensors * self.in_scale, self.in_scale, dtype=torch.cfloat))
-        self.weights_data_fft_2 = nn.Parameter(torch.rand(1, self.no_subslice_in_tensors * self.in_scale, self.in_scale, dtype=torch.cfloat))
+        self.weights_data_fft_0 = nn.Parameter(torch.rand(1, 5 * self.in_scale, self.in_scale, dtype=torch.cfloat))
+        self.weights_data_fft_1 = nn.Parameter(torch.rand(1, 5 * self.in_scale, self.in_scale, dtype=torch.cfloat))
+        self.weights_data_fft_2 = nn.Parameter(torch.rand(1, 5 * self.in_scale, self.in_scale, dtype=torch.cfloat))
 
         self.multiplier = (torch.arange(start=1,end=105,step=1)**2).to(self.device)
 
@@ -59,7 +59,7 @@ class Metamorph(nn.Module):
         self.no_meta_h2 = 32 * 2
         self.no_meta_h1 = 224 * 2
         self.dens_width = 10 * self.shifterCoefficients
-        self.flat_size = 400
+        self.flat_size = 800
 
         # Definition of layer 0,1,2 for lvl 3 in hierarchy
         self.l0h3 = nn.Linear(in_features=self.no_meta_h3, out_features=self.dens_width*self.shifterCoefficients)
@@ -77,8 +77,8 @@ class Metamorph(nn.Module):
         self.l2h1 = nn.Linear(in_features=self.dens_width, out_features=self.dens_width*self.shifterCoefficients)
 
         # Definition of intermidiet layer between lvl 0 and 1 for dimension matching
-        self.l1h01 = nn.Linear(in_features=self.dens_width, out_features=(self.in_scale**2) * self.shifterCoefficients*5)
-        self.l2h01 = nn.Linear(in_features=self.dens_width*self.shifterCoefficients, out_features=(self.in_scale**2) * self.shifterCoefficients*5)
+        self.l1h01 = nn.Linear(in_features=self.dens_width, out_features=(self.in_scale**2) * self.shifterCoefficients*10)
+        self.l2h01 = nn.Linear(in_features=self.dens_width*self.shifterCoefficients, out_features=(self.in_scale**2) * self.shifterCoefficients*10)
 
         # Definition of input layer 0 for lvl 0 in hierarchy
         # rmv of 3 paralleled layers for conv 1d k=1,2,3
@@ -97,32 +97,32 @@ class Metamorph(nn.Module):
         self.l0h0sx = nn.Linear(in_features=int(self.in_scale ** 2), out_features=int(self.in_scale ** 2))
         self.l0h0sy = nn.Linear(in_features=int(self.in_scale ** 2), out_features=int(self.in_scale ** 2))
 
-        self.l0h0r = nn.Conv1d(in_channels=self.in_scale,
-                               out_channels=self.in_scale, kernel_size=1)
-        self.l1h0r = nn.Conv1d(in_channels=self.in_scale,
-                               out_channels=int(self.in_scale), kernel_size=1)
-        self.l0h0g = nn.Conv1d(in_channels=self.in_scale,
-                               out_channels=self.in_scale, kernel_size=1)
-        self.l1h0g = nn.Conv1d(in_channels=self.in_scale,
-                               out_channels=int(self.in_scale), kernel_size=1)
-        self.l0h0b = nn.Conv1d(in_channels=self.in_scale,
-                               out_channels=self.in_scale, kernel_size=1)
-        self.l1h0b = nn.Conv1d(in_channels=self.in_scale,
-                               out_channels=int(self.in_scale), kernel_size=1)
-        self.l0h0a = nn.Conv1d(in_channels=self.in_scale,
-                               out_channels=self.in_scale, kernel_size=1)
-        self.l1h0a = nn.Conv1d(in_channels=self.in_scale,
-                               out_channels=int(self.in_scale), kernel_size=1)
+        # self.l0h0r = nn.Conv1d(in_channels=self.in_scale,
+        #                        out_channels=self.in_scale, kernel_size=1)
+        # self.l1h0r = nn.Conv1d(in_channels=self.in_scale,
+        #                        out_channels=int(self.in_scale), kernel_size=1)
+        # self.l0h0g = nn.Conv1d(in_channels=self.in_scale,
+        #                        out_channels=self.in_scale, kernel_size=1)
+        # self.l1h0g = nn.Conv1d(in_channels=self.in_scale,
+        #                        out_channels=int(self.in_scale), kernel_size=1)
+        # self.l0h0b = nn.Conv1d(in_channels=self.in_scale,
+        #                        out_channels=self.in_scale, kernel_size=1)
+        # self.l1h0b = nn.Conv1d(in_channels=self.in_scale,
+        #                        out_channels=int(self.in_scale), kernel_size=1)
+        # self.l0h0a = nn.Conv1d(in_channels=self.in_scale,
+        #                        out_channels=self.in_scale, kernel_size=1)
+        # self.l1h0a = nn.Conv1d(in_channels=self.in_scale,
+        #                        out_channels=int(self.in_scale), kernel_size=1)
         # Definition of input layer 1,2,3 for lvl 0 in hierarchy
         # self.l1h0= nn.Conv1d(in_channels=(self.no_subslice_in_tensors+1)*self.in_scale,
         #                           out_channels=self.no_subslice_in_tensors*self.in_scale, kernel_size=1)
         # self.l2h0 = nn.Conv1d(in_channels=self.no_subslice_in_tensors*self.in_scale,
         #                           out_channels=int(self.no_subslice_in_tensors*self.in_scale), kernel_size=1)
-        self.l1h0 = nn.Linear(in_features=int(self.in_scale ** 2)*5,
-                  out_features=int(self.in_scale ** 2)*5)
-        self.l2h0 = nn.Linear(in_features=int(self.in_scale ** 2)*5,
-                  out_features=int(self.in_scale ** 2)*5)
-        self.l3h0 = nn.Linear(in_features=int(self.in_scale ** 2)*5,out_features=int(self.flat_size))
+        self.l1h0 = nn.Linear(in_features=int(self.in_scale ** 2)*10,
+                  out_features=int(self.in_scale ** 2)*10)
+        self.l2h0 = nn.Linear(in_features=int(self.in_scale ** 2)*10,
+                  out_features=int(self.in_scale ** 2)*10)
+        self.l3h0 = nn.Linear(in_features=int(self.in_scale ** 2)*10,out_features=int(self.flat_size))
 
         # Definition of the structure density distribution
         self.l0h0s = nn.Conv1d(in_channels=self.in_scale,
@@ -209,12 +209,12 @@ class Metamorph(nn.Module):
         s_along_y = structure_input.transpose(1, 2).contiguous().view(self.batch_size,self.in_scale * self.in_scale)
         s_along_x = torch.tanh(self.l0h0sx(s_along_x))
         s_along_y = torch.tanh(self.l0h0sy(s_along_y))
-
-        rr = r_along_x * r_along_y
-        gg = g_along_x * g_along_y
-        bb = b_along_x * b_along_y
-        aa = a_along_x * a_along_y
-        ss = s_along_x * s_along_y
+        # print(r_along_x.shape,r_along_y.shape)
+        rr = torch.cat([r_along_x , r_along_y],dim=1)
+        gg = torch.cat([g_along_x , g_along_y],dim=1)
+        bb = torch.cat([b_along_x , b_along_y],dim=1)
+        aa = torch.cat([a_along_x , a_along_y],dim=1)
+        ss = torch.cat([s_along_x , s_along_y],dim=1)
 
         # r = torch.tanh(self.l0h0r(r.reshape(self.batch_size,self.in_scale,self.in_scale)))
         # r = torch.tanh(self.l1h0r(r))
@@ -234,7 +234,7 @@ class Metamorph(nn.Module):
         # x = self.SpaceTimeFFTFeature(x,self.weights_data_2,self.weights_data_fft_2, meta_central_points, meta_step)
         # x = torch.flatten(x,start_dim=1)
 
-        x = rgbas #+ x
+        x = rgbas# + x
         x = self.shapeShift(self.l1h0(x), x_alpha_l1)
         x = self.shapeShift(self.l2h0(x), x_alpha_l2)
 
@@ -304,8 +304,8 @@ class Metamorph(nn.Module):
         iFFWW_real = iFFWW.real
         iFFWW_imag = iFFWW.imag
         ifft_data = iFFWW_real+iFFWW_imag
-        #skip_connection  = torch.tanh(weights_data*data)
-        data = torch.tanh(ifft_data)#+skip_connection
+        skip_connection  = torch.tanh(weights_data*data)
+        data = torch.tanh(ifft_data)+skip_connection
         # Attention :  Above is implemented simplified FNO LAYER
         # data = torch.tanh(data)
         return data
