@@ -260,20 +260,16 @@ class Metamorph(nn.Module):
             coefficients = h.reshape(self.batch_size,x.shape[1],x.shape[2],self.shifterCoefficients)
             x_powers = torch.pow(x[0:self.batch_size,:,:].unsqueeze(3), self.exponents.unsqueeze(0).unsqueeze(1))
             craftedPolynomial = torch.sum((2*coefficients)*x_powers,dim=3)
-            # craftedPolynomial = nn.functional.hardtanh(craftedPolynomial,-2,2)
             return craftedPolynomial
         elif x.dim() == 2:
             coefficients = h.reshape(self.batch_size,x.shape[1],self.shifterCoefficients)
             x_powers = torch.pow(x[0:self.batch_size, :].unsqueeze(2), self.exponents.unsqueeze(0).unsqueeze(1))
             craftedPolynomial = torch.sum((2*coefficients) * x_powers, dim=2)
-            #print(craftedPolynomial.max())
-            # craftedPolynomial = nn.functional.hardtanh(craftedPolynomial, -2, 2)
             return craftedPolynomial
         elif x.dim() == 4:
             coefficients = h.reshape(self.batch_size, x.shape[1], x.shape[2], x.shape[3], self.shifterCoefficients)
             x_powers = torch.pow(x[0:self.batch_size, :, :, :].unsqueeze(4),self.exponents.unsqueeze(0).unsqueeze(1).unsqueeze(2))
             craftedPolynomial = torch.sum((2*coefficients) * x_powers, dim=4)
-            # craftedPolynomial = nn.functional.hardtanh(craftedPolynomial, -2, 2)
             return craftedPolynomial
         else:
             raise ValueError("Unsupported input dimensions")
