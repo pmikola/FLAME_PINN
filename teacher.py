@@ -303,7 +303,7 @@ class teacher(object):
                 num_epochs = num_epochs
                 t = 0.
                 grad_counter = 0
-                norm = 'forward'
+                norm = 'ortho'
                 noise_amplitude = 1.
                 print_every_nth_frame=10
                 for epoch in range(num_epochs):
@@ -452,10 +452,10 @@ class teacher(object):
                         if grad_counter == 10:
                             for param_group in optimizer.param_groups:
                                 param_group['lr'] = param_group['lr']*0.99
-                                if param_group['lr'] < 0.5e-5:
+                                if param_group['lr'] < 0.2e-5:
                                     param_group['lr'] = 1e-4
                                     print('lr back to starting point')
-                                #noise_amplitude = noise_amplitude*0.5
+                                noise_amplitude = noise_amplitude*0.5
                                 # if noise_amplitude < 1e-3:
                                 #     # print('noise amplitude')
                                 #     noise_amplitude = 0.

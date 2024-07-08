@@ -77,8 +77,8 @@ class Metamorph(nn.Module):
         self.l2h1 = nn.Linear(in_features=self.dens_width, out_features=self.dens_width*self.shifterCoefficients)
 
         # Definition of intermidiet layer between lvl 0 and 1 for dimension matching
-        self.l1h01 = nn.Linear(in_features=self.dens_width, out_features=(self.in_scale**2) * self.shifterCoefficients*10)
-        self.l2h01 = nn.Linear(in_features=self.dens_width*self.shifterCoefficients, out_features=(self.in_scale**2) * self.shifterCoefficients*10)
+        self.l1h01 = nn.Linear(in_features=self.dens_width, out_features=(self.in_scale**2) * self.shifterCoefficients*15)
+        self.l2h01 = nn.Linear(in_features=self.dens_width*self.shifterCoefficients, out_features=(self.in_scale**2) * self.shifterCoefficients*15)
 
         # Definition of input layer 0 for lvl 0 in hierarchy
         # rmv of 3 paralleled layers for conv 1d k=1,2,3
@@ -118,11 +118,11 @@ class Metamorph(nn.Module):
         #                           out_channels=self.no_subslice_in_tensors*self.in_scale, kernel_size=1)
         # self.l2h0 = nn.Conv1d(in_channels=self.no_subslice_in_tensors*self.in_scale,
         #                           out_channels=int(self.no_subslice_in_tensors*self.in_scale), kernel_size=1)
-        self.l1h0 = nn.Linear(in_features=int(self.in_scale ** 2)*10,
-                  out_features=int(self.in_scale ** 2)*10)
-        self.l2h0 = nn.Linear(in_features=int(self.in_scale ** 2)*10,
-                  out_features=int(self.in_scale ** 2)*10)
-        self.l3h0 = nn.Linear(in_features=int(self.in_scale ** 2)*10,out_features=int(self.flat_size))
+        self.l1h0 = nn.Linear(in_features=int(self.in_scale ** 2)*15,
+                  out_features=int(self.in_scale ** 2)*15)
+        self.l2h0 = nn.Linear(in_features=int(self.in_scale ** 2)*15,
+                  out_features=int(self.in_scale ** 2)*15)
+        self.l3h0 = nn.Linear(in_features=int(self.in_scale ** 2)*15,out_features=int(self.flat_size))
 
         # Definition of the structure density distribution
         self.l0h0s = nn.Conv1d(in_channels=self.in_scale,
@@ -174,13 +174,13 @@ class Metamorph(nn.Module):
 
         meta_step = torch.cat([meta_input_h2.float(), meta_output_h2.float()], dim=1)
         beta = torch.tanh(self.l0h2(meta_step))
-        beta_l1 = self.shapeShift(self.l1h2(beta), gamma_l1)
-        beta_l2 = self.shapeShift(self.l2h2(beta_l1), gamma_l2)
+        beta_l1 = self.shapeShift(torch.tanh(self.l1h2(beta)), gamma_l1)
+        beta_l2 = self.shapeShift(torch.tanh(self.l2h2(beta_l1)), gamma_l2)
 
         meta_h1 = torch.cat([meta_input_h1.float(),meta_output_h1.float()],dim=1)
         alpha = torch.tanh(self.l0h1(meta_h1))
-        alpha_l1 = self.shapeShift(self.l1h1(alpha),beta_l1)
-        alpha_l2 =  self.shapeShift(self.l2h1(alpha_l1),beta_l2)
+        alpha_l1 = self.shapeShift(torch.tanh(self.l1h1(alpha)),beta_l1)
+        alpha_l2 =  self.shapeShift(torch.tanh(self.l2h1(alpha_l1)),beta_l2)
 
         x_alpha_l1 = torch.tanh(self.l1h01(alpha_l1))
         x_alpha_l2 = torch.tanh(self.l2h01(alpha_l2))
@@ -210,11 +210,11 @@ class Metamorph(nn.Module):
         s_along_x = torch.tanh(self.l0h0sx(s_along_x))
         s_along_y = torch.tanh(self.l0h0sy(s_along_y))
         # print(r_along_x.shape,r_along_y.shape)
-        rr = torch.cat([r_along_x , r_along_y],dim=1)
-        gg = torch.cat([g_along_x , g_along_y],dim=1)
-        bb = torch.cat([b_along_x , b_along_y],dim=1)
-        aa = torch.cat([a_along_x , a_along_y],dim=1)
-        ss = torch.cat([s_along_x , s_along_y],dim=1)
+        rr = torch.cat([r_along_x , r_along_y,r_along_x*r_along_y],dim=1)
+        gg = torch.cat([g_along_x , g_along_y,g_along_x*g_along_y],dim=1)
+        bb = torch.cat([b_along_x , b_along_y,b_along_x*b_along_y],dim=1)
+        aa = torch.cat([a_along_x , a_along_y,a_along_x*a_along_y],dim=1)
+        ss = torch.cat([s_along_x , s_along_y,s_along_x*s_along_y],dim=1)
 
         # r = torch.tanh(self.l0h0r(r.reshape(self.batch_size,self.in_scale,self.in_scale)))
         # r = torch.tanh(self.l1h0r(r))
@@ -235,13 +235,12 @@ class Metamorph(nn.Module):
         # x = torch.flatten(x,start_dim=1)
 
         x = rgbas# + x
-        x = self.shapeShift(self.l1h0(x), x_alpha_l1)
-        x = self.shapeShift(self.l2h0(x), x_alpha_l2)
+        x = self.shapeShift(torch.tanh(self.l1h0(x)), x_alpha_l1)
+        x = self.shapeShift(torch.tanh(self.l2h0(x)), x_alpha_l2)
 
         # x = torch.flatten(x,start_dim=1)
         # print(x.shape)
         x = torch.tanh(self.l3h0(x))
-
         r = torch.tanh(self.l4_h0_r(x))
         g = torch.tanh(self.l4_h0_g(x))
         b = torch.tanh(self.l4_h0_b(x))
@@ -260,20 +259,20 @@ class Metamorph(nn.Module):
         if x.dim() == 3:
             coefficients = h.reshape(self.batch_size,x.shape[1],x.shape[2],self.shifterCoefficients)
             x_powers = torch.pow(x[0:self.batch_size,:,:].unsqueeze(3), self.exponents.unsqueeze(0).unsqueeze(1))
-            craftedPolynomial = torch.sum(coefficients*x_powers,dim=3)
+            craftedPolynomial = torch.sum((2*coefficients)*x_powers,dim=3)
             # craftedPolynomial = nn.functional.hardtanh(craftedPolynomial,-2,2)
             return craftedPolynomial
         elif x.dim() == 2:
             coefficients = h.reshape(self.batch_size,x.shape[1],self.shifterCoefficients)
             x_powers = torch.pow(x[0:self.batch_size, :].unsqueeze(2), self.exponents.unsqueeze(0).unsqueeze(1))
-            craftedPolynomial = torch.sum(coefficients * x_powers, dim=2)
+            craftedPolynomial = torch.sum((2*coefficients) * x_powers, dim=2)
             #print(craftedPolynomial.max())
             # craftedPolynomial = nn.functional.hardtanh(craftedPolynomial, -2, 2)
             return craftedPolynomial
         elif x.dim() == 4:
             coefficients = h.reshape(self.batch_size, x.shape[1], x.shape[2], x.shape[3], self.shifterCoefficients)
             x_powers = torch.pow(x[0:self.batch_size, :, :, :].unsqueeze(4),self.exponents.unsqueeze(0).unsqueeze(1).unsqueeze(2))
-            craftedPolynomial = torch.sum(coefficients * x_powers, dim=4)
+            craftedPolynomial = torch.sum((2*coefficients) * x_powers, dim=4)
             # craftedPolynomial = nn.functional.hardtanh(craftedPolynomial, -2, 2)
             return craftedPolynomial
         else:
