@@ -303,7 +303,7 @@ class teacher(object):
                 num_epochs = num_epochs
                 t = 0.
                 grad_counter = 0
-                norm = 'ortho'
+                norm = 'forward'
                 noise_amplitude = 1.
                 print_every_nth_frame=10
                 for epoch in range(num_epochs):
