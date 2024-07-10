@@ -452,7 +452,7 @@ class teacher(object):
                         if grad_counter == 10:
                             for param_group in optimizer.param_groups:
                                 param_group['lr'] = param_group['lr']*0.99
-                                if param_group['lr'] < 0.2e-5:
+                                if param_group['lr'] < 1e-6:
                                     param_group['lr'] = 1e-4
                                     print('lr back to starting point')
                                 noise_amplitude = noise_amplitude*0.5
