@@ -227,30 +227,8 @@ class teacher(object):
             # a_in_entropy = torch.special.entr(alpha_subslice_in).sum()
             # s_in_entropy = torch.special.entr(fuel_subslice_in).sum()
             frame += 1
-            if  rzero and gzero and bzero and azero and fzero:
+            if  rzero and gzero and bzero and azero and fzero and idx_input > idx_output:
                 frame -=1
-            # elif r_in_entropy > 1. or g_in_entropy > 1. or b_in_entropy>1. or a_in_entropy > 1. or s_in_entropy >1.:
-            #     frame -= 1
-            #     if frame > self.batch_size - 2:
-            #         pass
-            #     else:
-            #         for i in range(0,2):
-            #             central_points = torch.cat([central_point_x_binary, central_point_y_binary], dim=0)
-            #             data_input.append(data_input_subslice)
-            #             structure_input.append(fuel_subslice_in)
-            #             meta_input_h1.append(meta_input_subslice)
-            #             meta_input_h2.append(meta_step_in)
-            #             meta_input_h3.append(central_points)
-            #             meta_input_h4.append(torch.cat([torch.tensor(window_x), torch.tensor(window_y)]))
-            #             meta_input_h5.append(meta_step_in_numeric)
-            #             data_output.append(data_output_subslice)
-            #             structure_output.append(fuel_subslice_out)
-            #             meta_output_h1.append(meta_output_subslice)
-            #             meta_output_h2.append(meta_step_out)
-            #             meta_output_h3.append(central_points)
-            #             meta_output_h4.append(torch.cat([torch.tensor(window_x), torch.tensor(window_y)]))
-            #             meta_output_h5.append(meta_step_out_numeric)
-            #             frame+=1
             else:
                 # Note: Data for the different layers
                 central_points = torch.cat([central_point_x_binary, central_point_y_binary], dim=0)
@@ -303,11 +281,16 @@ class teacher(object):
                 num_epochs = num_epochs
                 t = 0.
                 grad_counter = 0
+                reiterate_data = 0
+                reiterate_counter = 0
                 norm = 'forward'
                 noise_amplitude = 1.
                 print_every_nth_frame=10
                 for epoch in range(num_epochs):
-                    self.data_preparation()
+                    if reiterate_data == 0:
+                        self.data_preparation()
+                    else:
+                        reiterate_counter +=1
                     (self.structure_input,self.meta_input_h1,self.meta_input_h2,
                      self.meta_input_h3,self.meta_input_h4,self.meta_input_h5,self.meta_output_h1,
                      self.meta_output_h2,self.meta_output_h3,self.meta_output_h4,self.meta_output_h5) =\
@@ -444,18 +427,27 @@ class teacher(object):
                     # t_stop = time.perf_counter()
                     t += t_pred - t_start
 
-                    if len(self.saved_loss) > 100:
+                    if len(self.saved_loss) > 10:
                         gloss = np.array(self.saved_loss)[-25:-1]
+                        if gloss[-1] > gloss[-2] or reiterate_counter < 35 or gloss[-1] < gloss[-2]*0.9 or gloss[-1] > 5.:
+                            reiterate_data = 1
+                        else:
+                            reiterate_counter = 0
+                            reiterate_data = 0
                         gloss = abs(np.sum(np.gradient(gloss)))
-                        if gloss > 0.1: grad_counter +=1
-                        else: grad_counter = 0
-                        if grad_counter == 10:
+                        if gloss > 1e-2:
+                            grad_counter +=1
+                        else:
+                            grad_counter = 0
+                            reiterate_data = 0
+                            reiterate_counter = 0
+                        if grad_counter == 10 or reiterate_data == 0:
                             for param_group in optimizer.param_groups:
-                                param_group['lr'] = param_group['lr']*0.99
-                                if param_group['lr'] < 1e-6:
-                                    param_group['lr'] = 1e-4
+                                param_group['lr'] = param_group['lr']*0.95
+                                if param_group['lr'] < 1e-5 or reiterate_data == 0:
+                                    param_group['lr'] = 9e-5
                                     print('lr back to starting point')
-                                noise_amplitude = noise_amplitude*0.5
+                               # noise_amplitude = noise_amplitude*0.5
                                 # if noise_amplitude < 1e-3:
                                 #     # print('noise amplitude')
                                 #     noise_amplitude = 0.
@@ -465,8 +457,8 @@ class teacher(object):
                               f'Loss: {loss.item():.4f}, '
                               f'Avg. Time per frame: {((self.fsim.grid_size_x*self.fsim.grid_size_y)/(self.model.in_scale**2))*(t*1e6/print_every_nth_frame/self.batch_size):.4f} [us]')
                         t = 0.
-                    if (epoch + 1) % 10 == 0:
-                        if loss.item() < best_loss:
+                    if (epoch + 1) % 10 == 0 or reiterate_data == 0:
+                        if loss.item() < best_loss or reiterate_data == 0:
                             best_loss = loss.item()
                             torch.save(self.model.state_dict(), 'model.pt')
                 # if best_model_state is None:
@@ -815,7 +807,7 @@ class teacher(object):
             # loss = value_loss + grad_loss  # TODO : Add Endropy loss + diversity loss + intermidiete velocity vectors loss + casual loss
             # self.saved_loss.append(loss.item())
         ani = animation.ArtistAnimation(fig, ims, interval=1, blit=True, repeat_delay=100)
-        # ani.save("flame_animation_ground_t_vs_preds.gif")
+        #ani.save("flame_animation.gif")
         fig.colorbar(rms_anim, ax=ax3)
         plt.show()
 

@@ -26,9 +26,6 @@ class Metamorph(nn.Module):
                                       device=self.device)  # Check : from 0 to n or from 1 to n +1?
 
         # Definition of intermediate layer/parameters that transforms input into Fourier Feature with positional encoding and TODO: gaussian Gate
-        self.modes = 75  # No o of modes for SpaceTime Encoding
-        self.ii = torch.arange(start=1, end=7, step=1, device=self.device)
-
         self.weights_data_0 = nn.Parameter(torch.rand(5 * self.in_scale**2, dtype=torch.float))
         self.weights_data_1 = nn.Parameter(torch.rand(5 * self.in_scale**2, dtype=torch.float))
         self.weights_data_2 = nn.Parameter(torch.rand(5 * self.in_scale**2, dtype=torch.float))
@@ -86,27 +83,8 @@ class Metamorph(nn.Module):
         self.l0h0sx = nn.Linear(in_features=int(self.in_scale ** 2), out_features=int(self.in_scale ** 2))
         self.l0h0sy = nn.Linear(in_features=int(self.in_scale ** 2), out_features=int(self.in_scale ** 2))
 
-        # self.l0h0r = nn.Conv1d(in_channels=self.in_scale,
-        #                        out_channels=self.in_scale, kernel_size=1)
-        # self.l1h0r = nn.Conv1d(in_channels=self.in_scale,
-        #                        out_channels=int(self.in_scale), kernel_size=1)
-        # self.l0h0g = nn.Conv1d(in_channels=self.in_scale,
-        #                        out_channels=self.in_scale, kernel_size=1)
-        # self.l1h0g = nn.Conv1d(in_channels=self.in_scale,
-        #                        out_channels=int(self.in_scale), kernel_size=1)
-        # self.l0h0b = nn.Conv1d(in_channels=self.in_scale,
-        #                        out_channels=self.in_scale, kernel_size=1)
-        # self.l1h0b = nn.Conv1d(in_channels=self.in_scale,
-        #                        out_channels=int(self.in_scale), kernel_size=1)
-        # self.l0h0a = nn.Conv1d(in_channels=self.in_scale,
-        #                        out_channels=self.in_scale, kernel_size=1)
-        # self.l1h0a = nn.Conv1d(in_channels=self.in_scale,
-        #                        out_channels=int(self.in_scale), kernel_size=1)
+
         # Definition of input layer 1,2,3 for lvl 0 in hierarchy
-        # self.l1h0= nn.Conv1d(in_channels=(self.no_subslice_in_tensors+1)*self.in_scale,
-        #                           out_channels=self.no_subslice_in_tensors*self.in_scale, kernel_size=1)
-        # self.l2h0 = nn.Conv1d(in_channels=self.no_subslice_in_tensors*self.in_scale,
-        #                           out_channels=int(self.no_subslice_in_tensors*self.in_scale), kernel_size=1)
         self.l1h0 = nn.Linear(in_features=int(self.in_scale ** 2)*5,
                   out_features=int(self.in_scale ** 2)*5)
         self.l2h0 = nn.Linear(in_features=int(self.in_scale ** 2)*5,
@@ -191,23 +169,22 @@ class Metamorph(nn.Module):
         #  meta_output_h3.shape,meta_output_h4.shape,meta_output_h5.shape,meta_central_points.shape)
         # Question : Do highest hierarchy should have parameters that are learning
         #  or just be top layer without any additional coefss (regarding polyNonlinear)
-
-        gamma = torch.tanh(self.l0h3(meta_central_points))
-        gamma_l1 = torch.tanh(self.l1h3(gamma))
-        gamma_l2 = torch.tanh(self.l2h3(gamma_l1))
-
+        # gamma = torch.tanh(self.l0h3(meta_central_points))
+        # gamma_l1 = torch.tanh(self.l1h3(gamma))
+        # gamma_l2 = torch.tanh(self.l2h3(gamma_l1))
+        #
         meta_step = torch.cat([meta_input_h2.float(), meta_output_h2.float()], dim=1)
-        beta = torch.tanh(self.l0h2(meta_step))
-        beta_l1 = self.shapeShift(torch.tanh(self.l1h2(beta)), gamma_l1)
-        beta_l2 = self.shapeShift(torch.tanh(self.l2h2(beta_l1)), gamma_l2)
-
-        meta_h1 = torch.cat([meta_input_h1.float(),meta_output_h1.float()],dim=1)
-        alpha = torch.tanh(self.l0h1(meta_h1))
-        alpha_l1 = self.shapeShift(torch.tanh(self.l1h1(alpha)),beta_l1)
-        alpha_l2 =  self.shapeShift(torch.tanh(self.l2h1(alpha_l1)),beta_l2)
-
-        x_alpha_l1 = f.gelu(self.l1h01(alpha_l1))
-        x_alpha_l2 = f.gelu(self.l2h01(alpha_l2))
+        # beta = torch.tanh(self.l0h2(meta_step))
+        # beta_l1 = self.shapeShift(torch.tanh(self.l1h2(beta)), gamma_l1)
+        # beta_l2 = self.shapeShift(torch.tanh(self.l2h2(beta_l1)), gamma_l2)
+        #
+        # meta_h1 = torch.cat([meta_input_h1.float(),meta_output_h1.float()],dim=1)
+        # alpha = torch.tanh(self.l0h1(meta_h1))
+        # alpha_l1 = self.shapeShift(torch.tanh(self.l1h1(alpha)),beta_l1)
+        # alpha_l2 =  self.shapeShift(torch.tanh(self.l2h1(alpha_l1)),beta_l2)
+        #
+        # x_alpha_l1 = torch.tanh(self.l1h01(alpha_l1))
+        # x_alpha_l2 = torch.tanh(self.l2h01(alpha_l2))
 
         r_along_x = data_input[:, 0:self.in_scale, :].view(self.batch_size, self.in_scale * self.in_scale)
         r_along_y = data_input[:, 0:self.in_scale, :].transpose(1, 2).contiguous().view(self.batch_size, self.in_scale * self.in_scale)
@@ -239,18 +216,20 @@ class Metamorph(nn.Module):
         bb = torch.cat([b_along_x*b_along_y],dim=1)
         aa = torch.cat([a_along_x*a_along_y],dim=1)
         ss = torch.cat([s_along_x*s_along_y],dim=1)
+        rgbas = torch.cat([rr, gg, bb, aa, ss], dim=1)
 
+        space_time = self.WalshHadamardSpaceTimeFeature(meta_central_points, meta_step)
 
-        rgbas = torch.cat([rr, gg , bb , aa , ss],dim=1)
-        x = self.SpaceTimeFFTFeature(torch.flatten(torch.cat([data_input,structure_input],dim=1),start_dim=1),self.weights_data_0,self.weights_data_fft_0, meta_central_points, meta_step)
-        x = self.SpaceTimeFFTFeature(x,self.weights_data_1,self.weights_data_fft_1, meta_central_points, meta_step)
-        x = self.SpaceTimeFFTFeature(x,self.weights_data_2,self.weights_data_fft_2, meta_central_points, meta_step)
+        stff_in = torch.flatten(torch.cat([data_input,structure_input],dim=1),start_dim=1)
+        x = self.SpaceTimeFFTFeature(stff_in,self.weights_data_0,self.weights_data_fft_0, space_time)
+        x = self.SpaceTimeFFTFeature(x,self.weights_data_1,self.weights_data_fft_1, space_time)
+        x = self.SpaceTimeFFTFeature(x,self.weights_data_2,self.weights_data_fft_2, space_time)
 
         # x = rgbas + x
-        x_mod = self.shapeShift(torch.tanh(self.l1h0(rgbas)), x_alpha_l1)
-        x_mod = self.shapeShift(torch.tanh(self.l2h0(x_mod)), x_alpha_l2)
+        # x_mod = self.shapeShift(torch.tanh(self.l1h0(rgbas)), x_alpha_l1)
+        # x_mod = self.shapeShift(torch.tanh(self.l2h0(x_mod)), x_alpha_l2)
 
-        x = f.gelu(self.l3h0(x_mod))+x
+        x = f.gelu(self.l3h0(x))+rgbas#-x_mod
         rres = f.gelu(self.l4_h0_r(x))
         gres = f.gelu(self.l4_h0_g(x))
         bres = f.gelu(self.l4_h0_b(x))
@@ -305,33 +284,50 @@ class Metamorph(nn.Module):
         if x.dim() == 3:
             coefficients = h.reshape(self.batch_size,x.shape[1],x.shape[2],self.shifterCoefficients)
             x_powers = torch.pow(x[0:self.batch_size,:,:].unsqueeze(3), self.exponents.unsqueeze(0).unsqueeze(1))
-            craftedPolynomial = torch.sum((2*coefficients)*x_powers,dim=3)
+            craftedPolynomial = torch.sum((coefficients)*x_powers,dim=3)
             return craftedPolynomial
         elif x.dim() == 2:
             coefficients = h.reshape(self.batch_size,x.shape[1],self.shifterCoefficients)
             x_powers = torch.pow(x[0:self.batch_size, :].unsqueeze(2), self.exponents.unsqueeze(0).unsqueeze(1))
-            craftedPolynomial = torch.sum((2*coefficients) * x_powers, dim=2)
+            craftedPolynomial = torch.sum((coefficients) * x_powers, dim=2)
             return craftedPolynomial
         elif x.dim() == 4:
             coefficients = h.reshape(self.batch_size, x.shape[1], x.shape[2], x.shape[3], self.shifterCoefficients)
             x_powers = torch.pow(x[0:self.batch_size, :, :, :].unsqueeze(4),self.exponents.unsqueeze(0).unsqueeze(1).unsqueeze(2))
-            craftedPolynomial = torch.sum((2*coefficients) * x_powers, dim=4)
+            craftedPolynomial = torch.sum((coefficients) * x_powers, dim=4)
             return craftedPolynomial
         else:
             raise ValueError("Unsupported input dimensions")
 
-    def SpaceTimeFFTFeature(self,data,weights_data,weights_data_fft, meta_central_points, meta_step):
+    def SpaceTimeFFTFeature(self,data,weights_data,weights_data_fft, space_time):
+        # Attention :  Below is implemented simplified FNO LAYER
+        # # question : using only real gives better results than using real and imag in sum or concat manner?
+        fft_data = torch.fft.fft(data,norm='forward')
+        fft_data /= torch.tensor(fft_data.shape[1]) # normalize
+        data_modes = fft_data + space_time
 
+        # question : is "bij,own->bin" give same outcome as "bij,own->bwj"?
+        FFwithWeights = torch.einsum("bi,j->bj",data_modes, weights_data_fft)
+        iFFWW = torch.fft.ifft(FFwithWeights, norm='forward')
+        iFFWW_real = iFFWW.real
+        iFFWW_imag = iFFWW.imag
+        ifft_data = iFFWW_real+iFFWW_imag
+        data = f.gelu(ifft_data)#+f.gelu(weights_data*data)
+        # Attention :  Above is implemented simplified FNO LAYER
+        # data = torch.tanh(data)
+        return data
+
+    def WalshHadamardSpaceTimeFeature(self,meta_central_points, meta_step):
         # NOTE: Walsh-Hadamard transform for space and time coding
-        space_time = torch.cat([meta_central_points,meta_step],dim=1)
-        bit_padding = torch.zeros((self.batch_size,128-space_time.shape[1])).to(self.device)
-        space_time = torch.cat([space_time,bit_padding],dim=1)
+        space_time = torch.cat([meta_central_points, meta_step], dim=1)
+        bit_padding = torch.zeros((self.batch_size, 128 - space_time.shape[1])).to(self.device)
+        space_time = torch.cat([space_time, bit_padding], dim=1)
         length = space_time.shape[1]
         assert (length & (length - 1)) == 0, "Length must be a power of 2"
         bit = length
         len_tens = torch.tensor(length)
         stages = torch.log2(len_tens)
-        stages = torch.arange(0,stages.int())
+        stages = torch.arange(0, stages.int())
         for _ in stages:
             bit >>= 1
             indices = torch.arange(length).view(1, -1)
@@ -345,24 +341,6 @@ class Metamorph(nn.Module):
         space_time /= len_tens  # normalize
         space_time = self.Walsh_Hadamard_rescaler_l0s0(space_time)
         space_time = f.gelu(space_time)
-        # Attention :  Below is implemented simplified FNO LAYER
-        # # question : using only real gives better results than using real and imag in sum or concat manner?
-        fft_data = torch.fft.fft(data,norm='forward')
-        fft_data /= torch.tensor(fft_data.shape[1]) # normalize
-        data_modes = fft_data + space_time
-
-        # question : is "bij,own->bin" give same outcome as "bij,own->bwj"?
-        FFwithWeights = torch.einsum("bi,j->bj",data_modes, weights_data_fft)
-        iFFWW = torch.fft.ifft(FFwithWeights, norm='forward')
-        iFFWW_real = iFFWW.real
-        iFFWW_imag = iFFWW.imag
-        ifft_data = iFFWW_real+iFFWW_imag
-        skip_connection  = f.gelu(weights_data*data)
-        data = f.gelu(ifft_data)+skip_connection
-        # Attention :  Above is implemented simplified FNO LAYER
-        # data = torch.tanh(data)
-        return data
-
-
+        return space_time
 
 
