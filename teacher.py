@@ -6,6 +6,7 @@ import time
 import numpy as np
 import torch
 from matplotlib import pyplot as plt, animation
+from torch.autograd import grad
 
 
 class teacher(object):
@@ -23,15 +24,15 @@ class teacher(object):
         self.field_names = None
         self.no_frame_samples,self.first_frame, self.last_frame, self.frame_skip =None, None, None, None
 
-        self.data_input = None
-        self.structure_input = None
+        self.data_input = torch.zeros((self.model.batch_size,self.model.in_scale*4,self.model.in_scale),requires_grad=True).to(device)
+        self.structure_input = None#torch.zeros((self.model.batch_size,self.model.in_scale,self.model.in_scale),requires_grad=True)
         self.meta_input_h1 = None
         self.meta_input_h2 = None
         self.meta_input_h3 = None
         self.meta_input_h4 = None
         self.meta_input_h5 = None
-        self.data_output = None
-        self.structure_output = None
+        self.data_output = torch.zeros((self.model.batch_size,self.model.in_scale*4,self.model.in_scale),requires_grad=True).to(device)
+        self.structure_output = None#torch.zeros((self.model.batch_size,self.model.in_scale,self.model.in_scale),requires_grad=True)
         self.meta_output_h1 = None
         self.meta_output_h2 = None
         self.meta_output_h3 = None
@@ -131,7 +132,7 @@ class teacher(object):
         meta_output_h4 = []
         meta_output_h5 = []
         frame = 0
-        while not frame == self.batch_size:
+        while not frame >= self.batch_size:
             idx_input = random.choice(range(0, fuel_slices.shape[0]))
             idx_output = random.choice(range(0, fuel_slices.shape[0]))
             central_point_x = random.sample(x_range, 1)[0]
@@ -152,6 +153,7 @@ class teacher(object):
             b_subslice_in = b_slices[idx_input,slice_x, slice_y]
             alpha_subslice_in = alpha_slices[idx_input,slice_x, slice_y]
             data_input_subslice = torch.cat([r_subslice_in,g_subslice_in, b_subslice_in, alpha_subslice_in], dim=0)
+
             meta_step_in = meta_binary_slices[idx_input][0]
             meta_step_in_numeric = self.meta_tensor[idx_input][0]
 
@@ -217,19 +219,17 @@ class teacher(object):
             bzero = b_zero and b_i0 and b_o0
             azero = a_zero and a_i0 and a_o0
             fzero = f_zero and f_i0 and f_o0
+
+            # NOTE : Entropy additional
+            # r_in_entropy = torch.special.entr(r_subslice_in).sum()
+            # g_in_entropy = torch.special.entr(g_subslice_in).sum()
+            # b_in_entropy = torch.special.entr(b_subslice_in).sum()
+            # a_in_entropy = torch.special.entr(alpha_subslice_in).sum()
+            # s_in_entropy = torch.special.entr(fuel_subslice_in).sum()
             frame += 1
-            if  rzero and gzero and bzero and azero and fzero:
+            if  rzero and gzero and bzero and azero and fzero and idx_input > idx_output:
                 frame -=1
             else:
-                # if not rzero:
-                #     plt.imshow(data_input_subslice[0:5,:].cpu().tolist())
-                #     plt.show()
-                # if not gzero:
-                #     plt.imshow(data_input_subslice[5:10, :].cpu().tolist())
-                #     plt.show()
-                # if not bzero:
-                #     plt.imshow(data_input_subslice[10:15, :].cpu().tolist())
-                #     plt.show()
                 # Note: Data for the different layers
                 central_points = torch.cat([central_point_x_binary, central_point_y_binary], dim=0)
                 data_input.append(data_input_subslice)
@@ -281,14 +281,20 @@ class teacher(object):
                 num_epochs = num_epochs
                 t = 0.
                 grad_counter = 0
+                reiterate_data = 0
+                reiterate_counter = 0
+                norm = 'forward'
                 noise_amplitude = 1.
                 print_every_nth_frame=10
                 for epoch in range(num_epochs):
-                    self.data_preparation()
-                    (self.data_input,self.structure_input,self.meta_input_h1,self.meta_input_h2,
+                    if reiterate_data == 0:
+                        self.data_preparation()
+                    else:
+                        reiterate_counter +=1
+                    (self.structure_input,self.meta_input_h1,self.meta_input_h2,
                      self.meta_input_h3,self.meta_input_h4,self.meta_input_h5,self.meta_output_h1,
                      self.meta_output_h2,self.meta_output_h3,self.meta_output_h4,self.meta_output_h5) =\
-                                                                (self.data_input.to(device),
+                                                                (
                                                                 self.structure_input.to(device),
                                                                 self.meta_input_h1.to(device),
                                                                 self.meta_input_h2.to(device),
@@ -302,9 +308,9 @@ class teacher(object):
                                                                 self.meta_output_h5.to(device))
 
 
-                    self.data_output = self.data_output.to(device)
-                    self.data_input = self.data_input + (torch.randn_like(self.data_input)*2-0.5)*noise_amplitude
-                    self.structure_input = self.structure_input + (torch.randn_like(self.structure_input)*2-0.5)*noise_amplitude
+                    #self.data_output = self.data_output.to(device) #+ (torch.randn_like(self.data_output)*2-0.5)*noise_amplitude
+                    #self.data_input = self.data_input + (torch.randn_like(self.data_input)*2-0.5)*noise_amplitude
+                    #self.structure_input = self.structure_input + (torch.randn_like(self.structure_input)*2-0.5)*noise_amplitude
                     dataset = (self.data_input,self.structure_input,self.meta_input_h1,self.meta_input_h2,
                                self.meta_input_h3,self.meta_input_h4,self.meta_input_h5,self.meta_output_h1,
                                self.meta_output_h2,self.meta_output_h3,self.meta_output_h4,self.meta_output_h5)
@@ -312,22 +318,43 @@ class teacher(object):
                     pred_r,pred_g,pred_b,pred_a,pred_s = self.model(dataset)
                     t_pred = time.perf_counter()
 
-                    grad_r_true = self.data_input[:,0:self.model.in_scale,:] - self.data_output[:,0:self.model.in_scale,:]
-                    grad_r_pred = self.data_input[:,0:self.model.in_scale,:] - pred_r
-                    loss_grad_r = criterion(grad_r_pred,grad_r_true)
-                    grad_g_true = self.data_input[:, self.model.in_scale:self.model.in_scale*2, :] - self.data_output[:, self.model.in_scale:self.model.in_scale*2, :]
-                    grad_g_pred = self.data_input[:, self.model.in_scale:self.model.in_scale*2, :] - pred_g
-                    loss_grad_g = criterion(grad_g_pred, grad_g_true)
-                    grad_b_true = self.data_input[:, self.model.in_scale*2:self.model.in_scale*3, :] - self.data_output[:, self.model.in_scale*2:self.model.in_scale*3, :]
-                    grad_b_pred = self.data_input[:, self.model.in_scale*2:self.model.in_scale*3, :] - pred_b
-                    loss_grad_b = criterion(grad_b_pred, grad_b_true)
-                    grad_a_true = self.data_input[:, self.model.in_scale*3:self.model.in_scale*4, :] - self.data_output[:, self.model.in_scale*3:self.model.in_scale*4, :]
-                    grad_a_pred = self.data_input[:, self.model.in_scale*3:self.model.in_scale*4, :] - pred_a
-                    loss_grad_a = criterion(grad_a_pred, grad_a_true)
-                    grad_s_true = self.structure_input - self.structure_output
-                    grad_s_pred = self.structure_input - pred_s
-                    loss_grad_s = criterion(grad_s_pred, grad_s_true)
-                    grad_loss = loss_grad_r+loss_grad_g+loss_grad_b+loss_grad_a+loss_grad_s
+                    # NOTE: Firs order difference
+                    diff_r_true = self.data_output[:,0:self.model.in_scale,:]-self.data_input[:,0:self.model.in_scale,:]
+                    diff_r_pred = pred_r-self.data_input[:,0:self.model.in_scale,:]
+                    # diff_r_pred = torch.gradient(torch.cat([data_in_r.unsqueeze(3),pred_r.unsqueeze(3)],dim=3),dim=3)[0][:, :, :, 1]
+                    loss_diff_r = criterion(diff_r_pred,diff_r_true)
+                    diff_g_true =  self.data_output[:, self.model.in_scale:self.model.in_scale*2, :]-self.data_input[:, self.model.in_scale:self.model.in_scale*2, :]
+                    diff_g_pred = pred_g-self.data_input[:, self.model.in_scale:self.model.in_scale*2, :]
+                    loss_diff_g = criterion(diff_g_pred, diff_g_true)
+                    diff_b_true = self.data_output[:, self.model.in_scale*2:self.model.in_scale*3, :]-self.data_input[:, self.model.in_scale*2:self.model.in_scale*3, :]
+                    diff_b_pred = pred_b-self.data_input[:, self.model.in_scale*2:self.model.in_scale*3, :]
+                    loss_diff_b = criterion(diff_b_pred, diff_b_true)
+                    diff_a_true = self.data_output[:, self.model.in_scale*3:self.model.in_scale*4, :]-self.data_input[:, self.model.in_scale*3:self.model.in_scale*4, :]
+                    diff_a_pred = pred_a-self.data_input[:, self.model.in_scale*3:self.model.in_scale*4, :]
+                    loss_diff_a = criterion(diff_a_pred, diff_a_true)
+                    diff_s_true = self.structure_output-self.structure_input
+                    diff_s_pred = pred_s-self.structure_input
+                    loss_diff_s = criterion(diff_s_pred, diff_s_true)
+                    diff_loss = loss_diff_r+loss_diff_g+loss_diff_b+loss_diff_a+loss_diff_s
+
+                    grad_r_true = torch.gradient(self.data_output[:,0:self.model.in_scale,:],dim=[1,2])[0]
+                    grad_r_pred = torch.gradient(pred_r)[0]
+                    grad_r = criterion(grad_r_pred, grad_r_true)
+                    grad_g_true = torch.gradient(self.data_output[:,self.model.in_scale:self.model.in_scale*2,:],dim=[1,2])[0]
+                    grad_g_pred = torch.gradient(pred_g)[0]
+                    grad_g = criterion(grad_g_pred, grad_g_true)
+                    grad_b_true = torch.gradient(self.data_output[:,self.model.in_scale*2:self.model.in_scale*3,:],dim=[1,2])[0]
+                    grad_b_pred = torch.gradient(pred_b)[0]
+                    grad_b = criterion(grad_b_pred, grad_b_true)
+                    grad_a_true = torch.gradient(self.data_output[:,self.model.in_scale*3:self.model.in_scale*4,:],dim=[1,2])[0]
+                    grad_a_pred = torch.gradient(pred_a)[0]
+                    grad_a = criterion(grad_a_pred, grad_a_true)
+                    grad_s_true = torch.gradient(self.structure_output,dim=[1,2])[0]
+                    grad_s_pred = torch.gradient(pred_s)[0]
+                    grad_s = criterion(grad_s_pred, grad_s_true)
+
+                    grad_loss = grad_r+grad_g+grad_b+grad_a+grad_s
+
                     loss_r = criterion(pred_r, self.data_output[:,0:self.model.in_scale,:])
                     loss_g = criterion(pred_g, self.data_output[:,self.model.in_scale:self.model.in_scale*2,:])
                     loss_b = criterion(pred_b, self.data_output[:,self.model.in_scale*2:self.model.in_scale*3,:])
@@ -335,32 +362,103 @@ class teacher(object):
                     loss_s = criterion(pred_s, self.structure_output)
                     value_loss = loss_r + loss_g + loss_b + loss_alpha+loss_s
 
-                    loss = value_loss+grad_loss # TODO : Add Endropy loss + diversity loss + intermidiete velocity vectors loss + casual loss
-                    self.saved_loss.append(loss.item())
+
+
+                    fft_out_pred_r = torch.real(torch.fft.rfft2(pred_r,norm=norm))
+                    fft_out_true_r = torch.real(torch.fft.rfft2(self.data_output[:,0:self.model.in_scale,:],norm=norm))
+                    fft_out_pred_g = torch.real(torch.fft.rfft2(pred_g, norm=norm))
+                    fft_out_true_g = torch.real(
+                        torch.fft.rfft2(self.data_output[:,self.model.in_scale:self.model.in_scale*2,:], norm=norm))
+                    fft_out_pred_b = torch.real(torch.fft.rfft2(pred_b, norm=norm))
+                    fft_out_true_b = torch.real(
+                        torch.fft.rfft2(self.data_output[:,self.model.in_scale*2:self.model.in_scale*3,:], norm=norm))
+                    fft_out_pred_a = torch.real(torch.fft.rfft2(pred_a, norm=norm))
+                    fft_out_true_a = torch.real(
+                        torch.fft.rfft2(self.data_output[:,self.model.in_scale*3:self.model.in_scale*4,:], norm=norm))
+                    fft_out_pred_s = torch.real(torch.fft.rfft2(pred_s, norm=norm))
+                    fft_out_true_s = torch.real(
+                        torch.fft.rfft2(self.structure_output, norm=norm))
+
+                    fft_in_true_r = torch.real(
+                        torch.fft.rfft2(self.data_input[:, 0:self.model.in_scale, :], norm=norm))
+                    fft_in_true_g = torch.real(
+                        torch.fft.rfft2(self.data_input[:, self.model.in_scale:self.model.in_scale * 2, :],
+                                        norm=norm))
+                    fft_in_true_b = torch.real(
+                        torch.fft.rfft2(self.data_input[:, self.model.in_scale * 2:self.model.in_scale * 3, :],
+                                        norm=norm))
+                    fft_in_true_a = torch.real(
+                        torch.fft.rfft2(self.data_input[:, self.model.in_scale * 3:self.model.in_scale * 4, :],
+                                        norm=norm))
+                    fft_in_true_s = torch.real(
+                        torch.fft.rfft2(self.structure_input, norm=norm))
+
+                    fft_loss_r = criterion(fft_out_pred_r,fft_out_true_r)
+                    fft_loss_g = criterion(fft_out_pred_g,fft_out_true_g)
+                    fft_loss_b = criterion(fft_out_pred_b,fft_out_true_b)
+                    fft_loss_a = criterion(fft_out_pred_a,fft_out_true_a)
+                    fft_loss_s = criterion(fft_out_pred_s,fft_out_true_s)
+                    fft_loss = fft_loss_r+fft_loss_g+fft_loss_b+fft_loss_a+fft_loss_s
+
+                    diff_fft_true_r = fft_out_true_r - fft_in_true_r
+                    diff_fft_pred_r = fft_out_pred_r - fft_in_true_r
+                    diff_fft_loss_r = criterion(diff_fft_pred_r,diff_fft_true_r)
+                    diff_fft_true_g = fft_out_true_g - fft_in_true_g
+                    diff_fft_pred_g = fft_out_pred_g - fft_in_true_g
+                    diff_fft_loss_g = criterion(diff_fft_pred_g, diff_fft_true_g)
+                    diff_fft_true_b = fft_out_true_b - fft_in_true_b
+                    diff_fft_pred_b = fft_out_pred_b - fft_in_true_b
+                    diff_fft_loss_b = criterion(diff_fft_pred_b, diff_fft_true_b)
+                    diff_fft_true_a = fft_out_true_a - fft_in_true_a
+                    diff_fft_pred_a = fft_out_pred_a - fft_in_true_a
+                    diff_fft_loss_a = criterion(diff_fft_pred_a, diff_fft_true_a)
+                    diff_fft_true_s = fft_out_true_s - fft_in_true_s
+                    diff_fft_pred_s = fft_out_pred_s - fft_in_true_s
+                    diff_fft_loss_s = criterion(diff_fft_pred_s, diff_fft_true_s)
+                    diff_fft_loss = diff_fft_loss_r+diff_fft_loss_g+diff_fft_loss_b+diff_fft_loss_a+diff_fft_loss_s
+
+
+                    loss = value_loss+diff_loss+grad_loss+fft_loss+diff_fft_loss # Attention: Aggregate all losses here
+
                     optimizer.zero_grad()
                     loss.backward()
                     optimizer.step()
+                    self.saved_loss.append(loss.item())
                     # t_stop = time.perf_counter()
                     t += t_pred - t_start
 
-                    if len(self.saved_loss) > 100:
+                    if len(self.saved_loss) > 10:
                         gloss = np.array(self.saved_loss)[-25:-1]
+                        if gloss[-1] > gloss[-2] or reiterate_counter < 35 or gloss[-1] < gloss[-2]*0.9 or gloss[-1] > 5.:
+                            reiterate_data = 1
+                        else:
+                            reiterate_counter = 0
+                            reiterate_data = 0
                         gloss = abs(np.sum(np.gradient(gloss)))
-                        if gloss > 0.1: grad_counter +=1
-                        else: grad_counter = 0
-                        if grad_counter == 10:
+                        if gloss > 1e-2:
+                            grad_counter +=1
+                        else:
+                            grad_counter = 0
+                            reiterate_data = 0
+                            reiterate_counter = 0
+                        if grad_counter == 10 or reiterate_data == 0:
                             for param_group in optimizer.param_groups:
-                                param_group['lr'] = param_group['lr']*0.99
-                                if param_group['lr'] < 1e-5:
-                                    param_group['lr'] = 5e-4
+                                param_group['lr'] = param_group['lr']*0.95
+                                if param_group['lr'] < 1e-5 or reiterate_data == 0:
+                                    param_group['lr'] = 9e-5
                                     print('lr back to starting point')
-                                noise_amplitude = noise_amplitude*0.999
+                               # noise_amplitude = noise_amplitude*0.5
+                                # if noise_amplitude < 1e-3:
+                                #     # print('noise amplitude')
+                                #     noise_amplitude = 0.
                             grad_counter = 0
                     if (epoch+1) % print_every_nth_frame == 0:
-                        print(f'Period: {self.period}/{self.no_of_periods} | Epoch: {epoch+1}/{num_epochs}, Loss: {loss.item():.4f}, Avg. Time pred for one slice: {t*1e6/print_every_nth_frame/self.batch_size:.4f} [us]')
+                        print(f'Period: {self.period}/{self.no_of_periods} | Epoch: {epoch+1}/{num_epochs}, '
+                              f'Loss: {loss.item():.4f}, '
+                              f'Avg. Time per frame: {((self.fsim.grid_size_x*self.fsim.grid_size_y)/(self.model.in_scale**2))*(t*1e6/print_every_nth_frame/self.batch_size):.4f} [us]')
                         t = 0.
-                    if (epoch + 1) % 10 == 0:
-                        if loss.item() < best_loss:
+                    if (epoch + 1) % 10 == 0 or reiterate_data == 0:
+                        if loss.item() < best_loss or reiterate_data == 0:
                             best_loss = loss.item()
                             torch.save(self.model.state_dict(), 'model.pt')
                 # if best_model_state is None:
@@ -678,7 +776,8 @@ class teacher(object):
             rgb_true_anim = ax2.imshow(ground_truth.astype(np.uint8)*255,alpha=a_v_true)
 
             rms = np.mean(np.sqrt(abs(prediction**2 - ground_truth**2)),axis=2)
-            rms_anim = ax3.imshow(rms)
+            rms_anim = ax3.imshow(rms,cmap= 'RdBu',vmin=0,vmax=1)
+
 
             ims.append([rgb_pred_anim, rgb_true_anim,rms_anim,title_pred,title_true,title_rms])
             # ims.append([rgb_true_anim,title_pred,title_true,title_rms])
@@ -708,7 +807,7 @@ class teacher(object):
             # loss = value_loss + grad_loss  # TODO : Add Endropy loss + diversity loss + intermidiete velocity vectors loss + casual loss
             # self.saved_loss.append(loss.item())
         ani = animation.ArtistAnimation(fig, ims, interval=1, blit=True, repeat_delay=100)
-        # ani.save("flame_animation_ground_t_vs_preds.gif")
+        #ani.save("flame_animation.gif")
         fig.colorbar(rms_anim, ax=ax3)
         plt.show()
 
