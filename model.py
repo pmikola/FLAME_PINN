@@ -169,22 +169,22 @@ class Metamorph(nn.Module):
         #  meta_output_h3.shape,meta_output_h4.shape,meta_output_h5.shape,meta_central_points.shape)
         # Question : Do highest hierarchy should have parameters that are learning
         #  or just be top layer without any additional coefss (regarding polyNonlinear)
-        # gamma = torch.tanh(self.l0h3(meta_central_points))
-        # gamma_l1 = torch.tanh(self.l1h3(gamma))
-        # gamma_l2 = torch.tanh(self.l2h3(gamma_l1))
+        gamma = torch.tanh(self.l0h3(meta_central_points))
+        gamma_l1 = torch.tanh(self.l1h3(gamma))
+        gamma_l2 = torch.tanh(self.l2h3(gamma_l1))
         #
         meta_step = torch.cat([meta_input_h2.float(), meta_output_h2.float()], dim=1)
-        # beta = torch.tanh(self.l0h2(meta_step))
-        # beta_l1 = self.shapeShift(torch.tanh(self.l1h2(beta)), gamma_l1)
-        # beta_l2 = self.shapeShift(torch.tanh(self.l2h2(beta_l1)), gamma_l2)
-        #
-        # meta_h1 = torch.cat([meta_input_h1.float(),meta_output_h1.float()],dim=1)
-        # alpha = torch.tanh(self.l0h1(meta_h1))
-        # alpha_l1 = self.shapeShift(torch.tanh(self.l1h1(alpha)),beta_l1)
-        # alpha_l2 =  self.shapeShift(torch.tanh(self.l2h1(alpha_l1)),beta_l2)
-        #
-        # x_alpha_l1 = torch.tanh(self.l1h01(alpha_l1))
-        # x_alpha_l2 = torch.tanh(self.l2h01(alpha_l2))
+        beta = torch.tanh(self.l0h2(meta_step))
+        beta_l1 = self.shapeShift(torch.tanh(self.l1h2(beta)), gamma_l1)
+        beta_l2 = self.shapeShift(torch.tanh(self.l2h2(beta_l1)), gamma_l2)
+
+        meta_h1 = torch.cat([meta_input_h1.float(),meta_output_h1.float()],dim=1)
+        alpha = torch.tanh(self.l0h1(meta_h1))
+        alpha_l1 = self.shapeShift(torch.tanh(self.l1h1(alpha)),beta_l1)
+        alpha_l2 =  self.shapeShift(torch.tanh(self.l2h1(alpha_l1)),beta_l2)
+
+        x_alpha_l1 = torch.tanh(self.l1h01(alpha_l1))
+        x_alpha_l2 = torch.tanh(self.l2h01(alpha_l2))
 
         r_along_x = data_input[:, 0:self.in_scale, :].view(self.batch_size, self.in_scale * self.in_scale)
         r_along_y = data_input[:, 0:self.in_scale, :].transpose(1, 2).contiguous().view(self.batch_size, self.in_scale * self.in_scale)
@@ -226,10 +226,10 @@ class Metamorph(nn.Module):
         x = self.SpaceTimeFFTFeature(x,self.weights_data_2,self.weights_data_fft_2, space_time)
 
         # x = rgbas + x
-        # x_mod = self.shapeShift(torch.tanh(self.l1h0(rgbas)), x_alpha_l1)
-        # x_mod = self.shapeShift(torch.tanh(self.l2h0(x_mod)), x_alpha_l2)
+        x_mod = self.shapeShift(torch.tanh(self.l1h0(rgbas)), x_alpha_l1)
+        x_mod = self.shapeShift(torch.tanh(self.l2h0(x_mod)), x_alpha_l2)
 
-        x = f.gelu(self.l3h0(x))+rgbas#-x_mod
+        x = f.gelu(self.l3h0(x))+rgbas-x_mod
         rres = f.gelu(self.l4_h0_r(x))
         gres = f.gelu(self.l4_h0_g(x))
         bres = f.gelu(self.l4_h0_b(x))
