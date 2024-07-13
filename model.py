@@ -229,7 +229,7 @@ class Metamorph(nn.Module):
         x_mod = self.shapeShift(torch.tanh(self.l1h0(rgbas)), x_alpha_l1)
         x_mod = self.shapeShift(torch.tanh(self.l2h0(x_mod)), x_alpha_l2)
 
-        x = f.gelu(self.l3h0(x))+rgbas-x_mod
+        x = f.gelu(self.l3h0(x))+rgbas+x_mod
         rres = f.gelu(self.l4_h0_r(x))
         gres = f.gelu(self.l4_h0_g(x))
         bres = f.gelu(self.l4_h0_b(x))
@@ -312,7 +312,7 @@ class Metamorph(nn.Module):
         iFFWW_real = iFFWW.real
         iFFWW_imag = iFFWW.imag
         ifft_data = iFFWW_real+iFFWW_imag
-        data = f.gelu(ifft_data)#+f.gelu(weights_data*data)
+        data = f.gelu(ifft_data)+f.gelu(weights_data*data)
         # Attention :  Above is implemented simplified FNO LAYER
         # data = torch.tanh(data)
         return data

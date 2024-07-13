@@ -286,6 +286,7 @@ class teacher(object):
                 norm = 'forward'
                 noise_amplitude = 1.
                 print_every_nth_frame=10
+                best_models = []
                 for epoch in range(num_epochs):
                     if reiterate_data == 0:
                         self.data_preparation()
@@ -429,23 +430,23 @@ class teacher(object):
 
                     if len(self.saved_loss) > 10:
                         gloss = np.array(self.saved_loss)[-25:-1]
-                        if gloss[-1] > gloss[-2] or reiterate_counter < 35 or gloss[-1] < gloss[-2]*0.9 or gloss[-1] > 5.:
+                        if gloss[-1] > gloss[-2] or reiterate_counter < 35 or gloss[-1] < gloss[-2]*0.9 or gloss[-1] > 6.:
                             reiterate_data = 1
                         else:
                             reiterate_counter = 0
                             reiterate_data = 0
                         gloss = abs(np.sum(np.gradient(gloss)))
                         if gloss > 1e-2:
-                            grad_counter +=1
+                            grad_counter =0
                         else:
-                            grad_counter = 0
-                            reiterate_data = 0
-                            reiterate_counter = 0
+                            grad_counter += 1
                         if grad_counter == 10 or reiterate_data == 0:
                             for param_group in optimizer.param_groups:
                                 param_group['lr'] = param_group['lr']*0.95
                                 if param_group['lr'] < 1e-5 or reiterate_data == 0:
                                     param_group['lr'] = 9e-5
+                                    reiterate_counter = 0
+                                    reiterate_data = 0
                                     print('lr back to starting point')
                                # noise_amplitude = noise_amplitude*0.5
                                 # if noise_amplitude < 1e-3:
@@ -460,7 +461,24 @@ class teacher(object):
                     if (epoch + 1) % 10 == 0 or reiterate_data == 0:
                         if loss.item() < best_loss or reiterate_data == 0:
                             best_loss = loss.item()
-                            torch.save(self.model.state_dict(), 'model.pt')
+                            best_models.append(self.model)
+                            if len(best_models) > 10:
+                                with torch.no_grad():
+                                    model_avg = self.model
+                                    param_sum = {name: torch.zeros_like(param) for name, param in
+                                                 model_avg.named_parameters()}
+                                    for m in range(len(best_models)):
+                                        for name, param in best_models[m].named_parameters():
+                                            param_sum[name] += param
+
+                                    num_models = len(best_models)
+                                    for name, param in model_avg.named_parameters():
+                                        param_avg = param_sum[name] / num_models
+                                        param.copy_(param_avg)
+
+                                    self.model = model_avg
+                                    torch.save(self.model.state_dict(), 'model.pt')
+                                    best_models = []
                 # if best_model_state is None:
                 #     pass
                 # else:
