@@ -229,7 +229,7 @@ class Metamorph(nn.Module):
         x_mod = self.shapeShift(torch.tanh(self.l1h0(rgbas)), x_alpha_l1)
         x_mod = self.shapeShift(torch.tanh(self.l2h0(x_mod)), x_alpha_l2)
 
-        x = f.gelu(self.l3h0(x))+rgbas+x_mod
+        x = f.gelu(self.l3h0(x))+x_mod+rgbas
         rres = f.gelu(self.l4_h0_r(x))
         gres = f.gelu(self.l4_h0_g(x))
         bres = f.gelu(self.l4_h0_b(x))

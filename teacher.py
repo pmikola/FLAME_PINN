@@ -1,3 +1,4 @@
+import copy
 import os.path
 import random
 import struct
@@ -10,10 +11,10 @@ from torch.autograd import grad
 
 
 class teacher(object):
-    def __init__(self,model,device):
+    def __init__(self,models,device):
         super(teacher, self).__init__()
-
-        self.model = model
+        self.model = models[0]
+        self.expert_0 = copy.deepcopy(models[1])
         self.device = device
         self.fsim = None
         self.period = 1
@@ -274,7 +275,10 @@ class teacher(object):
             (self.no_frame_samples,self.batch_size,self.input_window_size,self.first_frame,
              self.last_frame,self.frame_skip) = (no_frame_samples, batch_size,
                                                  input_window_size, first_frame, last_frame,frame_skip)
+
+            criterion_model,criterion_e0 = criterion
             global loss
+            global e0loss
             if learning == 1:
                 best_loss = float('inf')
                 best_model_state = None
@@ -308,7 +312,6 @@ class teacher(object):
                                                                 self.meta_output_h4.to(device),
                                                                 self.meta_output_h5.to(device))
 
-
                     #self.data_output = self.data_output.to(device) #+ (torch.randn_like(self.data_output)*2-0.5)*noise_amplitude
                     #self.data_input = self.data_input + (torch.randn_like(self.data_input)*2-0.5)*noise_amplitude
                     #self.structure_input = self.structure_input + (torch.randn_like(self.structure_input)*2-0.5)*noise_amplitude
@@ -316,119 +319,41 @@ class teacher(object):
                                self.meta_input_h3,self.meta_input_h4,self.meta_input_h5,self.meta_output_h1,
                                self.meta_output_h2,self.meta_output_h3,self.meta_output_h4,self.meta_output_h5)
                     t_start = time.perf_counter()
-                    pred_r,pred_g,pred_b,pred_a,pred_s = self.model(dataset)
+                    model_output = self.model(dataset)
+                    expert_0_output = self.expert_0(dataset)
                     t_pred = time.perf_counter()
 
-                    # NOTE: Firs order difference
-                    diff_r_true = self.data_output[:,0:self.model.in_scale,:]-self.data_input[:,0:self.model.in_scale,:]
-                    diff_r_pred = pred_r-self.data_input[:,0:self.model.in_scale,:]
-                    # diff_r_pred = torch.gradient(torch.cat([data_in_r.unsqueeze(3),pred_r.unsqueeze(3)],dim=3),dim=3)[0][:, :, :, 1]
-                    loss_diff_r = criterion(diff_r_pred,diff_r_true)
-                    diff_g_true =  self.data_output[:, self.model.in_scale:self.model.in_scale*2, :]-self.data_input[:, self.model.in_scale:self.model.in_scale*2, :]
-                    diff_g_pred = pred_g-self.data_input[:, self.model.in_scale:self.model.in_scale*2, :]
-                    loss_diff_g = criterion(diff_g_pred, diff_g_true)
-                    diff_b_true = self.data_output[:, self.model.in_scale*2:self.model.in_scale*3, :]-self.data_input[:, self.model.in_scale*2:self.model.in_scale*3, :]
-                    diff_b_pred = pred_b-self.data_input[:, self.model.in_scale*2:self.model.in_scale*3, :]
-                    loss_diff_b = criterion(diff_b_pred, diff_b_true)
-                    diff_a_true = self.data_output[:, self.model.in_scale*3:self.model.in_scale*4, :]-self.data_input[:, self.model.in_scale*3:self.model.in_scale*4, :]
-                    diff_a_pred = pred_a-self.data_input[:, self.model.in_scale*3:self.model.in_scale*4, :]
-                    loss_diff_a = criterion(diff_a_pred, diff_a_true)
-                    diff_s_true = self.structure_output-self.structure_input
-                    diff_s_pred = pred_s-self.structure_input
-                    loss_diff_s = criterion(diff_s_pred, diff_s_true)
-                    diff_loss = loss_diff_r+loss_diff_g+loss_diff_b+loss_diff_a+loss_diff_s
-
-                    grad_r_true = torch.gradient(self.data_output[:,0:self.model.in_scale,:],dim=[1,2])[0]
-                    grad_r_pred = torch.gradient(pred_r)[0]
-                    grad_r = criterion(grad_r_pred, grad_r_true)
-                    grad_g_true = torch.gradient(self.data_output[:,self.model.in_scale:self.model.in_scale*2,:],dim=[1,2])[0]
-                    grad_g_pred = torch.gradient(pred_g)[0]
-                    grad_g = criterion(grad_g_pred, grad_g_true)
-                    grad_b_true = torch.gradient(self.data_output[:,self.model.in_scale*2:self.model.in_scale*3,:],dim=[1,2])[0]
-                    grad_b_pred = torch.gradient(pred_b)[0]
-                    grad_b = criterion(grad_b_pred, grad_b_true)
-                    grad_a_true = torch.gradient(self.data_output[:,self.model.in_scale*3:self.model.in_scale*4,:],dim=[1,2])[0]
-                    grad_a_pred = torch.gradient(pred_a)[0]
-                    grad_a = criterion(grad_a_pred, grad_a_true)
-                    grad_s_true = torch.gradient(self.structure_output,dim=[1,2])[0]
-                    grad_s_pred = torch.gradient(pred_s)[0]
-                    grad_s = criterion(grad_s_pred, grad_s_true)
-
-                    grad_loss = grad_r+grad_g+grad_b+grad_a+grad_s
-
-                    loss_r = criterion(pred_r, self.data_output[:,0:self.model.in_scale,:])
-                    loss_g = criterion(pred_g, self.data_output[:,self.model.in_scale:self.model.in_scale*2,:])
-                    loss_b = criterion(pred_b, self.data_output[:,self.model.in_scale*2:self.model.in_scale*3,:])
-                    loss_alpha = criterion(pred_a, self.data_output[:,self.model.in_scale*3:self.model.in_scale*4,:])
-                    loss_s = criterion(pred_s, self.structure_output)
-                    value_loss = loss_r + loss_g + loss_b + loss_alpha+loss_s
+                    loss = self.loss_calculation(model_output, criterion_model, norm)
+                    e0loss = self.loss_calculation(expert_0_output, criterion_e0, norm)
 
 
+                    if loss > e0loss:
+                        loss =loss*1.5
+                    else:
+                        e0loss =e0loss*1.5
 
-                    fft_out_pred_r = torch.real(torch.fft.rfft2(pred_r,norm=norm))
-                    fft_out_true_r = torch.real(torch.fft.rfft2(self.data_output[:,0:self.model.in_scale,:],norm=norm))
-                    fft_out_pred_g = torch.real(torch.fft.rfft2(pred_g, norm=norm))
-                    fft_out_true_g = torch.real(
-                        torch.fft.rfft2(self.data_output[:,self.model.in_scale:self.model.in_scale*2,:], norm=norm))
-                    fft_out_pred_b = torch.real(torch.fft.rfft2(pred_b, norm=norm))
-                    fft_out_true_b = torch.real(
-                        torch.fft.rfft2(self.data_output[:,self.model.in_scale*2:self.model.in_scale*3,:], norm=norm))
-                    fft_out_pred_a = torch.real(torch.fft.rfft2(pred_a, norm=norm))
-                    fft_out_true_a = torch.real(
-                        torch.fft.rfft2(self.data_output[:,self.model.in_scale*3:self.model.in_scale*4,:], norm=norm))
-                    fft_out_pred_s = torch.real(torch.fft.rfft2(pred_s, norm=norm))
-                    fft_out_true_s = torch.real(
-                        torch.fft.rfft2(self.structure_output, norm=norm))
-
-                    fft_in_true_r = torch.real(
-                        torch.fft.rfft2(self.data_input[:, 0:self.model.in_scale, :], norm=norm))
-                    fft_in_true_g = torch.real(
-                        torch.fft.rfft2(self.data_input[:, self.model.in_scale:self.model.in_scale * 2, :],
-                                        norm=norm))
-                    fft_in_true_b = torch.real(
-                        torch.fft.rfft2(self.data_input[:, self.model.in_scale * 2:self.model.in_scale * 3, :],
-                                        norm=norm))
-                    fft_in_true_a = torch.real(
-                        torch.fft.rfft2(self.data_input[:, self.model.in_scale * 3:self.model.in_scale * 4, :],
-                                        norm=norm))
-                    fft_in_true_s = torch.real(
-                        torch.fft.rfft2(self.structure_input, norm=norm))
-
-                    fft_loss_r = criterion(fft_out_pred_r,fft_out_true_r)
-                    fft_loss_g = criterion(fft_out_pred_g,fft_out_true_g)
-                    fft_loss_b = criterion(fft_out_pred_b,fft_out_true_b)
-                    fft_loss_a = criterion(fft_out_pred_a,fft_out_true_a)
-                    fft_loss_s = criterion(fft_out_pred_s,fft_out_true_s)
-                    fft_loss = fft_loss_r+fft_loss_g+fft_loss_b+fft_loss_a+fft_loss_s
-
-                    diff_fft_true_r = fft_out_true_r - fft_in_true_r
-                    diff_fft_pred_r = fft_out_pred_r - fft_in_true_r
-                    diff_fft_loss_r = criterion(diff_fft_pred_r,diff_fft_true_r)
-                    diff_fft_true_g = fft_out_true_g - fft_in_true_g
-                    diff_fft_pred_g = fft_out_pred_g - fft_in_true_g
-                    diff_fft_loss_g = criterion(diff_fft_pred_g, diff_fft_true_g)
-                    diff_fft_true_b = fft_out_true_b - fft_in_true_b
-                    diff_fft_pred_b = fft_out_pred_b - fft_in_true_b
-                    diff_fft_loss_b = criterion(diff_fft_pred_b, diff_fft_true_b)
-                    diff_fft_true_a = fft_out_true_a - fft_in_true_a
-                    diff_fft_pred_a = fft_out_pred_a - fft_in_true_a
-                    diff_fft_loss_a = criterion(diff_fft_pred_a, diff_fft_true_a)
-                    diff_fft_true_s = fft_out_true_s - fft_in_true_s
-                    diff_fft_pred_s = fft_out_pred_s - fft_in_true_s
-                    diff_fft_loss_s = criterion(diff_fft_pred_s, diff_fft_true_s)
-                    diff_fft_loss = diff_fft_loss_r+diff_fft_loss_g+diff_fft_loss_b+diff_fft_loss_a+diff_fft_loss_s
-
-
-                    loss = value_loss+diff_loss+grad_loss+fft_loss+diff_fft_loss # Attention: Aggregate all losses here
+                    if (epoch + 1) % 10 == 0:
+                        with torch.no_grad():#
+                            simalirityFunction = torch.nn.CosineSimilarity(dim=0, eps=1e-6)
+                            param_similarity = 0.
+                            for param1, param2 in zip(self.model.parameters(), self.expert_0.parameters()):
+                                param_similarity += torch.mean(simalirityFunction(param1.real,param2.real))
+                            loss +=param_similarity
+                            e0loss +=param_similarity
+                    print(loss)
+                    optimizer.zero_grad()
+                    e0loss.backward()
+                    optimizer.step()
 
                     optimizer.zero_grad()
                     loss.backward()
                     optimizer.step()
+
                     self.saved_loss.append(loss.item())
                     # t_stop = time.perf_counter()
-                    t += t_pred - t_start
+                    t += (t_pred - t_start)*0.5
 
-                    if len(self.saved_loss) > 10:
+                    if len(self.saved_loss) > 100:
                         gloss = np.array(self.saved_loss)[-25:-1]
                         if gloss[-1] > gloss[-2] or reiterate_counter < 35 or gloss[-1] < gloss[-2]*0.9 or gloss[-1] > 6.:
                             reiterate_data = 1
@@ -462,7 +387,7 @@ class teacher(object):
                         if loss.item() < best_loss or reiterate_data == 0:
                             best_loss = loss.item()
                             best_models.append(self.model)
-                            if len(best_models) > 10:
+                            if len(best_models) > 30:
                                 with torch.no_grad():
                                     model_avg = self.model
                                     param_sum = {name: torch.zeros_like(param) for name, param in
@@ -796,7 +721,6 @@ class teacher(object):
             rms = np.mean(np.sqrt(abs(prediction**2 - ground_truth**2)),axis=2)
             rms_anim = ax3.imshow(rms,cmap= 'RdBu',vmin=0,vmax=1)
 
-
             ims.append([rgb_pred_anim, rgb_true_anim,rms_anim,title_pred,title_true,title_rms])
             # ims.append([rgb_true_anim,title_pred,title_true,title_rms])
 
@@ -828,6 +752,117 @@ class teacher(object):
         #ani.save("flame_animation.gif")
         fig.colorbar(rms_anim, ax=ax3)
         plt.show()
+
+    def loss_calculation(self,model_output,criterion,norm):
+        pred_r,pred_g,pred_b,pred_a,pred_s = model_output
+        # NOTE: Firs order difference
+        diff_r_true = self.data_output[:, 0:self.model.in_scale, :] - self.data_input[:, 0:self.model.in_scale, :]
+        diff_r_pred = pred_r - self.data_input[:, 0:self.model.in_scale, :]
+        # diff_r_pred = torch.gradient(torch.cat([data_in_r.unsqueeze(3),pred_r.unsqueeze(3)],dim=3),dim=3)[0][:, :, :, 1]
+        loss_diff_r = criterion(diff_r_pred, diff_r_true)
+        diff_g_true = self.data_output[:, self.model.in_scale:self.model.in_scale * 2, :] - self.data_input[:,
+                                                                                            self.model.in_scale:self.model.in_scale * 2,
+                                                                                            :]
+        diff_g_pred = pred_g - self.data_input[:, self.model.in_scale:self.model.in_scale * 2, :]
+        loss_diff_g = criterion(diff_g_pred, diff_g_true)
+        diff_b_true = self.data_output[:, self.model.in_scale * 2:self.model.in_scale * 3, :] - self.data_input[:,
+                                                                                                self.model.in_scale * 2:self.model.in_scale * 3,
+                                                                                                :]
+        diff_b_pred = pred_b - self.data_input[:, self.model.in_scale * 2:self.model.in_scale * 3, :]
+        loss_diff_b = criterion(diff_b_pred, diff_b_true)
+        diff_a_true = self.data_output[:, self.model.in_scale * 3:self.model.in_scale * 4, :] - self.data_input[:,
+                                                                                                self.model.in_scale * 3:self.model.in_scale * 4,
+                                                                                                :]
+        diff_a_pred = pred_a - self.data_input[:, self.model.in_scale * 3:self.model.in_scale * 4, :]
+        loss_diff_a = criterion(diff_a_pred, diff_a_true)
+        diff_s_true = self.structure_output - self.structure_input
+        diff_s_pred = pred_s - self.structure_input
+        loss_diff_s = criterion(diff_s_pred, diff_s_true)
+        diff_loss = loss_diff_r + loss_diff_g + loss_diff_b + loss_diff_a + loss_diff_s
+
+        grad_r_true = torch.gradient(self.data_output[:, 0:self.model.in_scale, :], dim=[1, 2])[0]
+        grad_r_pred = torch.gradient(pred_r)[0]
+        grad_r = criterion(grad_r_pred, grad_r_true)
+        grad_g_true = torch.gradient(self.data_output[:, self.model.in_scale:self.model.in_scale * 2, :], dim=[1, 2])[0]
+        grad_g_pred = torch.gradient(pred_g)[0]
+        grad_g = criterion(grad_g_pred, grad_g_true)
+        grad_b_true = \
+        torch.gradient(self.data_output[:, self.model.in_scale * 2:self.model.in_scale * 3, :], dim=[1, 2])[0]
+        grad_b_pred = torch.gradient(pred_b)[0]
+        grad_b = criterion(grad_b_pred, grad_b_true)
+        grad_a_true = \
+        torch.gradient(self.data_output[:, self.model.in_scale * 3:self.model.in_scale * 4, :], dim=[1, 2])[0]
+        grad_a_pred = torch.gradient(pred_a)[0]
+        grad_a = criterion(grad_a_pred, grad_a_true)
+        grad_s_true = torch.gradient(self.structure_output, dim=[1, 2])[0]
+        grad_s_pred = torch.gradient(pred_s)[0]
+        grad_s = criterion(grad_s_pred, grad_s_true)
+
+        grad_loss = grad_r + grad_g + grad_b + grad_a + grad_s
+
+        loss_r = criterion(pred_r, self.data_output[:, 0:self.model.in_scale, :])
+        loss_g = criterion(pred_g, self.data_output[:, self.model.in_scale:self.model.in_scale * 2, :])
+        loss_b = criterion(pred_b, self.data_output[:, self.model.in_scale * 2:self.model.in_scale * 3, :])
+        loss_alpha = criterion(pred_a, self.data_output[:, self.model.in_scale * 3:self.model.in_scale * 4, :])
+        loss_s = criterion(pred_s, self.structure_output)
+        value_loss = loss_r + loss_g + loss_b + loss_alpha + loss_s
+
+        fft_out_pred_r = torch.real(torch.fft.rfft2(pred_r, norm=norm))
+        fft_out_true_r = torch.real(torch.fft.rfft2(self.data_output[:, 0:self.model.in_scale, :], norm=norm))
+        fft_out_pred_g = torch.real(torch.fft.rfft2(pred_g, norm=norm))
+        fft_out_true_g = torch.real(
+            torch.fft.rfft2(self.data_output[:, self.model.in_scale:self.model.in_scale * 2, :], norm=norm))
+        fft_out_pred_b = torch.real(torch.fft.rfft2(pred_b, norm=norm))
+        fft_out_true_b = torch.real(
+            torch.fft.rfft2(self.data_output[:, self.model.in_scale * 2:self.model.in_scale * 3, :], norm=norm))
+        fft_out_pred_a = torch.real(torch.fft.rfft2(pred_a, norm=norm))
+        fft_out_true_a = torch.real(
+            torch.fft.rfft2(self.data_output[:, self.model.in_scale * 3:self.model.in_scale * 4, :], norm=norm))
+        fft_out_pred_s = torch.real(torch.fft.rfft2(pred_s, norm=norm))
+        fft_out_true_s = torch.real(
+            torch.fft.rfft2(self.structure_output, norm=norm))
+
+        fft_in_true_r = torch.real(
+            torch.fft.rfft2(self.data_input[:, 0:self.model.in_scale, :], norm=norm))
+        fft_in_true_g = torch.real(
+            torch.fft.rfft2(self.data_input[:, self.model.in_scale:self.model.in_scale * 2, :],
+                            norm=norm))
+        fft_in_true_b = torch.real(
+            torch.fft.rfft2(self.data_input[:, self.model.in_scale * 2:self.model.in_scale * 3, :],
+                            norm=norm))
+        fft_in_true_a = torch.real(
+            torch.fft.rfft2(self.data_input[:, self.model.in_scale * 3:self.model.in_scale * 4, :],
+                            norm=norm))
+        fft_in_true_s = torch.real(
+            torch.fft.rfft2(self.structure_input, norm=norm))
+
+        fft_loss_r = criterion(fft_out_pred_r, fft_out_true_r)
+        fft_loss_g = criterion(fft_out_pred_g, fft_out_true_g)
+        fft_loss_b = criterion(fft_out_pred_b, fft_out_true_b)
+        fft_loss_a = criterion(fft_out_pred_a, fft_out_true_a)
+        fft_loss_s = criterion(fft_out_pred_s, fft_out_true_s)
+        fft_loss = fft_loss_r + fft_loss_g + fft_loss_b + fft_loss_a + fft_loss_s
+
+        diff_fft_true_r = fft_out_true_r - fft_in_true_r
+        diff_fft_pred_r = fft_out_pred_r - fft_in_true_r
+        diff_fft_loss_r = criterion(diff_fft_pred_r, diff_fft_true_r)
+        diff_fft_true_g = fft_out_true_g - fft_in_true_g
+        diff_fft_pred_g = fft_out_pred_g - fft_in_true_g
+        diff_fft_loss_g = criterion(diff_fft_pred_g, diff_fft_true_g)
+        diff_fft_true_b = fft_out_true_b - fft_in_true_b
+        diff_fft_pred_b = fft_out_pred_b - fft_in_true_b
+        diff_fft_loss_b = criterion(diff_fft_pred_b, diff_fft_true_b)
+        diff_fft_true_a = fft_out_true_a - fft_in_true_a
+        diff_fft_pred_a = fft_out_pred_a - fft_in_true_a
+        diff_fft_loss_a = criterion(diff_fft_pred_a, diff_fft_true_a)
+        diff_fft_true_s = fft_out_true_s - fft_in_true_s
+        diff_fft_pred_s = fft_out_pred_s - fft_in_true_s
+        diff_fft_loss_s = criterion(diff_fft_pred_s, diff_fft_true_s)
+        diff_fft_loss = diff_fft_loss_r + diff_fft_loss_g + diff_fft_loss_b + diff_fft_loss_a + diff_fft_loss_s
+
+        LOSS = value_loss + diff_loss + grad_loss + fft_loss + diff_fft_loss  # Attention: Aggregate all losses here
+
+        return LOSS
 
 
 
