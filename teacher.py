@@ -291,6 +291,7 @@ class teacher(object):
                 noise_amplitude = 1.
                 print_every_nth_frame=10
                 best_models = []
+                best_losses = []
                 for epoch in range(num_epochs):
                     if reiterate_data == 0:
                         self.data_preparation()
@@ -326,21 +327,15 @@ class teacher(object):
                     loss = self.loss_calculation(model_output, criterion_model, norm)
                     e0loss = self.loss_calculation(expert_0_output, criterion_e0, norm)
 
-
-                    if loss > e0loss:
-                        loss =loss*1.5
-                    else:
-                        e0loss =e0loss*1.5
-
-                    if (epoch + 1) % 10 == 0:
-                        with torch.no_grad():#
-                            simalirityFunction = torch.nn.CosineSimilarity(dim=0, eps=1e-6)
-                            param_similarity = 0.
-                            for param1, param2 in zip(self.model.parameters(), self.expert_0.parameters()):
-                                param_similarity += torch.mean(simalirityFunction(param1.real,param2.real))
-                            loss +=param_similarity
-                            e0loss +=param_similarity
-                    print(loss)
+                    # if (epoch + 1) % 1 == 0:
+                    # NOTE: forces models parameters to be further with respect to each other
+                    with torch.no_grad():#
+                        # simalirityFunction = torch.nn.CosineSimilarity(dim=0, eps=1e-6)
+                        param_similarity = 0.
+                        for param1, param2 in zip(self.model.parameters(), self.expert_0.parameters()):
+                            param_similarity += criterion_model(param1.real,param2.real)
+                        loss -=param_similarity
+                        e0loss -=param_similarity
                     optimizer.zero_grad()
                     e0loss.backward()
                     optimizer.step()
@@ -353,23 +348,25 @@ class teacher(object):
                     # t_stop = time.perf_counter()
                     t += (t_pred - t_start)*0.5
 
-                    if len(self.saved_loss) > 100:
-                        gloss = np.array(self.saved_loss)[-25:-1]
-                        if gloss[-1] > gloss[-2] or reiterate_counter < 35 or gloss[-1] < gloss[-2]*0.9 or gloss[-1] > 6.:
+                    if len(self.saved_loss) > 10:
+                        loss_recent_history = np.array(self.saved_loss)[-5:-1]
+                        mean_hist_losses = np.mean(loss_recent_history)
+                        if loss_recent_history[-1] > loss_recent_history[-2] or reiterate_counter < 50 or loss_recent_history[-1] < loss_recent_history[-2]*0.9 or loss_recent_history[-1] > 6.:
                             reiterate_data = 1
                         else:
                             reiterate_counter = 0
                             reiterate_data = 0
-                        gloss = abs(np.sum(np.gradient(gloss)))
-                        if gloss > 1e-2:
+                        gloss = abs(np.sum(np.gradient(loss_recent_history)))
+                        if gloss > 1e0:
                             grad_counter =0
                         else:
                             grad_counter += 1
-                        if grad_counter == 10 or reiterate_data == 0:
+                        # NOTE: lowering lr for  better performance and reset lr within conditions
+                        if grad_counter == 3 or reiterate_data == 0:
                             for param_group in optimizer.param_groups:
                                 param_group['lr'] = param_group['lr']*0.95
                                 if param_group['lr'] < 1e-5 or reiterate_data == 0:
-                                    param_group['lr'] = 9e-5
+                                    param_group['lr'] = 5e-4
                                     reiterate_counter = 0
                                     reiterate_data = 0
                                     print('lr back to starting point')
@@ -378,32 +375,46 @@ class teacher(object):
                                 #     # print('noise amplitude')
                                 #     noise_amplitude = 0.
                             grad_counter = 0
-                    if (epoch+1) % print_every_nth_frame == 0:
-                        print(f'Period: {self.period}/{self.no_of_periods} | Epoch: {epoch+1}/{num_epochs}, '
+
+                        # NOTE: Averaging models with best loss results within all models
+                        if (epoch + 1) % 5 == 0 or reiterate_data == 0:
+                            if loss.item() < mean_hist_losses or best_loss < mean_hist_losses or e0loss.item() < mean_hist_losses or best_loss < mean_hist_losses or reiterate_data == 0:
+                                if loss < e0loss:
+                                    best_loss = loss.item()
+                                    best_losses.append(best_loss)
+                                    best_models.append(self.model)
+                                else:
+                                    best_loss = e0loss.item()
+                                    best_losses.append(best_loss)
+                                    best_models.append(self.expert_0)
+                                if len(best_models) > 10:
+                                    best_losses = torch.tensor(np.array(best_losses))
+                                    best_losses_norm = 1/(best_losses / best_losses.min())
+                                    with torch.no_grad():
+                                        model_avg = self.model
+                                        param_sum = {name: torch.zeros_like(param) for name, param in
+                                                     model_avg.named_parameters()}
+                                        num_models = len(best_models)
+                                        for m in range(num_models):
+                                            for name, param in best_models[m].named_parameters():
+                                                param_sum[name] += param*best_losses_norm[m]
+
+                                        for name, param in model_avg.named_parameters():
+                                            param_avg = param_sum[name] / num_models
+                                            param.copy_(param_avg)
+
+                                        self.model = model_avg
+                                        torch.save(self.model.state_dict(), 'model.pt')
+                                        best_models = []
+                                        best_losses = []
+                                        best_loss = 10000.
+                                        print('model weighted and averaged')
+
+                    if (epoch + 1) % print_every_nth_frame == 0:
+                        print(f'Period: {self.period}/{self.no_of_periods} | Epoch: {epoch + 1}/{num_epochs}, '
                               f'Loss: {loss.item():.4f}, '
-                              f'Avg. Time per frame: {((self.fsim.grid_size_x*self.fsim.grid_size_y)/(self.model.in_scale**2))*(t*1e6/print_every_nth_frame/self.batch_size):.4f} [us]')
+                              f'Avg. Time per frame: {((self.fsim.grid_size_x * self.fsim.grid_size_y) / (self.model.in_scale ** 2)) * (t * 1e6 / print_every_nth_frame / self.batch_size):.4f} [us]')
                         t = 0.
-                    if (epoch + 1) % 10 == 0 or reiterate_data == 0:
-                        if loss.item() < best_loss or reiterate_data == 0:
-                            best_loss = loss.item()
-                            best_models.append(self.model)
-                            if len(best_models) > 30:
-                                with torch.no_grad():
-                                    model_avg = self.model
-                                    param_sum = {name: torch.zeros_like(param) for name, param in
-                                                 model_avg.named_parameters()}
-                                    for m in range(len(best_models)):
-                                        for name, param in best_models[m].named_parameters():
-                                            param_sum[name] += param
-
-                                    num_models = len(best_models)
-                                    for name, param in model_avg.named_parameters():
-                                        param_avg = param_sum[name] / num_models
-                                        param.copy_(param_avg)
-
-                                    self.model = model_avg
-                                    torch.save(self.model.state_dict(), 'model.pt')
-                                    best_models = []
                 # if best_model_state is None:
                 #     pass
                 # else:
