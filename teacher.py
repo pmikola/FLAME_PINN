@@ -139,18 +139,41 @@ class teacher(object):
         meta_output_h5 = []
         noise_var_out = []
         frame = 0
-        while not frame >= self.batch_size:
-            noise_variance_in = torch.randn(size=(1,))
-            noise_variance_in_binary = ''.join(f'{c:08b}' for c in np.float32(noise_variance_in).tobytes())
-            noise_variance_in = noise_variance_in.to(self.device)
-            noise_variance_in_binary = [int(noise_variance_in_binary[i], 2) for i in range(0, len(noise_variance_in_binary), 1)]
-            noise_variance_in_binary = torch.tensor(np.array(noise_variance_in_binary)).to(self.device)
+        noise_flag = torch.randint(low=0, high=10,size=(1,))
 
-            noise_variance_out = torch.randn(size=(1,))
-            noise_variance_out_binary = ''.join(f'{c:08b}' for c in np.float32(noise_variance_out).tobytes())
-            noise_variance_out = noise_variance_out.to(self.device)
-            noise_variance_out_binary = [int(noise_variance_out_binary[i], 2) for i in range(0, len(noise_variance_out_binary), 1)]
-            noise_variance_out_binary = torch.tensor(np.array(noise_variance_out_binary)).to(self.device)
+        while not frame >= self.batch_size:
+            if noise_flag < 1:
+                noise_variance_in = torch.tensor(0.).to(self.device)
+                noise_variance_out = torch.tensor(0.).to(self.device)
+                noise_variance_in_binary = torch.zeros(32).to(self.device)
+                noise_variance_out_binary = torch.zeros(32).to(self.device)
+            elif 1 < noise_flag < 5:
+                noise_variance_in = torch.randn(size=(1,))
+                noise_variance_in_binary = ''.join(f'{c:08b}' for c in np.float32(noise_variance_in).tobytes())
+                noise_variance_in = noise_variance_in.to(self.device)
+                noise_variance_in_binary = [int(noise_variance_in_binary[i], 2) for i in range(0, len(noise_variance_in_binary), 1)]
+                noise_variance_in_binary = torch.tensor(np.array(noise_variance_in_binary)).to(self.device)
+                noise_variance_out = torch.tensor(0.).to(self.device)
+                noise_variance_out_binary = torch.zeros(32).to(self.device)
+            elif 5< noise_flag<9:
+                noise_variance_out = torch.randn(size=(1,))
+                noise_variance_out_binary = ''.join(f'{c:08b}' for c in np.float32(noise_variance_out).tobytes())
+                noise_variance_out = noise_variance_out.to(self.device)
+                noise_variance_out_binary = [int(noise_variance_out_binary[i], 2) for i in range(0, len(noise_variance_out_binary), 1)]
+                noise_variance_out_binary = torch.tensor(np.array(noise_variance_out_binary)).to(self.device)
+                noise_variance_in = torch.tensor(0.).to(self.device)
+                noise_variance_in_binary = torch.zeros(32).to(self.device)
+            else:
+                noise_variance_in = torch.randn(size=(1,))
+                noise_variance_in_binary = ''.join(f'{c:08b}' for c in np.float32(noise_variance_in).tobytes())
+                noise_variance_in = noise_variance_in.to(self.device)
+                noise_variance_in_binary = [int(noise_variance_in_binary[i], 2) for i in range(0, len(noise_variance_in_binary), 1)]
+                noise_variance_in_binary = torch.tensor(np.array(noise_variance_in_binary)).to(self.device)
+                noise_variance_out = torch.randn(size=(1,))
+                noise_variance_out_binary = ''.join(f'{c:08b}' for c in np.float32(noise_variance_out).tobytes())
+                noise_variance_out = noise_variance_out.to(self.device)
+                noise_variance_out_binary = [int(noise_variance_out_binary[i], 2) for i in range(0, len(noise_variance_out_binary), 1)]
+                noise_variance_out_binary = torch.tensor(np.array(noise_variance_out_binary)).to(self.device)
 
 
             idx_input = random.choice(range(0, fuel_slices.shape[0]))
@@ -665,11 +688,13 @@ class teacher(object):
                                               meta_ignition_temp_out, meta_viscosity_out, meta_diff_out], dim=0)
             # Note: Data for the different layers
             data_input = data_input_subslice
+            self.model.batch_size = data_input.shape[0]
             structure_input = fuel_subslice_in
             meta_input_h1 = meta_input_subslice.unsqueeze(0).repeat(data_input.shape[0],1)
             meta_input_h2 = meta_step_in.unsqueeze(0).repeat(data_input.shape[0],1)
             meta_input_h3 = torch.tensor(np.array(central_points_xy_binary))
             meta_input_h4 = torch.cat([x_idx[:,0:-1], y_idx[:,0:-1]],dim=1)
+            noise_var_in = torch.zeros((data_input.shape[0], 32))
 
             meta_input_h5 = meta_step_in_numeric.repeat(data_input.shape[0],1).squeeze(1)
             data_output = data_output_subslice
@@ -678,13 +703,13 @@ class teacher(object):
             meta_output_h3 = torch.tensor(np.array(central_points_xy_binary))
             meta_output_h4 = torch.cat([x_idx[:,0:-1], y_idx[:,0:-1]],dim=1)
             meta_output_h5 = meta_step_out_numeric.repeat(data_input.shape[0],1).squeeze(1)
+            noise_var_out = torch.zeros((data_input.shape[0],32))
 
-            self.model.batch_size = data_input.shape[0]
             self.model.eval()
 
             (data_input, structure_input, meta_input_h1, meta_input_h2,
-             meta_input_h3, meta_input_h4, meta_input_h5, meta_output_h1,
-             meta_output_h2, meta_output_h3, meta_output_h4, meta_output_h5) = \
+             meta_input_h3, meta_input_h4, meta_input_h5,noise_var_in, meta_output_h1,
+             meta_output_h2, meta_output_h3, meta_output_h4, meta_output_h5,noise_var_out) = \
                 (data_input.to(device),
                  structure_input.to(device),
                  meta_input_h1.to(device),
@@ -692,16 +717,18 @@ class teacher(object):
                  meta_input_h3.to(device),
                  meta_input_h4.to(device),
                  meta_input_h5.to(device),
+                 noise_var_in.to(device),
                  meta_output_h1.to(device),
                  meta_output_h2.to(device),
                  meta_output_h3.to(device),
                  meta_output_h4.to(device),
-                 meta_output_h5.to(device))
+                 meta_output_h5.to(device),
+                 noise_var_out.to(device))
 
             # data_output = data_output.to(device)
             dataset = (data_input, structure_input, meta_input_h1, meta_input_h2,
-                       meta_input_h3, meta_input_h4, meta_input_h5, meta_output_h1,
-                       meta_output_h2, meta_output_h3, meta_output_h4, meta_output_h5)
+                       meta_input_h3, meta_input_h4, meta_input_h5,noise_var_in, meta_output_h1,
+                       meta_output_h2, meta_output_h3, meta_output_h4, meta_output_h5,noise_var_out)
             # print(data_input.shape, structure_input.shape, meta_input_h1.shape, meta_input_h2.shape,
             #            meta_input_h3.shape, meta_input_h4.shape, meta_input_h5.shape, meta_output_h1.shape,
             #            meta_output_h2.shape, meta_output_h3.shape, meta_output_h4.shape, meta_output_h5.shape)

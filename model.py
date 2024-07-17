@@ -21,7 +21,7 @@ class Metamorph(nn.Module):
         self.in_data = 20
 
         # Definition of non-linear shifting activation function with parameters
-        self.shifterCoefficients = 4  # No. of polynomial coefficients
+        self.shifterCoefficients = 5  # No. of polynomial coefficients
         self.exponents = torch.arange(1, self.shifterCoefficients+1, 1,
                                       device=self.device)  # Check : from 0 to n or from 1 to n +1?
 
@@ -37,8 +37,7 @@ class Metamorph(nn.Module):
         self.multiplier = (torch.arange(start=1,end=105,step=1)).to(self.device)
 
         # Definition of Walsh-Hadamard rescale layers
-        self.Walsh_Hadamard_rescaler_l0s0= nn.Linear(in_features=128, out_features=(5 * self.in_scale**2))
-
+        self.Walsh_Hadamard_rescaler_l0s0= nn.Linear(in_features=256, out_features=(5 * self.in_scale**2))
 
         # NOTE : on Hierarchy 0 flows data and on higher levels flows metas
         self.no_meta_h3 = 20 * 2
@@ -227,7 +226,7 @@ class Metamorph(nn.Module):
         ss = torch.cat([s_along_x*s_along_y],dim=1)
         rgbas = torch.cat([rr, gg, bb, aa, ss], dim=1)
 
-        space_time = self.WalshHadamardSpaceTimeFeature(meta_central_points, meta_step)
+        space_time = self.WalshHadamardSpaceTimeFeature(meta_central_points, meta_step,noise_var)
 
         stff_in = torch.flatten(torch.cat([data_input,structure_input],dim=1),start_dim=1)
         x = self.SpaceTimeFFTFeature(stff_in,self.weights_data_0,self.weights_data_fft_0, space_time)
@@ -329,10 +328,10 @@ class Metamorph(nn.Module):
         # data = torch.tanh(data)
         return data
 
-    def WalshHadamardSpaceTimeFeature(self,meta_central_points, meta_step):
+    def WalshHadamardSpaceTimeFeature(self,meta_central_points, meta_step,noise_var):
         # NOTE: Walsh-Hadamard transform for space and time coding
-        space_time = torch.cat([meta_central_points, meta_step], dim=1)
-        bit_padding = torch.zeros((self.batch_size, 128 - space_time.shape[1])).to(self.device)
+        space_time = torch.cat([meta_central_points, meta_step,noise_var], dim=1)
+        bit_padding = torch.zeros((self.batch_size, 256 - space_time.shape[1])).to(self.device)
         space_time = torch.cat([space_time, bit_padding], dim=1)
         length = space_time.shape[1]
         assert (length & (length - 1)) == 0, "Length must be a power of 2"
