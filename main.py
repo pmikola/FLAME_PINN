@@ -23,7 +23,7 @@ no_frames = 1000
 first_frame,last_frame,frame_skip = 0,no_frames,10
 models = []
 
-for i in range(2):
+for i in range(3):
     torch.manual_seed(2024+i)
     np.random.seed(2024+i)
     random.seed(2024+i)
@@ -34,10 +34,12 @@ t = teacher(models, device)
 t.fsim = fl.flame_sim(no_frames=no_frames,frame_skip=frame_skip)
 criterion_model = nn.MSELoss(reduction='mean')
 criterion_e0 = nn.MSELoss(reduction='mean')
-criterion = criterion_model,criterion_e0
+criterion_e1 = nn.MSELoss(reduction='mean')
+criterion = criterion_model,criterion_e0,criterion_e1
 optimizer = torch.optim.Adam([
     {'params': t.model.parameters()},
-    {'params': t.expert_0.parameters()}
+    {'params': t.expert_0.parameters()},
+    {'params': t.expert_1.parameters()}
 ], lr=5e-4, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-6, amsgrad=True)
 # torch.autograd.set_detect_anomaly(True)
 # Note: Eon > Era > Period > Epoch

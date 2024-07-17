@@ -13,8 +13,10 @@ from torch.autograd import grad
 class teacher(object):
     def __init__(self,models,device):
         super(teacher, self).__init__()
+
         self.model = models[0]
-        self.expert_0 = copy.deepcopy(models[1])
+        self.expert_0 = models[1]#copy.deepcopy(models[1])
+        self.expert_1 = models[2]#copy.deepcopy(models[2])
         self.device = device
         self.fsim = None
         self.period = 1
@@ -32,6 +34,7 @@ class teacher(object):
         self.meta_input_h3 = None
         self.meta_input_h4 = None
         self.meta_input_h5 = None
+        self.noise_var_in = None
         self.data_output = torch.zeros((self.model.batch_size,self.model.in_scale*4,self.model.in_scale),requires_grad=True).to(device)
         self.structure_output = None#torch.zeros((self.model.batch_size,self.model.in_scale,self.model.in_scale),requires_grad=True)
         self.meta_output_h1 = None
@@ -39,6 +42,7 @@ class teacher(object):
         self.meta_output_h3 = None
         self.meta_output_h4 = None
         self.meta_output_h5 = None
+        self.noise_var_out = None
 
         self.saved_loss = []
     def generate_structure(self):
@@ -125,6 +129,7 @@ class teacher(object):
         meta_input_h3 = []
         meta_input_h4 = []
         meta_input_h5 = []
+        noise_var_in = []
         data_output = []
         structure_output = []
         meta_output_h1 = []
@@ -132,8 +137,22 @@ class teacher(object):
         meta_output_h3 = []
         meta_output_h4 = []
         meta_output_h5 = []
+        noise_var_out = []
         frame = 0
         while not frame >= self.batch_size:
+            noise_variance_in = torch.randn(size=(1,))
+            noise_variance_in_binary = ''.join(f'{c:08b}' for c in np.float32(noise_variance_in).tobytes())
+            noise_variance_in = noise_variance_in.to(self.device)
+            noise_variance_in_binary = [int(noise_variance_in_binary[i], 2) for i in range(0, len(noise_variance_in_binary), 1)]
+            noise_variance_in_binary = torch.tensor(np.array(noise_variance_in_binary)).to(self.device)
+
+            noise_variance_out = torch.randn(size=(1,))
+            noise_variance_out_binary = ''.join(f'{c:08b}' for c in np.float32(noise_variance_out).tobytes())
+            noise_variance_out = noise_variance_out.to(self.device)
+            noise_variance_out_binary = [int(noise_variance_out_binary[i], 2) for i in range(0, len(noise_variance_out_binary), 1)]
+            noise_variance_out_binary = torch.tensor(np.array(noise_variance_out_binary)).to(self.device)
+
+
             idx_input = random.choice(range(0, fuel_slices.shape[0]))
             idx_output = random.choice(range(0, fuel_slices.shape[0]))
             central_point_x = random.sample(x_range, 1)[0]
@@ -148,11 +167,11 @@ class teacher(object):
             slice_y = slice(window_y[0], window_y[-1] + 1)
 
             # Note : Input data
-            fuel_subslice_in = fuel_slices[idx_input,slice_x, slice_y]
-            r_subslice_in = r_slices[idx_input,slice_x, slice_y]
-            g_subslice_in = g_slices[idx_input,slice_x, slice_y]
-            b_subslice_in = b_slices[idx_input,slice_x, slice_y]
-            alpha_subslice_in = alpha_slices[idx_input,slice_x, slice_y]
+            fuel_subslice_in = fuel_slices[idx_input,slice_x, slice_y] + torch.nan_to_num((noise_variance_in**0.5)*torch.rand_like(fuel_slices[idx_input,slice_x, slice_y]).to(self.device)*2-0.5,nan=0.0)
+            r_subslice_in = r_slices[idx_input,slice_x, slice_y] + torch.nan_to_num((noise_variance_in**0.5)*torch.rand_like(r_slices[idx_input,slice_x, slice_y]).to(self.device)*2-0.5,nan=0.0)
+            g_subslice_in = g_slices[idx_input,slice_x, slice_y] + torch.nan_to_num((noise_variance_in**0.5)*torch.rand_like(g_slices[idx_input,slice_x, slice_y]).to(self.device)*2-0.5,nan=0.0)
+            b_subslice_in = b_slices[idx_input,slice_x, slice_y] + torch.nan_to_num((noise_variance_in**0.5)*torch.rand_like(b_slices[idx_input,slice_x, slice_y]).to(self.device)*2-0.5,nan=0.0)
+            alpha_subslice_in = alpha_slices[idx_input,slice_x, slice_y] + torch.nan_to_num((noise_variance_in**0.5)*torch.rand_like(alpha_slices[idx_input,slice_x, slice_y]).to(self.device)*2-0.5,nan=0.0)
             data_input_subslice = torch.cat([r_subslice_in,g_subslice_in, b_subslice_in, alpha_subslice_in], dim=0)
 
             meta_step_in = meta_binary_slices[idx_input][0]
@@ -170,11 +189,11 @@ class teacher(object):
 
 
             # Note : Output data
-            fuel_subslice_out = fuel_slices[idx_output,slice_x, slice_y]#.reshape(1)
-            r_subslice_out = r_slices[idx_output,slice_x, slice_y]#.reshape(1)
-            g_subslice_out = g_slices[idx_output,slice_x, slice_y]#.reshape(1)
-            b_subslice_out = b_slices[idx_output,slice_x, slice_y]#.reshape(1)
-            alpha_subslice_out = alpha_slices[idx_output,slice_x, slice_y]#.reshape(1)
+            fuel_subslice_out = fuel_slices[idx_output,slice_x, slice_y] + torch.nan_to_num((noise_variance_out**0.5)*torch.rand_like(fuel_slices[idx_output,slice_x, slice_y]).to(self.device)*2-0.5,nan=0.0)
+            r_subslice_out = r_slices[idx_output,slice_x, slice_y] + torch.nan_to_num((noise_variance_out**0.5)*torch.rand_like(r_slices[idx_output,slice_x, slice_y]).to(self.device)*2-0.5,nan=0.0)
+            g_subslice_out = g_slices[idx_output,slice_x, slice_y] + torch.nan_to_num((noise_variance_out**0.5)*torch.rand_like(g_slices[idx_output,slice_x, slice_y]).to(self.device)*2-0.5,nan=0.0)
+            b_subslice_out = b_slices[idx_output,slice_x, slice_y] + torch.nan_to_num((noise_variance_out**0.5)*torch.rand_like(b_slices[idx_output,slice_x, slice_y])*2-0.5,nan=0.0)
+            alpha_subslice_out = alpha_slices[idx_output,slice_x, slice_y] + torch.nan_to_num((noise_variance_out**0.5)*torch.rand_like(alpha_slices[idx_output,slice_x, slice_y]).to(self.device)*2-0.5,nan=0.0)
             data_output_subslice = torch.cat([r_subslice_out,g_subslice_out, b_subslice_out, alpha_subslice_out], dim=0)
 
             meta_step_out = meta_binary_slices[idx_output][0]
@@ -240,6 +259,7 @@ class teacher(object):
                 meta_input_h3.append(central_points)
                 meta_input_h4.append(torch.cat([torch.tensor(window_x),torch.tensor(window_y)]))
                 meta_input_h5.append(meta_step_in_numeric)
+                noise_var_in.append(noise_variance_in_binary.to(torch.float))
                 data_output.append(data_output_subslice)
                 structure_output.append(fuel_subslice_out)
                 meta_output_h1.append(meta_output_subslice)
@@ -247,6 +267,7 @@ class teacher(object):
                 meta_output_h3.append(central_points)
                 meta_output_h4.append(torch.cat([torch.tensor(window_x), torch.tensor(window_y)]))
                 meta_output_h5.append(meta_step_out_numeric)
+                noise_var_out.append(noise_variance_out_binary.to(torch.float))
 
 
         self.data_input = torch.stack(data_input,dim=0)
@@ -256,6 +277,7 @@ class teacher(object):
         self.meta_input_h3 = torch.stack(meta_input_h3,dim=0)
         self.meta_input_h4 = torch.stack(meta_input_h4,dim=0)
         self.meta_input_h5 = torch.stack(meta_input_h5,dim=0)
+        self.noise_var_in = torch.stack(noise_var_in,dim=0)
 
         self.data_output = torch.stack(data_output,dim=0)
         self.structure_output = torch.stack(structure_output, dim=0)
@@ -264,6 +286,8 @@ class teacher(object):
         self.meta_output_h3 = torch.stack(meta_output_h3,dim=0)
         self.meta_output_h4 = torch.stack(meta_output_h4,dim=0)
         self.meta_output_h5 = torch.stack(meta_output_h5,dim=0)
+        self.noise_var_out = torch.stack(noise_var_out,dim=0)
+
 
         # print(self.data_input.shape, self.structure_input.shape, self.meta_input_h1.shape, self.meta_input_h2.shape,
         #       self.meta_input_h3.shape, self.meta_input_h4.shape, self.meta_input_h5.shape, self.meta_output_h1.shape,
@@ -276,7 +300,7 @@ class teacher(object):
              self.last_frame,self.frame_skip) = (no_frame_samples, batch_size,
                                                  input_window_size, first_frame, last_frame,frame_skip)
 
-            criterion_model,criterion_e0 = criterion
+            criterion_model,criterion_e0,criterion_e1 = criterion
             global loss
             global e0loss
             if learning == 1:
@@ -298,8 +322,8 @@ class teacher(object):
                     else:
                         reiterate_counter +=1
                     (self.structure_input,self.meta_input_h1,self.meta_input_h2,
-                     self.meta_input_h3,self.meta_input_h4,self.meta_input_h5,self.meta_output_h1,
-                     self.meta_output_h2,self.meta_output_h3,self.meta_output_h4,self.meta_output_h5) =\
+                     self.meta_input_h3,self.meta_input_h4,self.meta_input_h5,self.noise_var_in,self.meta_output_h1,
+                     self.meta_output_h2,self.meta_output_h3,self.meta_output_h4,self.meta_output_h5,self.noise_var_out) =\
                                                                 (
                                                                 self.structure_input.to(device),
                                                                 self.meta_input_h1.to(device),
@@ -307,46 +331,52 @@ class teacher(object):
                                                                 self.meta_input_h3.to(device),
                                                                 self.meta_input_h4.to(device),
                                                                 self.meta_input_h5.to(device),
+                                                                self.noise_var_in.to(device),
                                                                 self.meta_output_h1.to(device),
                                                                 self.meta_output_h2.to(device),
                                                                 self.meta_output_h3.to(device),
                                                                 self.meta_output_h4.to(device),
-                                                                self.meta_output_h5.to(device))
+                                                                self.meta_output_h5.to(device),
+                                                                self.noise_var_out.to(device))
 
-                    #self.data_output = self.data_output.to(device) #+ (torch.randn_like(self.data_output)*2-0.5)*noise_amplitude
-                    #self.data_input = self.data_input + (torch.randn_like(self.data_input)*2-0.5)*noise_amplitude
-                    #self.structure_input = self.structure_input + (torch.randn_like(self.structure_input)*2-0.5)*noise_amplitude
+
                     dataset = (self.data_input,self.structure_input,self.meta_input_h1,self.meta_input_h2,
-                               self.meta_input_h3,self.meta_input_h4,self.meta_input_h5,self.meta_output_h1,
-                               self.meta_output_h2,self.meta_output_h3,self.meta_output_h4,self.meta_output_h5)
+                               self.meta_input_h3,self.meta_input_h4,self.meta_input_h5,self.noise_var_in,self.meta_output_h1,
+                               self.meta_output_h2,self.meta_output_h3,self.meta_output_h4,self.meta_output_h5,self.noise_var_out)
                     t_start = time.perf_counter()
                     model_output = self.model(dataset)
                     expert_0_output = self.expert_0(dataset)
+                    expert_1_output = self.expert_1(dataset)
                     t_pred = time.perf_counter()
 
                     loss = self.loss_calculation(model_output, criterion_model, norm)
                     e0loss = self.loss_calculation(expert_0_output, criterion_e0, norm)
+                    e1loss = self.loss_calculation(expert_1_output, criterion_e1, norm)
 
                     # if (epoch + 1) % 1 == 0:
                     # NOTE: forces models parameters to be further with respect to each other
                     with torch.no_grad():#
-                        # simalirityFunction = torch.nn.CosineSimilarity(dim=0, eps=1e-6)
+                    #simalirityFunction = torch.nn.CosineSimilarity(dim=0, eps=1e-6)
                         param_similarity = 0.
-                        for param1, param2 in zip(self.model.parameters(), self.expert_0.parameters()):
+                        for param1, param2,param3 in zip(self.model.parameters(), self.expert_0.parameters(),self.expert_1.parameters()):
                             param_similarity += criterion_model(param1.real,param2.real)
-                        loss -=param_similarity
-                        e0loss -=param_similarity
-                    optimizer.zero_grad()
-                    e0loss.backward()
-                    optimizer.step()
+                            param_similarity += criterion_model(param1.real,param3.real)
+                            param_similarity += criterion_model(param2.real,param3.real)
 
-                    optimizer.zero_grad()
+                    loss -=param_similarity
+                    e0loss -=param_similarity
+                    e1loss -=param_similarity
+
+
+                    optimizer.zero_grad(set_to_none=True)
                     loss.backward()
+                    e0loss.backward()
+                    e1loss.backward()
                     optimizer.step()
 
                     self.saved_loss.append(loss.item())
                     # t_stop = time.perf_counter()
-                    t += (t_pred - t_start)*0.5
+                    t += (t_pred - t_start)/3
 
                     if len(self.saved_loss) > 10:
                         loss_recent_history = np.array(self.saved_loss)[-5:-1]
@@ -369,7 +399,7 @@ class teacher(object):
                                     param_group['lr'] = 5e-4
                                     reiterate_counter = 0
                                     reiterate_data = 0
-                                    print('lr back to starting point')
+                                    print('optimizer -> lr back to starting point')
                                # noise_amplitude = noise_amplitude*0.5
                                 # if noise_amplitude < 1e-3:
                                 #     # print('noise amplitude')
@@ -377,38 +407,45 @@ class teacher(object):
                             grad_counter = 0
 
                         # NOTE: Averaging models with best loss results within all models
-                        if (epoch + 1) % 5 == 0 or reiterate_data == 0:
-                            if loss.item() < mean_hist_losses or best_loss < mean_hist_losses or e0loss.item() < mean_hist_losses or best_loss < mean_hist_losses or reiterate_data == 0:
-                                if loss < e0loss:
+                        if (epoch + 1) % 1 == 0 or reiterate_data == 0:
+                            if loss.item() < mean_hist_losses  or e0loss.item() < mean_hist_losses or e1loss.item() < mean_hist_losses or best_loss < mean_hist_losses or reiterate_data == 0:
+                                if loss < e0loss and loss<e1loss:
                                     best_loss = loss.item()
                                     best_losses.append(best_loss)
                                     best_models.append(self.model)
-                                else:
+                                elif e0loss < loss and e0loss < e1loss:
                                     best_loss = e0loss.item()
                                     best_losses.append(best_loss)
                                     best_models.append(self.expert_0)
-                                if len(best_models) > 10:
+                                else:
+                                    best_loss = e1loss.item()
+                                    best_losses.append(best_loss)
+                                    best_models.append(self.expert_1)
+                                if len(best_models) > 100:
                                     best_losses = torch.tensor(np.array(best_losses))
+                                    n = 10
+                                    _,best_n_losses_idx = torch.topk(best_losses,n,largest=False)
+                                    #best_loss_pos = best_losses.argmin()
                                     best_losses_norm = 1/(best_losses / best_losses.min())
                                     with torch.no_grad():
                                         model_avg = self.model
                                         param_sum = {name: torch.zeros_like(param) for name, param in
                                                      model_avg.named_parameters()}
-                                        num_models = len(best_models)
-                                        for m in range(num_models):
+
+                                        for m in best_n_losses_idx:
                                             for name, param in best_models[m].named_parameters():
-                                                param_sum[name] += param*best_losses_norm[m]
+                                                param_sum[name] += param * best_losses_norm[m]
 
                                         for name, param in model_avg.named_parameters():
-                                            param_avg = param_sum[name] / num_models
+                                            param_avg = param_sum[name] / n
                                             param.copy_(param_avg)
 
                                         self.model = model_avg
                                         torch.save(self.model.state_dict(), 'model.pt')
                                         best_models = []
                                         best_losses = []
-                                        best_loss = 10000.
-                                        print('model weighted and averaged')
+                                        best_loss = mean_hist_losses
+                                        print('model -> weighted average')
 
                     if (epoch + 1) % print_every_nth_frame == 0:
                         print(f'Period: {self.period}/{self.no_of_periods} | Epoch: {epoch + 1}/{num_epochs}, '

@@ -21,7 +21,7 @@ class Metamorph(nn.Module):
         self.in_data = 20
 
         # Definition of non-linear shifting activation function with parameters
-        self.shifterCoefficients = 6  # No. of polynomial coefficients
+        self.shifterCoefficients = 4  # No. of polynomial coefficients
         self.exponents = torch.arange(1, self.shifterCoefficients+1, 1,
                                       device=self.device)  # Check : from 0 to n or from 1 to n +1?
 
@@ -44,27 +44,35 @@ class Metamorph(nn.Module):
         self.no_meta_h3 = 20 * 2
         self.no_meta_h2 = 32 * 2
         self.no_meta_h1 = 224 * 2
-        self.dens_width = 10 * self.shifterCoefficients
+        self.dens_width = 2 * self.shifterCoefficients
         self.flat_size = 20*self.in_scale**2 # Note: n neurons per every pixel
+        self.diffiusion_context = 32*2
 
-        # Definition of layer 0,1,2 for lvl 3 in hierarchy
+        # Definition of layer 0,1,2 for lvl 4 in hierarchy - theta - diffusion noise context
+        self.l0h4 = nn.Linear(in_features=self.diffiusion_context, out_features=self.dens_width * self.shifterCoefficients**2)
+        self.l1h4 = nn.Linear(in_features=self.dens_width * self.shifterCoefficients**2,
+                              out_features=self.dens_width * self.shifterCoefficients**4)
+        self.l2h4 = nn.Linear(in_features=self.dens_width * self.shifterCoefficients**4,
+                              out_features=self.dens_width * self.shifterCoefficients**4)
+
+        # Definition of layer 0,1,2 for lvl 3 in hierarchy - gamma
         self.l0h3 = nn.Linear(in_features=self.no_meta_h3, out_features=self.dens_width*self.shifterCoefficients)
-        self.l1h3 = nn.Linear(in_features=self.dens_width*self.shifterCoefficients, out_features=self.dens_width*(self.shifterCoefficients**2))
-        self.l2h3 = nn.Linear(in_features=self.dens_width*(self.shifterCoefficients**2), out_features=self.dens_width*(self.shifterCoefficients**3))
+        self.l1h3 = nn.Linear(in_features=self.dens_width*self.shifterCoefficients, out_features=self.dens_width * self.shifterCoefficients**3)
+        self.l2h3 = nn.Linear(in_features=self.dens_width * self.shifterCoefficients**3, out_features=self.dens_width * self.shifterCoefficients**3)
 
-        # Definition of layer 0,1,2 for lvl 2 in hierarchy
+        # Definition of layer 0,1,2 for lvl 2 in hierarchy - beta
         self.l0h2 = nn.Linear(in_features=self.no_meta_h2, out_features=self.dens_width*self.shifterCoefficients)
-        self.l1h2 = nn.Linear(in_features=self.dens_width*self.shifterCoefficients, out_features=self.dens_width*self.shifterCoefficients)
-        self.l2h2 = nn.Linear(in_features=self.dens_width*self.shifterCoefficients, out_features=self.dens_width*(self.shifterCoefficients**2))
+        self.l1h2 = nn.Linear(in_features=self.dens_width*self.shifterCoefficients, out_features=self.dens_width*self.shifterCoefficients**2)
+        self.l2h2 = nn.Linear(in_features=self.dens_width*self.shifterCoefficients**2, out_features=self.dens_width * self.shifterCoefficients**2)
 
-        # Definition of layer 0,1,2 for lvl 1 in hierarchy
-        self.l0h1 = nn.Linear(in_features=self.no_meta_h1, out_features=self.dens_width)
-        self.l1h1 = nn.Linear(in_features=self.dens_width, out_features=self.dens_width)
-        self.l2h1 = nn.Linear(in_features=self.dens_width, out_features=self.dens_width*self.shifterCoefficients)
+        # Definition of layer 0,1,2 for lvl 1 in hierarchy - alpha
+        self.l0h1 = nn.Linear(in_features=self.no_meta_h1, out_features=int((self.dens_width*self.shifterCoefficients)))
+        self.l1h1 = nn.Linear(in_features=int((self.dens_width*self.shifterCoefficients)), out_features=int(self.dens_width*self.shifterCoefficients**1))
+        self.l2h1 = nn.Linear(in_features=int(self.dens_width*self.shifterCoefficients**1), out_features=int(self.dens_width*self.shifterCoefficients**1))
 
-        # Definition of intermidiet layer between lvl 0 and 1 for dimension matching
-        self.l1h01 = nn.Linear(in_features=self.dens_width, out_features=(self.in_scale**2) * self.shifterCoefficients*5)
-        self.l2h01 = nn.Linear(in_features=self.dens_width*self.shifterCoefficients, out_features=(self.in_scale**2) * self.shifterCoefficients*5)
+        # Definition of intermediate layer between lvl 0 and 1 for dimension matching
+        self.l1h01 = nn.Linear(in_features=int(self.dens_width*self.shifterCoefficients**1), out_features=(self.in_scale**2) * self.shifterCoefficients*5)
+        self.l2h01 = nn.Linear(in_features=int(self.dens_width*self.shifterCoefficients**1), out_features=(self.in_scale**2) * self.shifterCoefficients*5)
 
         # Definition of input layer 0 for lvl 0 in hierarchy
         # rmv of 3 paralleled layers for conv 1d k=1,2,3
@@ -72,8 +80,8 @@ class Metamorph(nn.Module):
         #  change configuration of input not by kernel size but by modes
         #  from fft with learnable parameters - do we will have better results?
         # TODO : check if above query gives better result
-        self.l0h0rx = nn.Linear(in_features=int(self.in_scale**2),out_features=int(self.in_scale**2))
-        self.l0h0ry = nn.Linear(in_features=int(self.in_scale**2),out_features=int(self.in_scale**2))
+        self.l0h0rx = nn.Linear(in_features=int(self.in_scale ** 2),out_features=int(self.in_scale **2))
+        self.l0h0ry = nn.Linear(in_features=int(self.in_scale ** 2),out_features=int(self.in_scale **2))
         self.l0h0gx = nn.Linear(in_features=int(self.in_scale ** 2), out_features=int(self.in_scale ** 2))
         self.l0h0gy = nn.Linear(in_features=int(self.in_scale ** 2), out_features=int(self.in_scale ** 2))
         self.l0h0bx = nn.Linear(in_features=int(self.in_scale ** 2), out_features=int(self.in_scale ** 2))
@@ -91,11 +99,6 @@ class Metamorph(nn.Module):
                   out_features=int(self.in_scale ** 2)*5)
         self.l3h0 = nn.Linear(in_features=int(self.in_scale ** 2)*5,out_features=int(self.in_scale ** 2)*5)
 
-        # Definition of the structure density distribution
-        self.l0h0s = nn.Conv1d(in_channels=self.in_scale,
-                              out_channels=self.no_subslice_in_tensors * self.in_scale, kernel_size=1)
-        self.l1h0s = nn.Conv1d(in_channels=self.no_subslice_in_tensors * self.in_scale,
-                              out_channels=int(self.in_scale), kernel_size=1)
 
         # Definition of Heads for red, green, blue, alpha and structure output channels
         self.l4_h0_r = nn.Linear(in_features=int(self.in_scale ** 2)*5, out_features=int(self.flat_size / 2))
@@ -161,27 +164,33 @@ class Metamorph(nn.Module):
 
     def forward(self, din):
         (data_input,structure_input,meta_input_h1,meta_input_h2,meta_input_h3,
-         meta_input_h4,meta_input_h5,meta_output_h1,meta_output_h2,
-         meta_output_h3,meta_output_h4,meta_output_h5) = din
-        meta_central_points = torch.cat([meta_input_h3.float(), meta_output_h3.float()], dim=1)
+         meta_input_h4,meta_input_h5,noise_var_in,meta_output_h1,meta_output_h2,
+         meta_output_h3,meta_output_h4,meta_output_h5,noise_var_out) = din
         # print(data_input.shape,meta_input_h1.shape,meta_input_h2.shape,meta_input_h3.shape,
         #  meta_input_h4.shape,meta_input_h5.shape,meta_output_h1.shape,meta_output_h2.shape,
         #  meta_output_h3.shape,meta_output_h4.shape,meta_output_h5.shape,meta_central_points.shape)
         # Question : Do highest hierarchy should have parameters that are learning
         #  or just be top layer without any additional coefss (regarding polyNonlinear)
-        gamma = torch.tanh(self.l0h3(meta_central_points))
-        gamma_l1 = torch.tanh(self.l1h3(gamma))
-        gamma_l2 = torch.tanh(self.l2h3(gamma_l1))
-        #
+        meta_central_points = torch.cat([meta_input_h3.float(), meta_output_h3.float()], dim=1)
+        noise_var = torch.cat([noise_var_in,noise_var_out],dim=1)
         meta_step = torch.cat([meta_input_h2.float(), meta_output_h2.float()], dim=1)
-        beta = torch.tanh(self.l0h2(meta_step))
-        beta_l1 = self.shapeShift(torch.tanh(self.l1h2(beta)), gamma_l1)
-        beta_l2 = self.shapeShift(torch.tanh(self.l2h2(beta_l1)), gamma_l2)
-
         meta_h1 = torch.cat([meta_input_h1.float(),meta_output_h1.float()],dim=1)
+
+        theta = torch.tanh(self.l0h4(noise_var))
+        theta_l1 = torch.tanh(self.l1h4(theta))
+        theta_l2 = torch.tanh(self.l2h4(theta_l1))
+
+        gamma = torch.tanh(self.l0h3(meta_central_points))
+        gamma_l1 = self.shapeShift(self.l1h3(gamma),theta_l1)
+        gamma_l2 = self.shapeShift(self.l2h3(gamma_l1),theta_l2)
+        #
+        beta = torch.tanh(self.l0h2(meta_step))
+        beta_l1 = self.shapeShift(self.l1h2(beta), gamma_l1)
+        beta_l2 = self.shapeShift(self.l2h2(beta_l1), gamma_l2)
+
         alpha = torch.tanh(self.l0h1(meta_h1))
-        alpha_l1 = self.shapeShift(torch.tanh(self.l1h1(alpha)),beta_l1)
-        alpha_l2 =  self.shapeShift(torch.tanh(self.l2h1(alpha_l1)),beta_l2)
+        alpha_l1 = self.shapeShift(self.l1h1(alpha),beta_l1)
+        alpha_l2 =  self.shapeShift(self.l2h1(alpha_l1),beta_l2)
 
         x_alpha_l1 = torch.tanh(self.l1h01(alpha_l1))
         x_alpha_l2 = torch.tanh(self.l2h01(alpha_l2))
@@ -226,10 +235,10 @@ class Metamorph(nn.Module):
         x = self.SpaceTimeFFTFeature(x,self.weights_data_2,self.weights_data_fft_2, space_time)
 
         # x = rgbas + x
-        x_mod = self.shapeShift(torch.tanh(self.l1h0(rgbas)), x_alpha_l1)
-        x_mod = self.shapeShift(torch.tanh(self.l2h0(x_mod)), x_alpha_l2)
+        x_mod = self.shapeShift(self.l1h0(x), x_alpha_l1)
+        x_mod = self.shapeShift(self.l2h0(x_mod), x_alpha_l2)
 
-        x = f.gelu(self.l3h0(x))+x_mod+rgbas
+        x = f.gelu(self.l3h0(x_mod))+rgbas
         rres = f.gelu(self.l4_h0_r(x))
         gres = f.gelu(self.l4_h0_g(x))
         bres = f.gelu(self.l4_h0_b(x))
@@ -284,17 +293,20 @@ class Metamorph(nn.Module):
         if x.dim() == 3:
             coefficients = h.reshape(self.batch_size,x.shape[1],x.shape[2],self.shifterCoefficients)
             x_powers = torch.pow(x[0:self.batch_size,:,:].unsqueeze(3), self.exponents.unsqueeze(0).unsqueeze(1))
-            craftedPolynomial = torch.sum((coefficients)*x_powers,dim=3)
+            craftedPolynomial = torch.sum(coefficients * x_powers, dim=3)
+            craftedPolynomial = torch.tanh(craftedPolynomial)
             return craftedPolynomial
         elif x.dim() == 2:
             coefficients = h.reshape(self.batch_size,x.shape[1],self.shifterCoefficients)
             x_powers = torch.pow(x[0:self.batch_size, :].unsqueeze(2), self.exponents.unsqueeze(0).unsqueeze(1))
-            craftedPolynomial = torch.sum((coefficients) * x_powers, dim=2)
+            craftedPolynomial = torch.sum(coefficients * x_powers, dim=2)
+            craftedPolynomial = torch.tanh(craftedPolynomial)
             return craftedPolynomial
         elif x.dim() == 4:
             coefficients = h.reshape(self.batch_size, x.shape[1], x.shape[2], x.shape[3], self.shifterCoefficients)
             x_powers = torch.pow(x[0:self.batch_size, :, :, :].unsqueeze(4),self.exponents.unsqueeze(0).unsqueeze(1).unsqueeze(2))
-            craftedPolynomial = torch.sum((coefficients) * x_powers, dim=4)
+            craftedPolynomial = torch.sum(coefficients * x_powers, dim=4)
+            craftedPolynomial = torch.tanh(craftedPolynomial)
             return craftedPolynomial
         else:
             raise ValueError("Unsupported input dimensions")
@@ -312,7 +324,7 @@ class Metamorph(nn.Module):
         iFFWW_real = iFFWW.real
         iFFWW_imag = iFFWW.imag
         ifft_data = iFFWW_real+iFFWW_imag
-        data = f.gelu(ifft_data)+f.gelu(weights_data*data)
+        data = f.gelu(ifft_data)#+f.gelu(weights_data*data)
         # Attention :  Above is implemented simplified FNO LAYER
         # data = torch.tanh(data)
         return data
