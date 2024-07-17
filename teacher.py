@@ -139,9 +139,8 @@ class teacher(object):
         meta_output_h5 = []
         noise_var_out = []
         frame = 0
-        noise_flag = torch.randint(low=0, high=10,size=(1,))
-
         while not frame >= self.batch_size:
+            noise_flag = torch.randint(low=0, high=10, size=(1,))
             if noise_flag < 1:
                 noise_variance_in = torch.tensor(0.).to(self.device)
                 noise_variance_out = torch.tensor(0.).to(self.device)
