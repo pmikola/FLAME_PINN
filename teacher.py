@@ -14,6 +14,7 @@ class teacher(object):
     def __init__(self,models,device):
         super(teacher, self).__init__()
 
+        self.validation_dataset = None
         self.max_seed = int(1e2)
         self.model = models[0]
         self.expert_0 = models[1]#copy.deepcopy(models[1])
@@ -45,7 +46,25 @@ class teacher(object):
         self.meta_output_h5 = None
         self.noise_var_out = None
 
-        self.saved_loss = []
+        self.data_input_val = None
+        self.data_output_val = None
+        self.structure_input_val = None
+        self.structure_output_val = None
+        self.meta_input_h1_val = None
+        self.meta_input_h2_val = None
+        self.meta_input_h3_val = None
+        self.meta_input_h4_val = None
+        self.meta_input_h5_val = None
+        self.noise_var_in_val = None
+        self.meta_output_h1_val = None
+        self.meta_output_h2_val = None
+        self.meta_output_h3_val = None
+        self.meta_output_h4_val = None
+        self.meta_output_h5_val = None
+        self.noise_var_out_val = None
+
+        self.train_loss = []
+        self.val_loss = []
     def generate_structure(self):
         no_structure = random.randint(0, self.fsim.grid_size_y - self.fsim.N_boundary)
         self.fsim.idx = torch.randint(low=self.fsim.N_boundary,high=self.fsim.grid_size_x-self.fsim.N_boundary,size=(no_structure,))
@@ -59,7 +78,7 @@ class teacher(object):
     def generate_sim_params(self):
         pass
 
-    def data_preparation(self):
+    def data_preparation(self,create_val_dataset=0):
         folder_names = ['v','u','velocity_magnitude','fuel_density','oxidizer_density',
                         'product_density','pressure','temperature','rgb','alpha']
         data_tensor = []
@@ -140,8 +159,9 @@ class teacher(object):
         meta_output_h5 = []
         noise_var_out = []
         frame = 0
-        while not frame >= self.batch_size*2:
 
+        while not frame >= self.batch_size*2:
+            choose_diffrent_frame = 0
             noise_flag = torch.randint(low=0, high=10, size=(1,))
             # noise_variance_in = torch.tensor(0.).to(self.device)
             # noise_variance_out = torch.tensor(0.).to(self.device)
@@ -268,18 +288,20 @@ class teacher(object):
             azero = a_zero and a_i0 and a_o0
             fzero = f_zero and f_i0 and f_o0
 
-            # NOTE : Entropy additional
-            # r_in_entropy = torch.special.entr(r_subslice_in).sum()
-            # g_in_entropy = torch.special.entr(g_subslice_in).sum()
-            # b_in_entropy = torch.special.entr(b_subslice_in).sum()
-            # a_in_entropy = torch.special.entr(alpha_subslice_in).sum()
-            # s_in_entropy = torch.special.entr(fuel_subslice_in).sum()
+            central_points = torch.cat([central_point_x_binary, central_point_y_binary], dim=0).to(self.device)
+
+            if create_val_dataset == 0:
+                matches_points = (self.meta_input_h3_val == central_points).all(dim=1)
+                matches_time_in = (self.meta_input_h2_val == meta_step_in.to(self.device)).all(dim=1)
+                matches_time_out = (self.meta_output_h2_val == meta_step_out.to(self.device)).all(dim=1)
+                if True in matches_points and True in matches_time_in and True in matches_time_out:
+                    choose_diffrent_frame = 1
+
             frame += 1
-            if  rzero and gzero and bzero and azero and fzero and idx_input > idx_output:
+            if  rzero and gzero and bzero and azero and fzero and idx_input > idx_output and choose_diffrent_frame:
                 frame -=1
             else:
                 # Note: Data for the different layers
-                central_points = torch.cat([central_point_x_binary, central_point_y_binary], dim=0)
                 data_input.append(data_input_subslice)
                 structure_input.append(fuel_subslice_in)
                 meta_input_h1.append(meta_input_subslice)
@@ -297,30 +319,42 @@ class teacher(object):
                 meta_output_h5.append(meta_step_out_numeric)
                 noise_var_out.append(noise_variance_out_binary.to(torch.float))
 
+        if create_val_dataset == 1:
+            self.data_input_val = torch.stack(data_input, dim=0)[0:self.batch_size].to(self.device)
+            self.structure_input_val = torch.stack(structure_input, dim=0)[0:self.batch_size].to(self.device)
+            self.meta_input_h1_val = torch.stack(meta_input_h1, dim=0)[0:self.batch_size].to(self.device)
+            self.meta_input_h2_val = torch.stack(meta_input_h2, dim=0)[0:self.batch_size].to(self.device)
+            self.meta_input_h3_val = torch.stack(meta_input_h3, dim=0)[0:self.batch_size].to(self.device)
+            self.meta_input_h4_val = torch.stack(meta_input_h4, dim=0)[0:self.batch_size].to(self.device)
+            self.meta_input_h5_val = torch.stack(meta_input_h5, dim=0)[0:self.batch_size].to(self.device)
+            self.noise_var_in_val = torch.stack(noise_var_in, dim=0)[0:self.batch_size].to(self.device)
 
-        self.data_input = torch.stack(data_input,dim=0)
-        self.structure_input = torch.stack(structure_input,dim=0)
-        self.meta_input_h1 = torch.stack(meta_input_h1,dim=0)
-        self.meta_input_h2 = torch.stack(meta_input_h2,dim=0)
-        self.meta_input_h3 = torch.stack(meta_input_h3,dim=0)
-        self.meta_input_h4 = torch.stack(meta_input_h4,dim=0)
-        self.meta_input_h5 = torch.stack(meta_input_h5,dim=0)
-        self.noise_var_in = torch.stack(noise_var_in,dim=0)
+            self.data_output_val = torch.stack(data_output, dim=0)[0:self.batch_size].to(self.device)
+            self.structure_output_val = torch.stack(structure_output, dim=0)[0:self.batch_size].to(self.device)
+            self.meta_output_h1_val = torch.stack(meta_output_h1, dim=0)[0:self.batch_size].to(self.device)
+            self.meta_output_h2_val = torch.stack(meta_output_h2, dim=0)[0:self.batch_size].to(self.device)
+            self.meta_output_h3_val = torch.stack(meta_output_h3, dim=0)[0:self.batch_size].to(self.device)
+            self.meta_output_h4_val = torch.stack(meta_output_h4, dim=0)[0:self.batch_size].to(self.device)
+            self.meta_output_h5_val = torch.stack(meta_output_h5, dim=0)[0:self.batch_size].to(self.device)
+            self.noise_var_out_val = torch.stack(noise_var_out, dim=0)[0:self.batch_size].to(self.device)
+        else:
+            self.data_input = torch.stack(data_input,dim=0).to(self.device)
+            self.structure_input = torch.stack(structure_input,dim=0).to(self.device)
+            self.meta_input_h1 = torch.stack(meta_input_h1,dim=0).to(self.device)
+            self.meta_input_h2 = torch.stack(meta_input_h2,dim=0).to(self.device)
+            self.meta_input_h3 = torch.stack(meta_input_h3,dim=0).to(self.device)
+            self.meta_input_h4 = torch.stack(meta_input_h4,dim=0).to(self.device)
+            self.meta_input_h5 = torch.stack(meta_input_h5,dim=0).to(self.device)
+            self.noise_var_in = torch.stack(noise_var_in,dim=0).to(self.device)
 
-        self.data_output = torch.stack(data_output,dim=0)
-        self.structure_output = torch.stack(structure_output, dim=0)
-        self.meta_output_h1 = torch.stack(meta_output_h1,dim=0)
-        self.meta_output_h2 = torch.stack(meta_output_h2,dim=0)
-        self.meta_output_h3 = torch.stack(meta_output_h3,dim=0)
-        self.meta_output_h4 = torch.stack(meta_output_h4,dim=0)
-        self.meta_output_h5 = torch.stack(meta_output_h5,dim=0)
-        self.noise_var_out = torch.stack(noise_var_out,dim=0)
-
-
-        # print(self.data_input.shape, self.structure_input.shape, self.meta_input_h1.shape, self.meta_input_h2.shape,
-        #       self.meta_input_h3.shape, self.meta_input_h4.shape, self.meta_input_h5.shape, self.meta_output_h1.shape,
-        #       self.meta_output_h2.shape, self.meta_output_h3.shape, self.meta_output_h4.shape, self.meta_output_h5.shape)
-
+            self.data_output = torch.stack(data_output,dim=0).to(self.device)
+            self.structure_output = torch.stack(structure_output, dim=0).to(self.device)
+            self.meta_output_h1 = torch.stack(meta_output_h1,dim=0).to(self.device)
+            self.meta_output_h2 = torch.stack(meta_output_h2,dim=0).to(self.device)
+            self.meta_output_h3 = torch.stack(meta_output_h3,dim=0).to(self.device)
+            self.meta_output_h4 = torch.stack(meta_output_h4,dim=0).to(self.device)
+            self.meta_output_h5 = torch.stack(meta_output_h5,dim=0).to(self.device)
+            self.noise_var_out = torch.stack(noise_var_out,dim=0).to(self.device)
 
     def learning_phase(self,no_frame_samples, batch_size, input_window_size, first_frame, last_frame,
                                       frame_skip,criterion,optimizer,device,learning=1,num_epochs=1500):
@@ -335,6 +369,7 @@ class teacher(object):
                 best_model_state = None
                 num_epochs = num_epochs
                 t = 0.
+                t_epoch = 0.
                 grad_counter = 0
                 reiterate_data = 0
                 reiterate_counter = 0
@@ -342,29 +377,22 @@ class teacher(object):
                 print_every_nth_frame=10
                 best_models = []
                 best_losses = []
+
+                self.data_preparation(1)
+                val_idx = torch.arange(self.data_input_val.shape[0])
+                self.validation_dataset = (
+                self.data_input_val, self.structure_input_val, self.meta_input_h1_val,self.meta_input_h2_val,
+                self.meta_input_h3_val, self.meta_input_h4_val, self.meta_input_h5_val,self.noise_var_in_val,
+                self.meta_output_h1_val,self.meta_output_h2_val, self.meta_output_h3_val, self.meta_output_h4_val,
+                self.meta_output_h5_val,self.noise_var_out_val)
+
                 for epoch in range(num_epochs):
+                    t_epoch_start = time.perf_counter()
                     self.seed_setter(int(epoch+1))
                     if reiterate_data == 0:
                         self.data_preparation()
                     else:
                         reiterate_counter +=1
-                    (self.structure_input,self.meta_input_h1,self.meta_input_h2,
-                     self.meta_input_h3,self.meta_input_h4,self.meta_input_h5,self.noise_var_in,self.meta_output_h1,
-                     self.meta_output_h2,self.meta_output_h3,self.meta_output_h4,self.meta_output_h5,self.noise_var_out) =\
-                                                                (
-                                                                self.structure_input.to(device),
-                                                                self.meta_input_h1.to(device),
-                                                                self.meta_input_h2.to(device),
-                                                                self.meta_input_h3.to(device),
-                                                                self.meta_input_h4.to(device),
-                                                                self.meta_input_h5.to(device),
-                                                                self.noise_var_in.to(device),
-                                                                self.meta_output_h1.to(device),
-                                                                self.meta_output_h2.to(device),
-                                                                self.meta_output_h3.to(device),
-                                                                self.meta_output_h4.to(device),
-                                                                self.meta_output_h5.to(device),
-                                                                self.noise_var_out.to(device))
 
                     m_idx = torch.arange(int(self.data_input.shape[0]/2))
                     e0_idx = torch.randperm(int(self.data_input.shape[0]/2))
@@ -388,6 +416,8 @@ class teacher(object):
                                   self.meta_output_h2[e1_idx], self.meta_output_h3[e1_idx], self.meta_output_h4[e1_idx], self.meta_output_h5[e1_idx],
                                   self.noise_var_out[e1_idx])
 
+
+
                     t_start = time.perf_counter()
                     self.seed_setter(int((epoch+1)*2))
                     model_output = self.model(dataset)
@@ -397,10 +427,16 @@ class teacher(object):
                     expert_1_output = self.expert_1(dataset_e1)
                     t_pred = time.perf_counter()
 
-                    loss = self.loss_calculation(m_idx,model_output, criterion_model, norm)
-                    e0loss = self.loss_calculation(e0_idx,expert_0_output, criterion_e0, norm)
-                    e1loss = self.loss_calculation(e1_idx,expert_1_output, criterion_e1, norm)
+                    loss = self.loss_calculation(m_idx,model_output,self.data_input,self.data_output,self.structure_input,self.structure_output,criterion_model, norm)
+                    e0loss = self.loss_calculation(e0_idx,expert_0_output,self.data_input,self.data_output,self.structure_input,self.structure_output, criterion_e0, norm)
+                    e1loss = self.loss_calculation(e1_idx,expert_1_output,self.data_input,self.data_output,self.structure_input,self.structure_output, criterion_e1, norm)
 
+                    if self.validation_dataset is not None:
+                        self.model.eval()
+                        with torch.no_grad():
+                            val_model_output = self.model(self.validation_dataset)
+                            val_loss = self.loss_calculation(val_idx,val_model_output,self.data_input_val,self.data_output_val,self.structure_input_val,self.structure_output_val, criterion_model, norm)
+                        self.model.train()
                     # if (epoch + 1) % 1 == 0:
                     # NOTE: forces models parameters to be further with respect to each other
                     with torch.no_grad():#
@@ -424,14 +460,16 @@ class teacher(object):
 
 
 
-                    self.saved_loss.append(loss.item())
+                    self.train_loss.append(loss.item())
+                    self.val_loss.append(val_loss.item())
                     # t_stop = time.perf_counter()
                     t += (t_pred - t_start)/3
 
-                    if len(self.saved_loss) > 10:
-                        loss_recent_history = np.array(self.saved_loss)[-5:-1]
+
+                    if len(self.train_loss) > 10:
+                        loss_recent_history = np.array(self.train_loss)[-5:-1]
                         mean_hist_losses = np.mean(loss_recent_history)
-                        if loss_recent_history[-1] > loss_recent_history[-2] or reiterate_counter < 100 or loss_recent_history[-1] < loss_recent_history[-2]*0.9 or loss_recent_history[-1] > 3.:
+                        if loss_recent_history[-1] > loss_recent_history[-2] or reiterate_counter < 30 or loss_recent_history[-1] < loss_recent_history[-2]*0.9 or loss_recent_history[-1] > 3.:
                             reiterate_data = 1
                         else:
                             reiterate_counter = 0
@@ -455,7 +493,6 @@ class teacher(object):
                                 #     # print('noise amplitude')
                                 #     noise_amplitude = 0.
                             grad_counter = 0
-
                         # NOTE: Averaging models with best loss results within all models
                         if (epoch + 1) % 1 == 0 or reiterate_data == 0:
                             if loss.item() < mean_hist_losses  or e0loss.item() < mean_hist_losses or e1loss.item() < mean_hist_losses or best_loss < mean_hist_losses or reiterate_data == 0:
@@ -505,7 +542,7 @@ class teacher(object):
                                             param.copy_(param_avg)
 
                                         for (name, param),(name_enh, param_enh), (name_damp, param_damp) in zip(self.model.named_parameters(),model_avg_enhance.named_parameters(), model_avg_damping.named_parameters()):
-                                            param_selector = random.randint(0,2)
+                                            param_selector = random.randint(0,4) # Note : 20% chance to enhance or damp parameter
                                             if param_selector == 0:
                                                 param.copy_(param_enh)
                                             elif param_selector == 1:
@@ -523,14 +560,21 @@ class teacher(object):
                                         best_losses = []
                                         best_loss = mean_hist_losses
 
+                    t_epoch_stop = time.perf_counter()
+                    t_epoch +=(t_epoch_stop - t_epoch_start)
 
                     if (epoch + 1) % print_every_nth_frame == 0:
-                        print(f'Period: {self.period}/{self.no_of_periods} | Epoch: {epoch + 1}/{num_epochs}, '
-                              f'mLoss: {loss.item():.4f}, '
-                              f'e0Loss: {e0loss.item():.4f}, '
-                              f'e1oss: {e1loss.item():.4f}, '
-                              f'time per frame: {((self.fsim.grid_size_x * self.fsim.grid_size_y) / (self.model.in_scale ** 2)) * (t * 1e3 / print_every_nth_frame / self.batch_size):.2f} [ms]')
+                        t_epoch_total = num_epochs * t_epoch
+                        t_epoch_current = epoch * t_epoch
+                        print(f'P: {self.period}/{self.no_of_periods} | E: {(t_epoch_total-t_epoch_current)/print_every_nth_frame:.2f} [s], '
+                              f'mL: {loss.item():.2f}, '
+                              f'e0L: {e0loss.item():.2f}, '
+                              f'e1L: {e1loss.item():.2f}, '
+                              f'vL: {val_loss.item():.2f}, '
+                              f'tpf: {((self.fsim.grid_size_x * self.fsim.grid_size_y) / (self.model.in_scale ** 2)) * (t * 1e3 / print_every_nth_frame / self.batch_size):.2f} [ms]')
                         t = 0.
+                        t_epoch=0.
+
                 # if best_model_state is None:
                 #     pass
                 # else:
@@ -544,7 +588,8 @@ class teacher(object):
 
 
     def visualize_lerning(self):
-        plt.plot(self.saved_loss)
+        plt.plot(self.train_loss)
+        plt.plot(self.val_loss)
         plt.xlabel('Epoch')
         plt.ylabel('Loss')
         plt.grid(True)
@@ -878,94 +923,85 @@ class teacher(object):
             # value_loss = loss_r + loss_g + loss_b + loss_alpha
             #
             # loss = value_loss + grad_loss  # TODO : Add Endropy loss + diversity loss + intermidiete velocity vectors loss + casual loss
-            # self.saved_loss.append(loss.item())
+            # self.train_loss.append(loss.item())
         ani = animation.ArtistAnimation(fig, ims, interval=1, blit=True, repeat_delay=100)
         #ani.save("flame_animation.gif")
         fig.colorbar(rms_anim, ax=ax3)
         plt.show()
 
-    def loss_calculation(self,idx,model_output,criterion,norm):
+    def loss_calculation(self,idx,model_output,data_input,data_output,structure_input,structure_output,criterion,norm):
         pred_r,pred_g,pred_b,pred_a,pred_s = model_output
         # NOTE: Firs order difference
-        diff_r_true = self.data_output[:, 0:self.model.in_scale, :][idx] - self.data_input[:, 0:self.model.in_scale, :][idx]
-        diff_r_pred = pred_r - self.data_input[:, 0:self.model.in_scale, :][idx]
+        diff_r_true = data_output[:, 0:self.model.in_scale, :][idx] - data_input[:, 0:self.model.in_scale, :][idx]
+        diff_r_pred = pred_r - data_input[:, 0:self.model.in_scale, :][idx]
         # diff_r_pred = torch.gradient(torch.cat([data_in_r.unsqueeze(3),pred_r.unsqueeze(3)],dim=3),dim=3)[0][:, :, :, 1]
         loss_diff_r = criterion(diff_r_pred, diff_r_true)
-        diff_g_true = self.data_output[:, self.model.in_scale:self.model.in_scale * 2, :][idx] - self.data_input[:,
-                                                                                            self.model.in_scale:self.model.in_scale * 2,
-                                                                                            :][idx]
-        diff_g_pred = pred_g - self.data_input[:, self.model.in_scale:self.model.in_scale * 2, :][idx]
+        diff_g_true = (data_output[:, self.model.in_scale:self.model.in_scale * 2, :][idx]
+                       - data_input[:,self.model.in_scale:self.model.in_scale * 2,:][idx])
+        diff_g_pred = pred_g - data_input[:, self.model.in_scale:self.model.in_scale * 2, :][idx]
         loss_diff_g = criterion(diff_g_pred, diff_g_true)
-        diff_b_true = self.data_output[:, self.model.in_scale * 2:self.model.in_scale * 3, :][idx] - self.data_input[:,
-                                                                                                self.model.in_scale * 2:self.model.in_scale * 3,
-                                                                                                :][idx]
-        diff_b_pred = pred_b - self.data_input[:, self.model.in_scale * 2:self.model.in_scale * 3, :][idx]
+        diff_b_true = (data_output[:, self.model.in_scale * 2:self.model.in_scale * 3, :][idx]
+                       - data_input[:,self.model.in_scale * 2:self.model.in_scale * 3,:][idx])
+        diff_b_pred = pred_b - data_input[:, self.model.in_scale * 2:self.model.in_scale * 3, :][idx]
         loss_diff_b = criterion(diff_b_pred, diff_b_true)
-        diff_a_true = self.data_output[:, self.model.in_scale * 3:self.model.in_scale * 4, :][idx] - self.data_input[:,
-                                                                                                self.model.in_scale * 3:self.model.in_scale * 4,
-                                                                                                :][idx]
-        diff_a_pred = pred_a - self.data_input[:, self.model.in_scale * 3:self.model.in_scale * 4, :][idx]
+        diff_a_true = (data_output[:, self.model.in_scale * 3:self.model.in_scale * 4, :][idx]
+                       - data_input[:,self.model.in_scale * 3:self.model.in_scale * 4,:][idx])
+        diff_a_pred = pred_a - data_input[:, self.model.in_scale * 3:self.model.in_scale * 4, :][idx]
         loss_diff_a = criterion(diff_a_pred, diff_a_true)
-        diff_s_true = self.structure_output[idx] - self.structure_input[idx]
-        diff_s_pred = pred_s - self.structure_input[idx]
+        diff_s_true = structure_output[idx] - self.structure_input[idx]
+        diff_s_pred = pred_s - structure_input[idx]
         loss_diff_s = criterion(diff_s_pred, diff_s_true)
         diff_loss = loss_diff_r + loss_diff_g + loss_diff_b + loss_diff_a + loss_diff_s
 
-        grad_r_true = torch.gradient(self.data_output[:, 0:self.model.in_scale, :][idx], dim=[1, 2])[0]
+        grad_r_true = torch.gradient(data_output[:, 0:self.model.in_scale, :][idx], dim=[1, 2])[0]
         grad_r_pred = torch.gradient(pred_r)[0]
         grad_r = criterion(grad_r_pred, grad_r_true)
-        grad_g_true = torch.gradient(self.data_output[:, self.model.in_scale:self.model.in_scale * 2, :][idx], dim=[1, 2])[0]
+        grad_g_true = torch.gradient(data_output[:, self.model.in_scale:self.model.in_scale * 2, :][idx], dim=[1, 2])[0]
         grad_g_pred = torch.gradient(pred_g)[0]
         grad_g = criterion(grad_g_pred, grad_g_true)
-        grad_b_true = \
-        torch.gradient(self.data_output[:, self.model.in_scale * 2:self.model.in_scale * 3, :][idx], dim=[1, 2])[0]
+        grad_b_true = torch.gradient(data_output[:, self.model.in_scale * 2:self.model.in_scale * 3, :][idx], dim=[1, 2])[0]
         grad_b_pred = torch.gradient(pred_b)[0]
         grad_b = criterion(grad_b_pred, grad_b_true)
-        grad_a_true = \
-        torch.gradient(self.data_output[:, self.model.in_scale * 3:self.model.in_scale * 4, :][idx], dim=[1, 2])[0]
+        grad_a_true = torch.gradient(data_output[:, self.model.in_scale * 3:self.model.in_scale * 4, :][idx], dim=[1, 2])[0]
         grad_a_pred = torch.gradient(pred_a)[0]
         grad_a = criterion(grad_a_pred, grad_a_true)
-        grad_s_true = torch.gradient(self.structure_output[idx], dim=[1, 2])[0]
+        grad_s_true = torch.gradient(structure_output[idx], dim=[1, 2])[0]
         grad_s_pred = torch.gradient(pred_s)[0]
         grad_s = criterion(grad_s_pred, grad_s_true)
 
         grad_loss = grad_r + grad_g + grad_b + grad_a + grad_s
 
-        loss_r = criterion(pred_r, self.data_output[:, 0:self.model.in_scale, :][idx])
-        loss_g = criterion(pred_g, self.data_output[:, self.model.in_scale:self.model.in_scale * 2, :][idx])
-        loss_b = criterion(pred_b, self.data_output[:, self.model.in_scale * 2:self.model.in_scale * 3, :][idx])
-        loss_alpha = criterion(pred_a, self.data_output[:, self.model.in_scale * 3:self.model.in_scale * 4, :][idx])
-        loss_s = criterion(pred_s, self.structure_output[idx])
+        loss_r = criterion(pred_r, data_output[:, 0:self.model.in_scale, :][idx])
+        loss_g = criterion(pred_g, data_output[:, self.model.in_scale:self.model.in_scale * 2, :][idx])
+        loss_b = criterion(pred_b, data_output[:, self.model.in_scale * 2:self.model.in_scale * 3, :][idx])
+        loss_alpha = criterion(pred_a, data_output[:, self.model.in_scale * 3:self.model.in_scale * 4, :][idx])
+        loss_s = criterion(pred_s, structure_output[idx])
         value_loss = loss_r + loss_g + loss_b + loss_alpha + loss_s
 
         fft_out_pred_r = torch.real(torch.fft.rfft2(pred_r, norm=norm))
-        fft_out_true_r = torch.real(torch.fft.rfft2(self.data_output[:, 0:self.model.in_scale, :][idx], norm=norm))
+        fft_out_true_r = torch.real(torch.fft.rfft2(data_output[:, 0:self.model.in_scale, :][idx], norm=norm))
         fft_out_pred_g = torch.real(torch.fft.rfft2(pred_g, norm=norm))
-        fft_out_true_g = torch.real(
-            torch.fft.rfft2(self.data_output[:, self.model.in_scale:self.model.in_scale * 2, :][idx], norm=norm))
+        fft_out_true_g = torch.real(torch.fft.rfft2(data_output[:, self.model.in_scale:self.model.in_scale * 2, :][idx], norm=norm))
         fft_out_pred_b = torch.real(torch.fft.rfft2(pred_b, norm=norm))
-        fft_out_true_b = torch.real(
-            torch.fft.rfft2(self.data_output[:, self.model.in_scale * 2:self.model.in_scale * 3, :][idx], norm=norm))
+        fft_out_true_b = torch.real(torch.fft.rfft2(data_output[:, self.model.in_scale * 2:self.model.in_scale * 3, :][idx], norm=norm))
         fft_out_pred_a = torch.real(torch.fft.rfft2(pred_a, norm=norm))
-        fft_out_true_a = torch.real(
-            torch.fft.rfft2(self.data_output[:, self.model.in_scale * 3:self.model.in_scale * 4, :][idx], norm=norm))
+        fft_out_true_a = torch.real(torch.fft.rfft2(data_output[:, self.model.in_scale * 3:self.model.in_scale * 4, :][idx], norm=norm))
         fft_out_pred_s = torch.real(torch.fft.rfft2(pred_s, norm=norm))
-        fft_out_true_s = torch.real(
-            torch.fft.rfft2(self.structure_output[idx], norm=norm))
+        fft_out_true_s = torch.real(torch.fft.rfft2(structure_output[idx], norm=norm))
 
         fft_in_true_r = torch.real(
-            torch.fft.rfft2(self.data_input[:, 0:self.model.in_scale, :][idx], norm=norm))
+            torch.fft.rfft2(data_input[:, 0:self.model.in_scale, :][idx], norm=norm))
         fft_in_true_g = torch.real(
-            torch.fft.rfft2(self.data_input[:, self.model.in_scale:self.model.in_scale * 2, :][idx],
+            torch.fft.rfft2(data_input[:, self.model.in_scale:self.model.in_scale * 2, :][idx],
                             norm=norm))
         fft_in_true_b = torch.real(
-            torch.fft.rfft2(self.data_input[:, self.model.in_scale * 2:self.model.in_scale * 3, :][idx],
+            torch.fft.rfft2(data_input[:, self.model.in_scale * 2:self.model.in_scale * 3, :][idx],
                             norm=norm))
         fft_in_true_a = torch.real(
-            torch.fft.rfft2(self.data_input[:, self.model.in_scale * 3:self.model.in_scale * 4, :][idx],
+            torch.fft.rfft2(data_input[:, self.model.in_scale * 3:self.model.in_scale * 4, :][idx],
                             norm=norm))
         fft_in_true_s = torch.real(
-            torch.fft.rfft2(self.structure_input[idx], norm=norm))
+            torch.fft.rfft2(structure_input[idx], norm=norm))
 
         fft_loss_r = criterion(fft_out_pred_r, fft_out_true_r)
         fft_loss_g = criterion(fft_out_pred_g, fft_out_true_g)

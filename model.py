@@ -21,7 +21,7 @@ class Metamorph(nn.Module):
         self.in_data = 20
 
         # Definition of non-linear shifting activation function with parameters
-        self.shifterCoefficients = 5  # No. of polynomial coefficients
+        self.shifterCoefficients = 3  # No. of polynomial coefficients
         self.exponents = torch.arange(1, self.shifterCoefficients+1, 1,
                                       device=self.device)  # Check : from 0 to n or from 1 to n +1?
 
@@ -379,6 +379,6 @@ class Metamorph(nn.Module):
         return space_time.real
     @staticmethod
     def activate(x):
-        return f.gelu(x)
+        return torch.tanh(x)
 
 
