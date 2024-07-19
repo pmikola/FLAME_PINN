@@ -43,8 +43,8 @@ class Metamorph(nn.Module):
         self.no_meta_h3 = 20 * 2
         self.no_meta_h2 = 32 * 2
         self.no_meta_h1 = 224 * 2
-        self.dens_width = 2 * self.shifterCoefficients
-        self.flat_size = 20*self.in_scale**2 # Note: n neurons per every pixel
+        self.dens_width = 5 * self.shifterCoefficients
+        self.flat_size = 10*self.in_scale**2 # Note: n neurons per every pixel
         self.diffiusion_context = 32*2
 
         # Definition of layer 0,1,2 for lvl 4 in hierarchy - theta - diffusion noise context
@@ -160,6 +160,15 @@ class Metamorph(nn.Module):
 
         if isinstance(self,nn.Parameter):
             self.data.normal_(mean=0.0, std=1.0)
+
+    def weight_reset(self: nn.Module):
+        reset_parameters = getattr(self, "reset_parameters", None)
+        if callable(reset_parameters):
+            self.reset_parameters()
+        # NOTE : Making sure that nn.conv2d and nn.linear will be reset
+        if isinstance(self, nn.Conv2d) or isinstance(self, nn.Linear):
+            self.reset_parameters()
+
 
     def forward(self, din):
         (data_input,structure_input,meta_input_h1,meta_input_h2,meta_input_h3,
@@ -326,7 +335,7 @@ class Metamorph(nn.Module):
         data = f.gelu(ifft_data)#+f.gelu(weights_data*data)
         # Attention :  Above is implemented simplified FNO LAYER
         # data = torch.tanh(data)
-        return data
+        return data.real
 
     def WalshHadamardSpaceTimeFeature(self,meta_central_points, meta_step,noise_var):
         # NOTE: Walsh-Hadamard transform for space and time coding
@@ -352,6 +361,6 @@ class Metamorph(nn.Module):
         space_time /= len_tens  # normalize
         space_time = self.Walsh_Hadamard_rescaler_l0s0(space_time)
         space_time = f.gelu(space_time)
-        return space_time
+        return space_time.real
 
 
