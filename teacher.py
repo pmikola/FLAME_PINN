@@ -471,7 +471,7 @@ class teacher(object):
                                     best_loss = e1loss.item()
                                     best_losses.append(best_loss)
                                     best_models.append(self.expert_1)
-                                if len(best_models) > 200:
+                                if len(best_models) > 300:
                                     best_losses = torch.tensor(np.array(best_losses))
                                     n = 10
                                     _,best_n_losses_idx = torch.topk(best_losses,n,largest=False)
