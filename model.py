@@ -43,7 +43,7 @@ class Metamorph(nn.Module):
         self.no_meta_h3 = 20 * 2
         self.no_meta_h2 = 32 * 2
         self.no_meta_h1 = 224 * 2
-        self.dens_width = 5 * self.shifterCoefficients
+        self.dens_width = 2 * self.shifterCoefficients
         self.flat_size = 10*self.in_scale**2 # Note: n neurons per every pixel
         self.diffiusion_context = 32*2
 
