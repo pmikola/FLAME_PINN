@@ -504,11 +504,15 @@ class teacher(object):
                                             param_avg = param_sum_enhance[name] / n
                                             param.copy_(param_avg)
 
-                                        avrager_selector = random.randint(0,1)
-                                        if avrager_selector == 0:
-                                            self.model = model_avg_enhance#model_avg_enhance
-                                        else:
-                                            self.model = model_avg_damping  # model_avg_damping
+                                        for (name, param),(name_enh, param_enh), (name_damp, param_damp) in zip(self.model.named_parameters(),model_avg_enhance.named_parameters(), model_avg_damping.named_parameters()):
+                                            param_selector = random.randint(0,2)
+                                            if param_selector == 0:
+                                                param.copy_(param_enh)
+                                            elif param_selector == 1:
+                                                param.copy_(param_damp)
+                                            else:
+                                                pass
+
                                         # self.expert_0.weight_reset()# = model_avg_enhance
                                         #self.seed_setter(int((epoch + 1) * 5))
                                         # self.expert_1.weight_reset()
