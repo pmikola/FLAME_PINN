@@ -21,7 +21,6 @@ class Metamorph(nn.Module):
         self.in_data = 20
         self.activation_weight = nn.Parameter(torch.rand(1, dtype=torch.float))
 
-
         # Definition of non-linear shifting activation function with parameters
         self.shifterCoefficients = 4  # No. of polynomial coefficients
         self.exponents = torch.arange(1, self.shifterCoefficients+1, 1,

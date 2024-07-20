@@ -64,7 +64,7 @@ class teacher(object):
         self.meta_output_h4_val = None
         self.meta_output_h5_val = None
         self.noise_var_out_val = None
-
+        self.epoch = 0
         self.train_loss = []
         self.val_loss = []
     def generate_structure(self):
@@ -216,8 +216,11 @@ class teacher(object):
             slice_y_in = slice(window_y_in[0], window_y_in[-1] + 1)
 
             idx_output = random.choice(range(0, fuel_slices.shape[0]))
-            central_point_x_out = random.sample(x_range, 1)[0]
-            central_point_y_out = random.sample(y_range, 1)[0]
+            offset_x = random.randint(int(-self.input_window_size/2),int(self.input_window_size/2))
+            offset_y = random.randint(int(-self.input_window_size/2),int(self.input_window_size/2))
+            central_point_x_out = central_point_x_in + offset_x
+            central_point_y_out = central_point_y_in + offset_y
+
             window_x_out = np.array(range(central_point_x_out - self.input_window_size, central_point_x_out + self.input_window_size + 1))
             window_y_out = np.array(range(central_point_y_out - self.input_window_size, central_point_y_out + self.input_window_size + 1))
             central_point_x_binary_out = "{0:010b}".format(central_point_x_out)
@@ -312,6 +315,8 @@ class teacher(object):
                 if True in matches_points_in and True in matches_time_in and True in matches_time_out and True in matches_points_out:
                     choose_diffrent_frame = 1
 
+
+
             frame += 1
             if  rzero and gzero and bzero and azero and fzero and idx_input > idx_output and choose_diffrent_frame:
                 frame -=1
@@ -402,6 +407,7 @@ class teacher(object):
                 self.meta_output_h5_val,self.noise_var_out_val)
 
                 for epoch in range(num_epochs):
+                    self.epoch = epoch
                     t_epoch_start = time.perf_counter()
                     self.seed_setter(int(epoch+1))
                     if reiterate_data == 0:
