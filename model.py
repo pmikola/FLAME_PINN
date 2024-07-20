@@ -383,4 +383,3 @@ class Metamorph(nn.Module):
     def activate(self,x):
         return torch.tanh(x)*self.activation_weight
 
-

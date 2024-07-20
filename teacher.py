@@ -204,24 +204,35 @@ class teacher(object):
 
 
             idx_input = random.choice(range(0, fuel_slices.shape[0]))
+            central_point_x_in = random.sample(x_range, 1)[0]
+            central_point_y_in = random.sample(y_range, 1)[0]
+            window_x_in = np.array(range(central_point_x_in - self.input_window_size, central_point_x_in + self.input_window_size + 1))
+            window_y_in = np.array(range(central_point_y_in - self.input_window_size, central_point_y_in + self.input_window_size + 1))
+            central_point_x_binary_in = "{0:010b}".format(central_point_x_in)
+            central_point_x_binary_in = torch.tensor(np.array([int(d) for d in central_point_x_binary_in]))
+            central_point_y_binary_in = "{0:010b}".format(central_point_y_in)
+            central_point_y_binary_in = torch.tensor(np.array([int(d) for d in central_point_y_binary_in]))
+            slice_x_in = slice(window_x_in[0], window_x_in[-1] + 1)
+            slice_y_in = slice(window_y_in[0], window_y_in[-1] + 1)
+
             idx_output = random.choice(range(0, fuel_slices.shape[0]))
-            central_point_x = random.sample(x_range, 1)[0]
-            central_point_y = random.sample(y_range, 1)[0]
-            window_x = np.array(range(central_point_x - self.input_window_size, central_point_x + self.input_window_size + 1))
-            window_y = np.array(range(central_point_y - self.input_window_size, central_point_y + self.input_window_size + 1))
-            central_point_x_binary = "{0:010b}".format(central_point_x)
-            central_point_x_binary = torch.tensor(np.array([int(d) for d in central_point_x_binary]))
-            central_point_y_binary = "{0:010b}".format(central_point_y)
-            central_point_y_binary = torch.tensor(np.array([int(d) for d in central_point_y_binary]))
-            slice_x = slice(window_x[0], window_x[-1] + 1)
-            slice_y = slice(window_y[0], window_y[-1] + 1)
+            central_point_x_out = random.sample(x_range, 1)[0]
+            central_point_y_out = random.sample(y_range, 1)[0]
+            window_x_out = np.array(range(central_point_x_out - self.input_window_size, central_point_x_out + self.input_window_size + 1))
+            window_y_out = np.array(range(central_point_y_out - self.input_window_size, central_point_y_out + self.input_window_size + 1))
+            central_point_x_binary_out = "{0:010b}".format(central_point_x_out)
+            central_point_x_binary_out = torch.tensor(np.array([int(d) for d in central_point_x_binary_out]))
+            central_point_y_binary_out = "{0:010b}".format(central_point_y_out)
+            central_point_y_binary_out = torch.tensor(np.array([int(d) for d in central_point_y_binary_out]))
+            slice_x_out = slice(window_x_out[0], window_x_out[-1] + 1)
+            slice_y_out = slice(window_y_out[0], window_y_out[-1] + 1)
 
             # Note : Input data
-            fuel_subslice_in = fuel_slices[idx_input,slice_x, slice_y] + torch.nan_to_num((noise_variance_in**0.5)*torch.rand_like(fuel_slices[idx_input,slice_x, slice_y]).to(self.device),nan=0.0)
-            r_subslice_in = r_slices[idx_input,slice_x, slice_y] + torch.nan_to_num((noise_variance_in**0.5)*torch.rand_like(r_slices[idx_input,slice_x, slice_y]).to(self.device),nan=0.0)
-            g_subslice_in = g_slices[idx_input,slice_x, slice_y] + torch.nan_to_num((noise_variance_in**0.5)*torch.rand_like(g_slices[idx_input,slice_x, slice_y]).to(self.device),nan=0.0)
-            b_subslice_in = b_slices[idx_input,slice_x, slice_y] + torch.nan_to_num((noise_variance_in**0.5)*torch.rand_like(b_slices[idx_input,slice_x, slice_y]).to(self.device),nan=0.0)
-            alpha_subslice_in = alpha_slices[idx_input,slice_x, slice_y] + torch.nan_to_num((noise_variance_in**0.5)*torch.rand_like(alpha_slices[idx_input,slice_x, slice_y]).to(self.device),nan=0.0)
+            fuel_subslice_in = fuel_slices[idx_input,slice_x_in, slice_y_in] + torch.nan_to_num((noise_variance_in)*torch.rand_like(fuel_slices[idx_input,slice_x_in, slice_y_in]).to(self.device),nan=0.0)
+            r_subslice_in = r_slices[idx_input,slice_x_in, slice_y_in] + torch.nan_to_num((noise_variance_in)*torch.rand_like(r_slices[idx_input,slice_x_in, slice_y_in]).to(self.device),nan=0.0)
+            g_subslice_in = g_slices[idx_input,slice_x_in, slice_y_in] + torch.nan_to_num((noise_variance_in)*torch.rand_like(g_slices[idx_input,slice_x_in, slice_y_in]).to(self.device),nan=0.0)
+            b_subslice_in = b_slices[idx_input,slice_x_in, slice_y_in] + torch.nan_to_num((noise_variance_in)*torch.rand_like(b_slices[idx_input,slice_x_in, slice_y_in]).to(self.device),nan=0.0)
+            alpha_subslice_in = alpha_slices[idx_input,slice_x_in, slice_y_in] + torch.nan_to_num((noise_variance_in)*torch.rand_like(alpha_slices[idx_input,slice_x_in, slice_y_in]).to(self.device),nan=0.0)
             data_input_subslice = torch.cat([r_subslice_in,g_subslice_in, b_subslice_in, alpha_subslice_in], dim=0)
 
             meta_step_in = meta_binary_slices[idx_input][0]
@@ -239,11 +250,11 @@ class teacher(object):
 
 
             # Note : Output data
-            fuel_subslice_out = fuel_slices[idx_output,slice_x, slice_y] + torch.nan_to_num((noise_variance_out**0.5)*torch.rand_like(fuel_slices[idx_output,slice_x, slice_y]).to(self.device),nan=0.0)
-            r_subslice_out = r_slices[idx_output,slice_x, slice_y] + torch.nan_to_num((noise_variance_out**0.5)*torch.rand_like(r_slices[idx_output,slice_x, slice_y]).to(self.device),nan=0.0)
-            g_subslice_out = g_slices[idx_output,slice_x, slice_y] + torch.nan_to_num((noise_variance_out**0.5)*torch.rand_like(g_slices[idx_output,slice_x, slice_y]).to(self.device),nan=0.0)
-            b_subslice_out = b_slices[idx_output,slice_x, slice_y] + torch.nan_to_num((noise_variance_out**0.5)*torch.rand_like(b_slices[idx_output,slice_x, slice_y]),nan=0.0)
-            alpha_subslice_out = alpha_slices[idx_output,slice_x, slice_y] + torch.nan_to_num((noise_variance_out**0.5)*torch.rand_like(alpha_slices[idx_output,slice_x, slice_y]).to(self.device),nan=0.0)
+            fuel_subslice_out = fuel_slices[idx_output,slice_x_out, slice_y_out] + torch.nan_to_num((noise_variance_out)*torch.rand_like(fuel_slices[idx_output,slice_x_out, slice_y_out]).to(self.device),nan=0.0)
+            r_subslice_out = r_slices[idx_output,slice_x_out, slice_y_out] + torch.nan_to_num((noise_variance_out)*torch.rand_like(r_slices[idx_output,slice_x_out, slice_y_out]).to(self.device),nan=0.0)
+            g_subslice_out = g_slices[idx_output,slice_x_out, slice_y_out] + torch.nan_to_num((noise_variance_out)*torch.rand_like(g_slices[idx_output,slice_x_out, slice_y_out]).to(self.device),nan=0.0)
+            b_subslice_out = b_slices[idx_output,slice_x_out, slice_y_out] + torch.nan_to_num((noise_variance_out)*torch.rand_like(b_slices[idx_output,slice_x_out, slice_y_out]),nan=0.0)
+            alpha_subslice_out = alpha_slices[idx_output,slice_x_out, slice_y_out] + torch.nan_to_num((noise_variance_out)*torch.rand_like(alpha_slices[idx_output,slice_x_out, slice_y_out]).to(self.device),nan=0.0)
             data_output_subslice = torch.cat([r_subslice_out,g_subslice_out, b_subslice_out, alpha_subslice_out], dim=0)
 
             meta_step_out = meta_binary_slices[idx_output][0]
@@ -290,13 +301,15 @@ class teacher(object):
             azero = a_zero and a_i0 and a_o0
             fzero = f_zero and f_i0 and f_o0
 
-            central_points = torch.cat([central_point_x_binary, central_point_y_binary], dim=0).to(self.device)
+            central_points_in = torch.cat([central_point_x_binary_in, central_point_y_binary_in], dim=0).to(self.device)
+            central_points_out = torch.cat([central_point_x_binary_out, central_point_y_binary_out], dim=0).to(self.device)
 
             if create_val_dataset == 0:
-                matches_points = (self.meta_input_h3_val == central_points).all(dim=1)
+                matches_points_in = (self.meta_input_h3_val == central_points_in).all(dim=1)
+                matches_points_out = (self.meta_output_h3_val == central_points_out).all(dim=1)
                 matches_time_in = (self.meta_input_h2_val == meta_step_in.to(self.device)).all(dim=1)
                 matches_time_out = (self.meta_output_h2_val == meta_step_out.to(self.device)).all(dim=1)
-                if True in matches_points and True in matches_time_in and True in matches_time_out:
+                if True in matches_points_in and True in matches_time_in and True in matches_time_out and True in matches_points_out:
                     choose_diffrent_frame = 1
 
             frame += 1
@@ -308,16 +321,16 @@ class teacher(object):
                 structure_input.append(fuel_subslice_in)
                 meta_input_h1.append(meta_input_subslice)
                 meta_input_h2.append(meta_step_in)
-                meta_input_h3.append(central_points)
-                meta_input_h4.append(torch.cat([torch.tensor(window_x),torch.tensor(window_y)]))
+                meta_input_h3.append(central_points_in)
+                meta_input_h4.append(torch.cat([torch.tensor(window_x_in),torch.tensor(window_y_in)]))
                 meta_input_h5.append(meta_step_in_numeric)
                 noise_var_in.append(noise_variance_in_binary.to(torch.float))
                 data_output.append(data_output_subslice)
                 structure_output.append(fuel_subslice_out)
                 meta_output_h1.append(meta_output_subslice)
                 meta_output_h2.append(meta_step_out)
-                meta_output_h3.append(central_points)
-                meta_output_h4.append(torch.cat([torch.tensor(window_x), torch.tensor(window_y)]))
+                meta_output_h3.append(central_points_out)
+                meta_output_h4.append(torch.cat([torch.tensor(window_x_out), torch.tensor(window_y_out)]))
                 meta_output_h5.append(meta_step_out_numeric)
                 noise_var_out.append(noise_variance_out_binary.to(torch.float))
 
@@ -507,7 +520,7 @@ class teacher(object):
                                     param_group['lr'] = 1e-3
                                     reiterate_counter = 0
                                     reiterate_data = 0
-                            print('optimizer -> lr back to starting point')
+                                    print('optimizer -> lr back to starting point')
                                # noise_amplitude = noise_amplitude*0.5
                                 # if noise_amplitude < 1e-3:
                                 #     # print('noise amplitude')
