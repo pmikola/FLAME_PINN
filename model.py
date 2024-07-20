@@ -19,9 +19,11 @@ class Metamorph(nn.Module):
         self.in_scale = (1+self.input_window_size*2)
         self.no_subslice_in_tensors = 4
         self.in_data = 20
+        self.activation_weight = nn.Parameter(torch.rand(1, dtype=torch.float))
+
 
         # Definition of non-linear shifting activation function with parameters
-        self.shifterCoefficients = 3  # No. of polynomial coefficients
+        self.shifterCoefficients = 4  # No. of polynomial coefficients
         self.exponents = torch.arange(1, self.shifterCoefficients+1, 1,
                                       device=self.device)  # Check : from 0 to n or from 1 to n +1?
 
@@ -261,7 +263,7 @@ class Metamorph(nn.Module):
         x_mod = self.shapeShift(self.l1h0(x), x_alpha_l1)
         x_mod = self.shapeShift(self.l2h0(x_mod), x_alpha_l2)
 
-        x = self.activate(self.l3h0(x_mod))+rgbas
+        x = self.activate(self.l3h0(x_mod))+rgbas+x
         rres = self.activate(self.l4_h0_r(x))
         gres = self.activate(self.l4_h0_g(x))
         bres = self.activate(self.l4_h0_b(x))
@@ -317,19 +319,19 @@ class Metamorph(nn.Module):
             coefficients = h.reshape(self.batch_size,x.shape[1],x.shape[2],self.shifterCoefficients)
             x_powers = torch.pow(x[0:self.batch_size,:,:].unsqueeze(3), self.exponents.unsqueeze(0).unsqueeze(1))
             craftedPolynomial = torch.sum(coefficients * x_powers, dim=3)
-            craftedPolynomial = torch.tanh(craftedPolynomial)
+            #craftedPolynomial = torch.tanh(craftedPolynomial)
             return craftedPolynomial
         elif x.dim() == 2:
             coefficients = h.reshape(self.batch_size,x.shape[1],self.shifterCoefficients)
             x_powers = torch.pow(x[0:self.batch_size, :].unsqueeze(2), self.exponents.unsqueeze(0).unsqueeze(1))
             craftedPolynomial = torch.sum(coefficients * x_powers, dim=2)
-            craftedPolynomial = torch.tanh(craftedPolynomial)
+            #craftedPolynomial = torch.tanh(craftedPolynomial)
             return craftedPolynomial
         elif x.dim() == 4:
             coefficients = h.reshape(self.batch_size, x.shape[1], x.shape[2], x.shape[3], self.shifterCoefficients)
             x_powers = torch.pow(x[0:self.batch_size, :, :, :].unsqueeze(4),self.exponents.unsqueeze(0).unsqueeze(1).unsqueeze(2))
             craftedPolynomial = torch.sum(coefficients * x_powers, dim=4)
-            craftedPolynomial = torch.tanh(craftedPolynomial)
+            #craftedPolynomial = torch.tanh(craftedPolynomial)
             return craftedPolynomial
         else:
             raise ValueError("Unsupported input dimensions")
@@ -347,7 +349,7 @@ class Metamorph(nn.Module):
         iFFWW_real = iFFWW.real
         iFFWW_imag = iFFWW.imag
         ifft_data = iFFWW_real+iFFWW_imag
-        data = self.activate(ifft_data)#+f.gelu(weights_data*data)
+        data = self.activate(ifft_data)+self.activate(weights_data*data)
         # Attention :  Above is implemented simplified FNO LAYER
         # data = torch.tanh(data)
         return data.real
@@ -377,8 +379,8 @@ class Metamorph(nn.Module):
         space_time = self.Walsh_Hadamard_rescaler_l0s0(space_time)
         space_time = self.activate(space_time)
         return space_time.real
-    @staticmethod
-    def activate(x):
-        return torch.tanh(x)
+
+    def activate(self,x):
+        return torch.tanh(x)*self.activation_weight
 
 
