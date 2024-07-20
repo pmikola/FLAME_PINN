@@ -264,7 +264,7 @@ class Metamorph(nn.Module):
         x_mod = self.shapeShift(self.l1h0(rgbas), x_alpha_l1)
         x_mod = self.shapeShift(self.l2h0(x_mod), x_alpha_l2)
 
-        x = self.activate(self.l3h0(x_mod))+x
+        x = self.activate(self.l3h0(x_mod))+x+rgbas
         rres = self.activate(self.l4_h0_r(x))
         gres = self.activate(self.l4_h0_g(x))
         bres = self.activate(self.l4_h0_b(x))
