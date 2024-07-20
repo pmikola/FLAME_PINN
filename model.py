@@ -30,15 +30,16 @@ class Metamorph(nn.Module):
         self.weights_data_0 = nn.Parameter(torch.rand(5 * self.in_scale**2, dtype=torch.float))
         self.weights_data_1 = nn.Parameter(torch.rand(5 * self.in_scale**2, dtype=torch.float))
         self.weights_data_2 = nn.Parameter(torch.rand(5 * self.in_scale**2, dtype=torch.float))
+        self.weights_data_3 = nn.Parameter(torch.rand(5 * self.in_scale**2, dtype=torch.float))
 
         self.weights_data_fft_0 = nn.Parameter(torch.rand(5 * self.in_scale**2, dtype=torch.cfloat))
         self.weights_data_fft_1 = nn.Parameter(torch.rand(5 * self.in_scale**2, dtype=torch.cfloat))
         self.weights_data_fft_2 = nn.Parameter(torch.rand(5 * self.in_scale**2, dtype=torch.cfloat))
-
-        self.multiplier = (torch.arange(start=1,end=105,step=1)).to(self.device)
+        self.weights_data_fft_3 = nn.Parameter(torch.rand(5 * self.in_scale**2, dtype=torch.cfloat))
 
         # Definition of Walsh-Hadamard rescale layers
-        self.Walsh_Hadamard_rescaler_l0s0= nn.Linear(in_features=256, out_features=(5 * self.in_scale**2))
+        self.Walsh_Hadamard_rescaler_l0wh= nn.Linear(in_features=256, out_features=(5 * self.in_scale**2))
+        self.Walsh_Hadamard_rescaler_l1wh= nn.Linear(in_features=(5 * self.in_scale**2), out_features=(5 * self.in_scale**2))
 
         # NOTE : on Hierarchy 0 flows data and on higher levels flows metas
         self.no_meta_h3 = 20 * 2
@@ -257,12 +258,13 @@ class Metamorph(nn.Module):
         x = self.SpaceTimeFFTFeature(stff_in, self.weights_data_0, self.weights_data_fft_0, space_time)
         x = self.SpaceTimeFFTFeature(x, self.weights_data_1, self.weights_data_fft_1, space_time)
         x = self.SpaceTimeFFTFeature(x, self.weights_data_2, self.weights_data_fft_2, space_time)
+        x = self.SpaceTimeFFTFeature(x, self.weights_data_3, self.weights_data_fft_3, space_time)
 
         # x = rgbas + x
-        x_mod = self.shapeShift(self.l1h0(x), x_alpha_l1)
+        x_mod = self.shapeShift(self.l1h0(rgbas), x_alpha_l1)
         x_mod = self.shapeShift(self.l2h0(x_mod), x_alpha_l2)
 
-        x = self.activate(self.l3h0(x_mod))+rgbas+x
+        x = self.activate(self.l3h0(x_mod))+x
         rres = self.activate(self.l4_h0_r(x))
         gres = self.activate(self.l4_h0_g(x))
         bres = self.activate(self.l4_h0_b(x))
@@ -318,19 +320,19 @@ class Metamorph(nn.Module):
             coefficients = h.reshape(self.batch_size,x.shape[1],x.shape[2],self.shifterCoefficients)
             x_powers = torch.pow(x[0:self.batch_size,:,:].unsqueeze(3), self.exponents.unsqueeze(0).unsqueeze(1))
             craftedPolynomial = torch.sum(coefficients * x_powers, dim=3)
-            #craftedPolynomial = torch.tanh(craftedPolynomial)
+            craftedPolynomial = self.activate(craftedPolynomial)
             return craftedPolynomial
         elif x.dim() == 2:
             coefficients = h.reshape(self.batch_size,x.shape[1],self.shifterCoefficients)
             x_powers = torch.pow(x[0:self.batch_size, :].unsqueeze(2), self.exponents.unsqueeze(0).unsqueeze(1))
             craftedPolynomial = torch.sum(coefficients * x_powers, dim=2)
-            #craftedPolynomial = torch.tanh(craftedPolynomial)
+            craftedPolynomial = self.activate(craftedPolynomial)
             return craftedPolynomial
         elif x.dim() == 4:
             coefficients = h.reshape(self.batch_size, x.shape[1], x.shape[2], x.shape[3], self.shifterCoefficients)
             x_powers = torch.pow(x[0:self.batch_size, :, :, :].unsqueeze(4),self.exponents.unsqueeze(0).unsqueeze(1).unsqueeze(2))
             craftedPolynomial = torch.sum(coefficients * x_powers, dim=4)
-            #craftedPolynomial = torch.tanh(craftedPolynomial)
+            craftedPolynomial = self.activate(craftedPolynomial)
             return craftedPolynomial
         else:
             raise ValueError("Unsupported input dimensions")
@@ -339,16 +341,14 @@ class Metamorph(nn.Module):
         # Attention :  Below is implemented simplified FNO LAYER
         # # question : using only real gives better results than using real and imag in sum or concat manner?
         fft_data = torch.fft.fft(data,norm='forward')
-        fft_data /= torch.tensor(fft_data.shape[1]) # normalize
-        data_modes = fft_data + space_time
-
+        fft_data /= torch.tensor(fft_data.shape[1])
         # question : is "bij,own->bin" give same outcome as "bij,own->bwj"?
-        FFwithWeights = torch.einsum("bi,j->bj",data_modes, weights_data_fft)
+        FFwithWeights = torch.einsum("bi,j->bj",fft_data, weights_data_fft)
         iFFWW = torch.fft.ifft(FFwithWeights, norm='forward')
         iFFWW_real = iFFWW.real
         iFFWW_imag = iFFWW.imag
         ifft_data = iFFWW_real+iFFWW_imag
-        data = self.activate(ifft_data)+self.activate(weights_data*data)
+        data = self.activate(ifft_data)+self.activate(weights_data*data)+space_time
         # Attention :  Above is implemented simplified FNO LAYER
         # data = torch.tanh(data)
         return data.real
@@ -375,10 +375,10 @@ class Metamorph(nn.Module):
             space_time[:, indices_j] = result_i - result_j
 
         space_time /= len_tens  # normalize
-        space_time = self.Walsh_Hadamard_rescaler_l0s0(space_time)
-        space_time = self.activate(space_time)
+        space_time = self.activate(self.Walsh_Hadamard_rescaler_l0wh(space_time))
+        space_time = self.activate(self.Walsh_Hadamard_rescaler_l1wh(space_time))
         return space_time.real
 
     def activate(self,x):
-        return torch.tanh(x)*self.activation_weight
+        return torch.tanh(x)*2#self.activation_weight
 

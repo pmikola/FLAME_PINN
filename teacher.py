@@ -317,7 +317,7 @@ class teacher(object):
                     choose_diffrent_frame = 1
 
             mod = 4
-            if self.epoch > self.num_of_epochs*0.6 and create_val_dataset == 1:
+            if self.epoch > self.num_of_epochs*0.3 or create_val_dataset == 1:
                 pass
             else:
                 data_in_cnz = torch.count_nonzero(data_input_subslice)
