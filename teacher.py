@@ -65,6 +65,7 @@ class teacher(object):
         self.meta_output_h5_val = None
         self.noise_var_out_val = None
         self.epoch = 0
+        self.num_of_epochs = 0
         self.train_loss = []
         self.val_loss = []
     def generate_structure(self):
@@ -315,8 +316,20 @@ class teacher(object):
                 if True in matches_points_in and True in matches_time_in and True in matches_time_out and True in matches_points_out:
                     choose_diffrent_frame = 1
 
+            mod = 4
+            if self.epoch > self.num_of_epochs*0.6 and create_val_dataset == 1:
+                pass
+            else:
+                data_in_cnz = torch.count_nonzero(data_input_subslice)
+                fuel_in_cnz = torch.count_nonzero(fuel_subslice_in)
+                data_out_cnz = torch.count_nonzero(data_output_subslice)
+                fuel_out_cnz = torch.count_nonzero(fuel_subslice_out)
 
-
+                if (data_in_cnz < mod*int(data_input_subslice.shape[0]*data_input_subslice.shape[1]/(self.epoch+mod)) or
+                        fuel_in_cnz < mod*int(data_input_subslice.shape[0]*data_input_subslice.shape[1]/(self.epoch+mod)) or
+                        data_out_cnz < mod*int(data_output_subslice.shape[0]*data_output_subslice.shape[1]/(self.epoch+mod)) or
+                        fuel_out_cnz < mod*int(data_output_subslice.shape[0]*data_output_subslice.shape[1]/(self.epoch+mod))):
+                    choose_diffrent_frame = 1
             frame += 1
             if  rzero and gzero and bzero and azero and fzero and idx_input > idx_output and choose_diffrent_frame:
                 frame -=1
@@ -383,7 +396,7 @@ class teacher(object):
                                                  input_window_size, first_frame, last_frame,frame_skip)
 
             criterion_model,criterion_e0,criterion_e1,criterion_e2 = criterion
-
+            self.num_of_epochs = num_epochs
             if learning == 1:
                 best_loss = float('inf')
                 best_model_state = None
