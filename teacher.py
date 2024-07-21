@@ -12,7 +12,7 @@ from torch.autograd import grad
 
 
 class teacher(object):
-    def __init__(self,models,device):
+    def __init__(self,models,discriminator,device):
         super(teacher, self).__init__()
 
         self.validation_dataset = None
@@ -21,6 +21,7 @@ class teacher(object):
         self.expert_0 = models[1]#copy.deepcopy(models[1])
         self.expert_1 = models[2]#copy.deepcopy(models[2])
         self.expert_2 = models[3]  # copy.deepcopy(models[2])
+        self.discriminator = discriminator
         self.device = device
         self.fsim = None
         self.period = 1
@@ -395,12 +396,12 @@ class teacher(object):
             self.noise_var_out = torch.stack(noise_var_out,dim=0).to(self.device)
 
     def learning_phase(self,no_frame_samples, batch_size, input_window_size, first_frame, last_frame,
-                                      frame_skip,criterion,optimizer,device,learning=1,num_epochs=1500):
+                                      frame_skip,criterion,optimizer,disc_optimizer,device,learning=1,num_epochs=1500):
             (self.no_frame_samples,self.batch_size,self.input_window_size,self.first_frame,
              self.last_frame,self.frame_skip) = (no_frame_samples, batch_size,
                                                  input_window_size, first_frame, last_frame,frame_skip)
 
-            criterion_model,criterion_e0,criterion_e1,criterion_e2 = criterion
+            criterion_model,criterion_e0,criterion_e1,criterion_e2,criterion_disc = criterion
             self.num_of_epochs = num_epochs
             if learning == 1:
                 best_loss = float('inf')
@@ -466,7 +467,6 @@ class teacher(object):
                                   self.noise_var_out[e2_idx])
 
 
-
                     t_start = time.perf_counter()
                     self.seed_setter(int((epoch+1)*2))
                     model_output = self.model(dataset)
@@ -477,6 +477,11 @@ class teacher(object):
                     self.seed_setter(int((epoch + 1) * 5))
                     expert_2_output = self.expert_2(dataset_e2)
                     t_pred = time.perf_counter()
+
+                    disc_loss = self.discriminator_loss(m_idx, model_output, self.data_output, self.structure_output,criterion_disc)
+                    disc_optimizer.zero_grad(set_to_none=True)
+                    disc_loss.backward()
+                    disc_optimizer.step()
 
                     loss = self.loss_calculation(m_idx,model_output,self.data_input,self.data_output,self.structure_input,self.structure_output,criterion_model, norm)
                     e0loss = self.loss_calculation(e0_idx,expert_0_output,self.data_input,self.data_output,self.structure_input,self.structure_output, criterion_e0, norm)
@@ -506,16 +511,12 @@ class teacher(object):
                     # e0loss -=param_similarity
                     # e1loss -=param_similarity
                     # e2loss -= param_similarity
-
-
                     optimizer.zero_grad(set_to_none=True)
                     loss.backward()
                     e0loss.backward()
                     e1loss.backward()
                     e2loss.backward()
                     optimizer.step()
-
-
 
                     self.train_loss.append(loss.item())
                     self.val_loss.append(val_loss.item())
@@ -630,6 +631,7 @@ class teacher(object):
                         print(f'P: {self.period}/{self.no_of_periods} | E: {((t_epoch_total-t_epoch_current)/(print_every_nth_frame*60)):.2f} [min], '
                               f'vL: {val_loss.item():.2f}, '
                               f'mL: {loss.item():.2f}, '
+                              f'dL: {disc_loss.item():.2f}, '
                               f'e0L: {e0loss.item():.2f}, '
                               f'e1L: {e1loss.item():.2f}, '
                               f'e2L: {e2loss.item():.2f}, '
@@ -1118,6 +1120,33 @@ class teacher(object):
         hist_loss = hist_loss*10
         LOSS = value_loss + diff_loss + grad_loss + fft_loss + diff_fft_loss+hist_loss # Attention: Aggregate all losses here
         return LOSS
+
+    def discriminator_loss(self,idx,model_output,data_output,structure_output,criterion):
+
+        dataset = (
+        self.data_input[idx], self.structure_input[idx], self.meta_input_h1[idx], self.meta_input_h2[idx],
+        self.meta_input_h3[idx], self.meta_input_h4[idx], self.meta_input_h5[idx], self.noise_var_in[idx],
+        self.meta_output_h1[idx],
+        self.meta_output_h2[idx], self.meta_output_h3[idx], self.meta_output_h4[idx], self.meta_output_h5[idx],
+        self.noise_var_out[idx])
+
+        pred_r, pred_g, pred_b, pred_a, pred_s = model_output
+        r_out = data_output[:, 0:self.model.in_scale, :][idx]
+        g_out = data_output[:, self.model.in_scale:self.model.in_scale * 2, :][idx]
+        b_out = data_output[:, self.model.in_scale * 2:self.model.in_scale * 3, :][idx]
+        a_out = data_output[:, self.model.in_scale * 3:self.model.in_scale * 4, :][idx]
+        s_out = structure_output[idx]
+        pred = torch.cat([pred_r.detach(), pred_g.detach(), pred_b.detach(), pred_a.detach(), pred_s.detach()],dim=1)
+        true = torch.cat([r_out, g_out, b_out, a_out,s_out],dim=1)
+        fake_labels = torch.zeros((pred.shape[0],1)).to(self.device)
+        true_labels = torch.ones((true.shape[0], 1)).to(self.device)
+        combined_data = torch.cat([pred,true],dim=0)
+        combined_labels = torch.cat([fake_labels,true_labels],dim=0)
+        shuffle_idx = torch.randint(0,combined_data.shape[0],(int(combined_data.shape[0]/2),)).to(self.device)
+        shuffled_labels = combined_labels[shuffle_idx]
+        disc_pred = self.discriminator(combined_data,dataset,shuffle_idx)
+        disc_loss = criterion(disc_pred, shuffled_labels)
+        return disc_loss
     @staticmethod
     def seed_setter(seed):
         s = torch.randint(0,seed,(1,))

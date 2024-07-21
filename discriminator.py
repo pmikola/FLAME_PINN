@@ -8,10 +8,10 @@ from matplotlib import pyplot as plt
 import torch.nn.functional as f
 
 
-class Metamorph(nn.Module):
+class Metamorph_discriminator(nn.Module):
     # Note : Buzzword - Metamorph will be better name here probably :) or HIPNO
     def __init__(self,no_frame_samples,batch_size,input_window_size,device):
-        super(Metamorph, self).__init__()
+        super(Metamorph_discriminator, self).__init__()
         self.device = device
         self.no_frame_samples = no_frame_samples
         self.batch_size = batch_size
@@ -150,17 +150,19 @@ class Metamorph(nn.Module):
         self.l9_h0_a = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
         self.l9_h0_s = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
 
-        self.l10_h0_r = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l10_h0_g = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l10_h0_b = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l10_h0_a = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l10_h0_s = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
+        self.l10_h0_r = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.in_scale ** 2))
+        self.l10_h0_g = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.in_scale ** 2))
+        self.l10_h0_b = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.in_scale ** 2))
+        self.l10_h0_a = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.in_scale ** 2))
+        self.l10_h0_s = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.in_scale ** 2))
 
-        self.l11_h0_r = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.in_scale ** 2), bias=True)
-        self.l11_h0_g = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.in_scale ** 2), bias=True)
-        self.l11_h0_b = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.in_scale ** 2), bias=True)
-        self.l11_h0_a = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.in_scale ** 2), bias=True)
-        self.l11_h0_s = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.in_scale ** 2), bias=True)
+        self.l11_h0_r = nn.Linear(in_features=int(self.in_scale ** 2), out_features=int(self.in_scale ** 2), bias=True)
+        self.l11_h0_g = nn.Linear(in_features=int(self.in_scale ** 2), out_features=int(self.in_scale ** 2), bias=True)
+        self.l11_h0_b = nn.Linear(in_features=int(self.in_scale ** 2), out_features=int(self.in_scale ** 2), bias=True)
+        self.l11_h0_a = nn.Linear(in_features=int(self.in_scale ** 2), out_features=int(self.in_scale ** 2), bias=True)
+        self.l11_h0_s = nn.Linear(in_features=int(self.in_scale ** 2), out_features=int(self.in_scale ** 2), bias=True)
+
+        self.l12_disc_output = nn.Linear(in_features=int(self.in_scale ** 2)*5, out_features=1, bias=True)
         self.init_weights()
 
     def init_weights(self):
@@ -184,15 +186,24 @@ class Metamorph(nn.Module):
         if isinstance(self, nn.Conv2d) or isinstance(self, nn.Linear):
             self.reset_parameters()
 
-    def forward(self, din):
-        (data_input, structure_input, meta_input_h1, meta_input_h2, meta_input_h3,
-         meta_input_h4, meta_input_h5, noise_var_in, meta_output_h1, meta_output_h2,
-         meta_output_h3, meta_output_h4, meta_output_h5, noise_var_out) = din
+    def forward(self,disc_data, g_model_data,shuffle_idx):
+        (_, _, meta_input_h1, meta_input_h2, meta_input_h3,
+         _, _, noise_var_in, meta_output_h1, meta_output_h2,
+         meta_output_h3, _, _, noise_var_out) = g_model_data
         # print(data_input.shape,meta_input_h1.shape,meta_input_h2.shape,meta_input_h3.shape,
         #  meta_input_h4.shape,meta_input_h5.shape,meta_output_h1.shape,meta_output_h2.shape,
         #  meta_output_h3.shape,meta_output_h4.shape,meta_output_h5.shape,meta_central_points.shape)
         # Question : Do highest hierarchy should have parameters that are learning
         #  or just be top layer without any additional coefss (regarding polyNonlinear)
+        meta_input_h1 = torch.cat([meta_input_h1, meta_input_h1], dim=0)[shuffle_idx]
+        meta_input_h2 = torch.cat([meta_input_h2, meta_input_h2], dim=0)[shuffle_idx]
+        meta_input_h3 = torch.cat([meta_input_h3, meta_input_h3], dim=0)[shuffle_idx]
+        noise_var_in = torch.cat([noise_var_in, noise_var_in], dim=0)[shuffle_idx]
+        meta_output_h1 = torch.cat([meta_output_h1, meta_output_h1], dim=0)[shuffle_idx]
+        meta_output_h2 = torch.cat([meta_output_h2, meta_output_h2], dim=0)[shuffle_idx]
+        meta_output_h3 = torch.cat([meta_output_h3, meta_output_h3], dim=0)[shuffle_idx]
+        noise_var_out = torch.cat([noise_var_out, noise_var_out], dim=0)[shuffle_idx]
+
         meta_central_points = torch.cat([meta_input_h3.float(), meta_output_h3.float()], dim=1)
         noise_var = torch.cat([noise_var_in, noise_var_out], dim=1)
         meta_step = torch.cat([meta_input_h2.float(), meta_output_h2.float()], dim=1)
@@ -218,30 +229,31 @@ class Metamorph(nn.Module):
         x_alpha_l2 = self.activate(self.l2h01(alpha_l2))
 
         # Note: Factorisation for dense layers
-        r_along_x = data_input[:, 0:self.in_scale, :].view(self.batch_size, self.in_scale * self.in_scale)
-        r_along_y = data_input[:, 0:self.in_scale, :].transpose(1, 2).contiguous().view(self.batch_size,self.in_scale * self.in_scale)
+        disc_data = disc_data[shuffle_idx]
+        r_along_x = disc_data[:, 0:self.in_scale, :].view(self.batch_size, self.in_scale * self.in_scale)
+        r_along_y = disc_data[:, 0:self.in_scale, :].transpose(1, 2).contiguous().view(self.batch_size,self.in_scale * self.in_scale)
         r_along_x = self.activate(self.l0h0rx(r_along_x))
         r_along_y = self.activate(self.l0h0ry(r_along_y))
 
-        g_along_x = data_input[:, self.in_scale:self.in_scale * 2, :].view(self.batch_size,self.in_scale * self.in_scale)
-        g_along_y = data_input[:, self.in_scale:self.in_scale * 2, :].transpose(1, 2).contiguous().view(self.batch_size,self.in_scale * self.in_scale)
+        g_along_x = disc_data[:, self.in_scale:self.in_scale * 2, :].view(self.batch_size,self.in_scale * self.in_scale)
+        g_along_y = disc_data[:, self.in_scale:self.in_scale * 2, :].transpose(1, 2).contiguous().view(self.batch_size,self.in_scale * self.in_scale)
         g_along_x = self.activate(self.l0h0gx(g_along_x))
         g_along_y = self.activate(self.l0h0gy(g_along_y))
 
-        b_along_x = data_input[:, self.in_scale * 2:self.in_scale * 3, :].view(self.batch_size,self.in_scale * self.in_scale)
-        b_along_y = data_input[:, self.in_scale * 2:self.in_scale * 3, :].transpose(1, 2).contiguous().view(
+        b_along_x = disc_data[:, self.in_scale * 2:self.in_scale * 3, :].view(self.batch_size,self.in_scale * self.in_scale)
+        b_along_y = disc_data[:, self.in_scale * 2:self.in_scale * 3, :].transpose(1, 2).contiguous().view(
             self.batch_size, self.in_scale * self.in_scale)
         b_along_x = self.activate(self.l0h0bx(b_along_x))
         b_along_y = self.activate(self.l0h0by(b_along_y))
 
-        a_along_x = data_input[:, self.in_scale * 3:self.in_scale * 4, :].view(self.batch_size,self.in_scale * self.in_scale)
-        a_along_y = data_input[:, self.in_scale * 3:self.in_scale * 4, :].transpose(1, 2).contiguous().view(
+        a_along_x = disc_data[:, self.in_scale * 3:self.in_scale * 4, :].view(self.batch_size,self.in_scale * self.in_scale)
+        a_along_y = disc_data[:, self.in_scale * 3:self.in_scale * 4, :].transpose(1, 2).contiguous().view(
             self.batch_size, self.in_scale * self.in_scale)
         a_along_x = self.activate(self.l0h0ax(a_along_x))
         a_along_y = self.activate(self.l0h0ay(a_along_y))
 
-        s_along_x = structure_input.view(self.batch_size, self.in_scale * self.in_scale)
-        s_along_y = structure_input.transpose(1, 2).contiguous().view(self.batch_size, self.in_scale * self.in_scale)
+        s_along_x = disc_data[:, self.in_scale * 4:self.in_scale * 5, :].view(self.batch_size, self.in_scale * self.in_scale)
+        s_along_y = disc_data[:, self.in_scale * 4:self.in_scale * 5, :].transpose(1, 2).contiguous().view(self.batch_size, self.in_scale * self.in_scale)
         s_along_x = self.activate(self.l0h0sx(s_along_x))
         s_along_y = self.activate(self.l0h0sy(s_along_y))
         # print(r_along_x.shape,r_along_y.shape)
@@ -254,7 +266,7 @@ class Metamorph(nn.Module):
 
         space_time = self.WalshHadamardSpaceTimeFeature(meta_central_points, meta_step, noise_var)
 
-        stff_in = torch.flatten(torch.cat([data_input, structure_input], dim=1), start_dim=1)
+        stff_in = torch.flatten(disc_data, start_dim=1)
         x0 = self.SpaceTimeFFTFeature(stff_in, self.weights_data_0, self.weights_data_fft_0, space_time)
         x0 = self.SpaceTimeFFTFeature(x0, self.weights_data_1, self.weights_data_fft_1, space_time)
         x0 = self.SpaceTimeFFTFeature(x0, self.weights_data_2, self.weights_data_fft_2, space_time)
@@ -296,24 +308,21 @@ class Metamorph(nn.Module):
         a = self.activate(self.l8_h0_a(ares))
         s = self.activate(self.l8_h0_s(sres))
 
-        r =  self.activate(self.l9_h0_r(r))
-        g =  self.activate(self.l9_h0_g(g))
-        b =  self.activate(self.l9_h0_b(b))
-        a =  self.activate(self.l9_h0_a(a))
-        s =  self.activate(self.l9_h0_s(s))
+        r = self.activate(self.l9_h0_r(r))+rres
+        g = self.activate(self.l9_h0_g(g))+gres
+        b = self.activate(self.l9_h0_b(b))+bres
+        a = self.activate(self.l9_h0_a(a))+ares
+        s = self.activate(self.l9_h0_s(s))+sres
 
-        r =  self.activate(self.l10_h0_r(r))+rres
-        g =  self.activate(self.l10_h0_g(g))+gres
-        b =  self.activate(self.l10_h0_b(b))+bres
-        a =  self.activate(self.l10_h0_a(a))+ares
-        s =  self.activate(self.l10_h0_s(s))+sres
+        r = self.activate(self.l10_h0_r(r))
+        g = self.activate(self.l10_h0_g(g))
+        b = self.activate(self.l10_h0_b(b))
+        a = self.activate(self.l10_h0_a(a))
+        s = self.activate(self.l10_h0_s(s))
 
-        r = self.l11_h0_r(r).reshape(self.batch_size, self.in_scale, self.in_scale)
-        g = self.l11_h0_g(g).reshape(self.batch_size, self.in_scale, self.in_scale)
-        b = self.l11_h0_b(b).reshape(self.batch_size, self.in_scale, self.in_scale)
-        a = self.l11_h0_a(a).reshape(self.batch_size, self.in_scale, self.in_scale)
-        s = self.l11_h0_s(s).reshape(self.batch_size, self.in_scale, self.in_scale)
-        return r,g,b,a,s
+        out = torch.cat([r,g,b,a,s], dim=1)
+        out = torch.sigmoid(self.l12_disc_output(out))
+        return out
 
 
     def shapeShift(self,x, h):
