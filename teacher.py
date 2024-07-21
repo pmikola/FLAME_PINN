@@ -131,6 +131,10 @@ class teacher(object):
 
         alpha_idx = np.array([i for i, x in enumerate(self.field_names) if x == "alpha"])[frame_samples]
         fuel_slices = self.data_tensor[fdens_idx]
+        min_val = fuel_slices.min()
+        max_val = fuel_slices.max()
+        fuel_slices = (fuel_slices - min_val) / ((max_val - min_val) + 1e-10)
+
         r_slices = self.data_tensor[r_idx]
         g_slices = self.data_tensor[g_idx]
         b_slices = self.data_tensor[b_idx]
@@ -170,13 +174,14 @@ class teacher(object):
             # noise_variance_out = torch.tensor(0.).to(self.device)
             # noise_variance_in_binary = torch.zeros(32).to(self.device)
             # noise_variance_out_binary = torch.zeros(32).to(self.device)
+            noise_mod = 1.
             if noise_flag < 3:
                 noise_variance_in = torch.tensor(0.).to(self.device)
                 noise_variance_out = torch.tensor(0.).to(self.device)
                 noise_variance_in_binary = torch.zeros(32).to(self.device)
                 noise_variance_out_binary = torch.zeros(32).to(self.device)
             elif 3 < noise_flag < 8:
-                noise_variance_in = torch.randn(size=(1,))
+                noise_variance_in = torch.randn(size=(1,))*noise_mod
                 noise_variance_in_binary = ''.join(f'{c:08b}' for c in np.float32(noise_variance_in).tobytes())
                 noise_variance_in = noise_variance_in.to(self.device)
                 noise_variance_in_binary = [int(noise_variance_in_binary[i], 2) for i in range(0, len(noise_variance_in_binary), 1)]
@@ -184,7 +189,7 @@ class teacher(object):
                 noise_variance_out = torch.tensor(0.).to(self.device)
                 noise_variance_out_binary = torch.zeros(32).to(self.device)
             elif 8 < noise_flag<10:
-                noise_variance_out = torch.randn(size=(1,))
+                noise_variance_out = torch.randn(size=(1,))*noise_mod
                 noise_variance_out_binary = ''.join(f'{c:08b}' for c in np.float32(noise_variance_out).tobytes())
                 noise_variance_out = noise_variance_out.to(self.device)
                 noise_variance_out_binary = [int(noise_variance_out_binary[i], 2) for i in range(0, len(noise_variance_out_binary), 1)]
@@ -192,12 +197,12 @@ class teacher(object):
                 noise_variance_in = torch.tensor(0.).to(self.device)
                 noise_variance_in_binary = torch.zeros(32).to(self.device)
             else:
-                noise_variance_in = torch.randn(size=(1,))
+                noise_variance_in = torch.randn(size=(1,))*noise_mod
                 noise_variance_in_binary = ''.join(f'{c:08b}' for c in np.float32(noise_variance_in).tobytes())
                 noise_variance_in = noise_variance_in.to(self.device)
                 noise_variance_in_binary = [int(noise_variance_in_binary[i], 2) for i in range(0, len(noise_variance_in_binary), 1)]
                 noise_variance_in_binary = torch.tensor(np.array(noise_variance_in_binary)).to(self.device)
-                noise_variance_out = torch.randn(size=(1,))
+                noise_variance_out = torch.randn(size=(1,))*noise_mod
                 noise_variance_out_binary = ''.join(f'{c:08b}' for c in np.float32(noise_variance_out).tobytes())
                 noise_variance_out = noise_variance_out.to(self.device)
                 noise_variance_out_binary = [int(noise_variance_out_binary[i], 2) for i in range(0, len(noise_variance_out_binary), 1)]
@@ -486,21 +491,21 @@ class teacher(object):
                         self.model.train()
                     # if (epoch + 1) % 1 == 0:
                     # NOTE: forces models parameters to be further with respect to each other
-                    with torch.no_grad():#
-                    #simalirityFunction = torch.nn.CosineSimilarity(dim=0, eps=1e-6)
-                        param_similarity = 0.
-                        for param1, param2,param3,param4 in zip(self.model.parameters(), self.expert_0.parameters(),self.expert_1.parameters(),self.expert_2.parameters()):
-                            param_similarity += criterion_model(param1.real,param2.real)
-                            param_similarity += criterion_model(param1.real,param3.real)
-                            param_similarity += criterion_model(param1.real,param4.real)
-                            param_similarity += criterion_model(param2.real, param3.real)
-                            param_similarity += criterion_model(param2.real, param4.real)
-                            param_similarity += criterion_model(param3.real, param4.real)
-                    param_similarity = param_similarity/6
-                    loss -=param_similarity
-                    e0loss -=param_similarity
-                    e1loss -=param_similarity
-                    e2loss -= param_similarity
+                    # with torch.no_grad():#
+                    # #simalirityFunction = torch.nn.CosineSimilarity(dim=0, eps=1e-6)
+                    #     param_similarity = 0.
+                    #     for param1, param2,param3,param4 in zip(self.model.parameters(), self.expert_0.parameters(),self.expert_1.parameters(),self.expert_2.parameters()):
+                    #         param_similarity += criterion_model(param1.real,param2.real)
+                    #         param_similarity += criterion_model(param1.real,param3.real)
+                    #         param_similarity += criterion_model(param1.real,param4.real)
+                    #         param_similarity += criterion_model(param2.real, param3.real)
+                    #         param_similarity += criterion_model(param2.real, param4.real)
+                    #         param_similarity += criterion_model(param3.real, param4.real)
+                    # param_similarity = param_similarity/50
+                    # loss -=param_similarity
+                    # e0loss -=param_similarity
+                    # e1loss -=param_similarity
+                    # e2loss -= param_similarity
 
 
                     optimizer.zero_grad(set_to_none=True)
@@ -519,9 +524,9 @@ class teacher(object):
 
 
                     if len(self.train_loss) > 10:
-                        loss_recent_history = np.array(self.train_loss)[-5:-1]
+                        loss_recent_history = np.array(self.train_loss)[-10:-1]
                         mean_hist_losses = np.mean(loss_recent_history)
-                        if loss_recent_history[-1] > loss_recent_history[-2] or reiterate_counter < 50 or loss_recent_history[-1] < loss_recent_history[-2]*0.9 or loss_recent_history[-1] > 10.:
+                        if loss_recent_history[-1] > loss_recent_history[-2] or reiterate_counter < 50 or loss_recent_history[-1] < loss_recent_history[-2]*0.9 or loss_recent_history[-1] > 0.3:
                             reiterate_data = 1
                         else:
                             reiterate_counter = 0
@@ -703,6 +708,10 @@ class teacher(object):
         b_idx = rgb_idx[::3]+2#[frame_samples]
         alpha_idx = np.array([i for i, x in enumerate(self.field_names) if x == "alpha"])#[frame_samples]
         fuel_slices = self.data_tensor[fdens_idx]
+        min_val = fuel_slices.min()
+        max_val = fuel_slices.max()
+        fuel_slices = (fuel_slices - min_val) / ((max_val - min_val) + 1e-10)
+
         r_slices = self.data_tensor[r_idx]
         g_slices = self.data_tensor[g_idx]
         b_slices = self.data_tensor[b_idx]
