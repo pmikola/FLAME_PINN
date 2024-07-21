@@ -479,6 +479,10 @@ class teacher(object):
                     t_pred = time.perf_counter()
 
                     disc_loss = self.discriminator_loss(m_idx, model_output, self.data_output, self.structure_output,criterion_disc)
+                    disc_loss = self.discriminator_loss(e0_idx, expert_0_output, self.data_output, self.structure_output,criterion_disc)+disc_loss
+                    disc_loss = self.discriminator_loss(e1_idx, expert_1_output, self.data_output, self.structure_output,criterion_disc)+disc_loss
+                    disc_loss = self.discriminator_loss(e2_idx, expert_2_output, self.data_output, self.structure_output,criterion_disc)+disc_loss
+
                     disc_optimizer.zero_grad(set_to_none=True)
                     disc_loss.backward()
                     disc_optimizer.step()
@@ -631,7 +635,7 @@ class teacher(object):
                         print(f'P: {self.period}/{self.no_of_periods} | E: {((t_epoch_total-t_epoch_current)/(print_every_nth_frame*60)):.2f} [min], '
                               f'vL: {val_loss.item():.2f}, '
                               f'mL: {loss.item():.2f}, '
-                              f'dL: {disc_loss.item():.2f}, '
+                              f'dL: {disc_loss.item():.3f}, '
                               f'e0L: {e0loss.item():.2f}, '
                               f'e1L: {e1loss.item():.2f}, '
                               f'e2L: {e2loss.item():.2f}, '

@@ -114,11 +114,11 @@ class Metamorph_discriminator(nn.Module):
         self.l3h0 = nn.Linear(in_features=int(self.in_scale ** 2) * 5, out_features=int(self.in_scale ** 2) * 5)
 
         # Definition of Heads for red, green, blue, alpha and structure output channels
-        self.l4_h0_r = nn.Linear(in_features=int(self.in_scale ** 2) * 5, out_features=int(self.flat_size / 2))
-        self.l4_h0_g = nn.Linear(in_features=int(self.in_scale ** 2) * 5, out_features=int(self.flat_size / 2))
-        self.l4_h0_b = nn.Linear(in_features=int(self.in_scale ** 2) * 5, out_features=int(self.flat_size / 2))
-        self.l4_h0_a = nn.Linear(in_features=int(self.in_scale ** 2) * 5, out_features=int(self.flat_size / 2))
-        self.l4_h0_s = nn.Linear(in_features=int(self.in_scale ** 2) * 5, out_features=int(self.flat_size / 2))
+        self.l4_h0_r = nn.Linear(in_features=int(self.in_scale ** 2) * 5, out_features=int(self.in_scale ** 2))
+        self.l4_h0_g = nn.Linear(in_features=int(self.in_scale ** 2) * 5, out_features=int(self.in_scale ** 2))
+        self.l4_h0_b = nn.Linear(in_features=int(self.in_scale ** 2) * 5, out_features=int(self.in_scale ** 2))
+        self.l4_h0_a = nn.Linear(in_features=int(self.in_scale ** 2) * 5, out_features=int(self.in_scale ** 2))
+        self.l4_h0_s = nn.Linear(in_features=int(self.in_scale ** 2) * 5, out_features=int(self.in_scale ** 2))
 
         self.l5_h0_r = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
         self.l5_h0_g = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
@@ -274,51 +274,51 @@ class Metamorph_discriminator(nn.Module):
         x1 = self.SpaceTimeFFTFeature(x1, self.weights_data_4, self.weights_data_fft_4, space_time)
         x1 = self.SpaceTimeFFTFeature(x1, self.weights_data_5, self.weights_data_fft_5, space_time)
         x = x0 + x1
-        x_mod = self.shapeShift(self.l1h0(x), x_alpha_l1)
+        x_mod = self.shapeShift(self.l1h0(rgbas), x_alpha_l1)
         x_mod = self.shapeShift(self.l2h0(x_mod), x_alpha_l2)
 
-        x = self.activate(self.l3h0(x_mod))+rgbas+x
-        rres = self.activate(self.l4_h0_r(x))
-        gres = self.activate(self.l4_h0_g(x))
-        bres = self.activate(self.l4_h0_b(x))
-        ares = self.activate(self.l4_h0_a(x))
-        sres = self.activate(self.l4_h0_s(x))
+        x = self.activate(self.l3h0(x_mod))+x+rgbas
+        r = self.activate(self.l4_h0_r(x))
+        g = self.activate(self.l4_h0_g(x))
+        b = self.activate(self.l4_h0_b(x))
+        a = self.activate(self.l4_h0_a(x))
+        s = self.activate(self.l4_h0_s(x))
 
-        r = self.activate(self.l5_h0_r(rres))
-        g = self.activate(self.l5_h0_g(gres))
-        b = self.activate(self.l5_h0_b(bres))
-        a = self.activate(self.l5_h0_a(ares))
-        s = self.activate(self.l5_h0_s(sres))
-
-        r = self.activate(self.l6_h0_r(r))
-        g = self.activate(self.l6_h0_g(g))
-        b = self.activate(self.l6_h0_b(b))
-        a = self.activate(self.l6_h0_a(a))
-        s = self.activate(self.l6_h0_s(s))
-
-        rres = self.activate(self.l7_h0_r(r))+rres
-        gres = self.activate(self.l7_h0_g(g))+gres
-        bres = self.activate(self.l7_h0_b(b))+bres
-        ares = self.activate(self.l7_h0_a(a))+ares
-        sres = self.activate(self.l7_h0_s(s))+sres
-
-        r = self.activate(self.l8_h0_r(rres))
-        g = self.activate(self.l8_h0_g(gres))
-        b = self.activate(self.l8_h0_b(bres))
-        a = self.activate(self.l8_h0_a(ares))
-        s = self.activate(self.l8_h0_s(sres))
-
-        r = self.activate(self.l9_h0_r(r))+rres
-        g = self.activate(self.l9_h0_g(g))+gres
-        b = self.activate(self.l9_h0_b(b))+bres
-        a = self.activate(self.l9_h0_a(a))+ares
-        s = self.activate(self.l9_h0_s(s))+sres
-
-        r = self.activate(self.l10_h0_r(r))
-        g = self.activate(self.l10_h0_g(g))
-        b = self.activate(self.l10_h0_b(b))
-        a = self.activate(self.l10_h0_a(a))
-        s = self.activate(self.l10_h0_s(s))
+        # r = self.activate(self.l5_h0_r(rres))
+        # g = self.activate(self.l5_h0_g(gres))
+        # b = self.activate(self.l5_h0_b(bres))
+        # a = self.activate(self.l5_h0_a(ares))
+        # s = self.activate(self.l5_h0_s(sres))
+        #
+        # r = self.activate(self.l6_h0_r(r))
+        # g = self.activate(self.l6_h0_g(g))
+        # b = self.activate(self.l6_h0_b(b))
+        # a = self.activate(self.l6_h0_a(a))
+        # s = self.activate(self.l6_h0_s(s))
+        #
+        # rres = self.activate(self.l7_h0_r(r))+rres
+        # gres = self.activate(self.l7_h0_g(g))+gres
+        # bres = self.activate(self.l7_h0_b(b))+bres
+        # ares = self.activate(self.l7_h0_a(a))+ares
+        # sres = self.activate(self.l7_h0_s(s))+sres
+        #
+        # r = self.activate(self.l8_h0_r(rres))
+        # g = self.activate(self.l8_h0_g(gres))
+        # b = self.activate(self.l8_h0_b(bres))
+        # a = self.activate(self.l8_h0_a(ares))
+        # s = self.activate(self.l8_h0_s(sres))
+        #
+        # r = self.activate(self.l9_h0_r(r))+rres
+        # g = self.activate(self.l9_h0_g(g))+gres
+        # b = self.activate(self.l9_h0_b(b))+bres
+        # a = self.activate(self.l9_h0_a(a))+ares
+        # s = self.activate(self.l9_h0_s(s))+sres
+        #
+        # r = self.activate(self.l10_h0_r(r))
+        # g = self.activate(self.l10_h0_g(g))
+        # b = self.activate(self.l10_h0_b(b))
+        # a = self.activate(self.l10_h0_a(a))
+        # s = self.activate(self.l10_h0_s(s))
 
         out = torch.cat([r,g,b,a,s], dim=1)
         out = torch.sigmoid(self.l12_disc_output(out))

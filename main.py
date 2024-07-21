@@ -37,7 +37,7 @@ criterion_model = nn.MSELoss(reduction='mean')
 criterion_e0 = nn.MSELoss(reduction='mean')
 criterion_e1 = nn.MSELoss(reduction='mean')
 criterion_e2 = nn.MSELoss(reduction='mean')
-criterion_disc = nn.BCELoss(reduction='sum')
+criterion_disc = nn.BCELoss(reduction='mean')
 criterion = criterion_model,criterion_e0,criterion_e1,criterion_e2,criterion_disc
 optimizer = torch.optim.Adam([
     {'params': t.model.parameters()},
@@ -59,7 +59,7 @@ for period in range(1,no_periods+1):
     t.fsim.fuel_dens_modifier = 1/t.fsim.dt
     t.fsim.simulate(simulate=0,save_rgb=1,save_alpha=1,save_fuel=1,delete_data=0)
     t.learning_phase(no_frame_samples, batch_size, input_window_size, first_frame,
-                     last_frame,frame_skip*2,criterion,optimizer,disc_optimizer,device,learning=1,num_epochs=5000)
+                     last_frame,frame_skip*2,criterion,optimizer,disc_optimizer,device,learning=1,num_epochs=100000)
     # t.fsim.simulate(simulate=0,delete_data=1)
 
 t.visualize_lerning()
