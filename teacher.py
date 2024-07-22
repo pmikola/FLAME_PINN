@@ -394,275 +394,6 @@ class teacher(object):
             self.meta_output_h4 = torch.stack(meta_output_h4,dim=0).to(self.device)
             self.meta_output_h5 = torch.stack(meta_output_h5,dim=0).to(self.device)
             self.noise_var_out = torch.stack(noise_var_out,dim=0).to(self.device)
-
-    def learning_phase(self,no_frame_samples, batch_size, input_window_size, first_frame, last_frame,
-                                      frame_skip,criterion,optimizer,disc_optimizer,device,learning=1,num_epochs=1500):
-            (self.no_frame_samples,self.batch_size,self.input_window_size,self.first_frame,
-             self.last_frame,self.frame_skip) = (no_frame_samples, batch_size,
-                                                 input_window_size, first_frame, last_frame,frame_skip)
-
-            criterion_model,criterion_e0,criterion_e1,criterion_e2,criterion_disc = criterion
-            self.num_of_epochs = num_epochs
-            if learning == 1:
-                best_loss = float('inf')
-                best_model_state = None
-                num_epochs = num_epochs
-                t = 0.
-                t_epoch = 0.
-                grad_counter = 0
-                reiterate_data = 0
-                reiterate_counter = 0
-                norm = 'forward'
-                print_every_nth_frame=10
-                best_models = []
-                best_losses = []
-
-                self.data_preparation(1)
-                val_idx = torch.arange(self.data_input_val.shape[0])
-                self.validation_dataset = (
-                self.data_input_val, self.structure_input_val, self.meta_input_h1_val,self.meta_input_h2_val,
-                self.meta_input_h3_val, self.meta_input_h4_val, self.meta_input_h5_val,self.noise_var_in_val,
-                self.meta_output_h1_val,self.meta_output_h2_val, self.meta_output_h3_val, self.meta_output_h4_val,
-                self.meta_output_h5_val,self.noise_var_out_val)
-
-                for epoch in range(num_epochs):
-                    self.epoch = epoch
-                    t_epoch_start = time.perf_counter()
-                    self.seed_setter(int(epoch+1))
-                    if reiterate_data == 0:
-                        self.data_preparation()
-                    else:
-                        reiterate_counter +=1
-
-                    m_idx = torch.arange(int(self.data_input.shape[0]/2))
-                    e0_idx = torch.randint(int(self.data_input.shape[0]),(int(self.data_input.shape[0]/2),))
-                    e1_idx = torch.randint(int(self.data_input.shape[0]),(int(self.data_input.shape[0]/2),))
-                    e2_idx = torch.arange(start=int(self.data_input.shape[0] / 2),end=int(self.data_input.shape[0]))
-
-                    dataset = (self.data_input[m_idx],self.structure_input[m_idx],self.meta_input_h1[m_idx],self.meta_input_h2[m_idx],
-                               self.meta_input_h3[m_idx],self.meta_input_h4[m_idx],self.meta_input_h5[m_idx],self.noise_var_in[m_idx],self.meta_output_h1[m_idx],
-                               self.meta_output_h2[m_idx],self.meta_output_h3[m_idx],self.meta_output_h4[m_idx],self.meta_output_h5[m_idx],self.noise_var_out[m_idx])
-
-
-
-                    dataset_e0 = (self.data_input[e0_idx], self.structure_input[e0_idx], self.meta_input_h1[e0_idx], self.meta_input_h2[e0_idx],
-                               self.meta_input_h3[e0_idx], self.meta_input_h4[e0_idx], self.meta_input_h5[e0_idx], self.noise_var_in[e0_idx],
-                               self.meta_output_h1[e0_idx],
-                               self.meta_output_h2[e0_idx], self.meta_output_h3[e0_idx], self.meta_output_h4[e0_idx], self.meta_output_h5[e0_idx],
-                               self.noise_var_out[e0_idx])
-
-                    dataset_e1 = (self.data_input[e1_idx], self.structure_input[e1_idx], self.meta_input_h1[e1_idx], self.meta_input_h2[e1_idx],
-                                  self.meta_input_h3[e1_idx], self.meta_input_h4[e1_idx], self.meta_input_h5[e1_idx], self.noise_var_in[e1_idx],
-                                  self.meta_output_h1[e1_idx],
-                                  self.meta_output_h2[e1_idx], self.meta_output_h3[e1_idx], self.meta_output_h4[e1_idx], self.meta_output_h5[e1_idx],
-                                  self.noise_var_out[e1_idx])
-
-                    dataset_e2 = (self.data_input[e2_idx], self.structure_input[e2_idx], self.meta_input_h1[e2_idx],
-                                  self.meta_input_h2[e2_idx],
-                                  self.meta_input_h3[e2_idx], self.meta_input_h4[e2_idx], self.meta_input_h5[e2_idx],
-                                  self.noise_var_in[e2_idx],
-                                  self.meta_output_h1[e2_idx],
-                                  self.meta_output_h2[e2_idx], self.meta_output_h3[e2_idx], self.meta_output_h4[e2_idx],
-                                  self.meta_output_h5[e2_idx],
-                                  self.noise_var_out[e2_idx])
-
-
-                    t_start = time.perf_counter()
-                    self.seed_setter(int((epoch+1)*2))
-                    model_output = self.model(dataset)
-                    self.seed_setter(int((epoch+1) * 3))
-                    expert_0_output = self.expert_0(dataset_e0)
-                    self.seed_setter(int((epoch+1) * 4))
-                    expert_1_output = self.expert_1(dataset_e1)
-                    self.seed_setter(int((epoch + 1) * 5))
-                    expert_2_output = self.expert_2(dataset_e2)
-                    t_pred = time.perf_counter()
-
-                    disc_loss = self.discriminator_loss(m_idx, model_output, self.data_output, self.structure_output,criterion_disc)
-                    disc_loss = self.discriminator_loss(e0_idx, expert_0_output, self.data_output, self.structure_output,criterion_disc)+disc_loss
-                    disc_loss = self.discriminator_loss(e1_idx, expert_1_output, self.data_output, self.structure_output,criterion_disc)+disc_loss
-                    disc_loss = self.discriminator_loss(e2_idx, expert_2_output, self.data_output, self.structure_output,criterion_disc)+disc_loss
-
-                    disc_optimizer.zero_grad(set_to_none=True)
-                    disc_loss.backward()
-                    disc_optimizer.step()
-
-                    loss = self.loss_calculation(m_idx,model_output,self.data_input,self.data_output,self.structure_input,self.structure_output,criterion_model, norm)
-                    e0loss = self.loss_calculation(e0_idx,expert_0_output,self.data_input,self.data_output,self.structure_input,self.structure_output, criterion_e0, norm)
-                    e1loss = self.loss_calculation(e1_idx,expert_1_output,self.data_input,self.data_output,self.structure_input,self.structure_output, criterion_e1, norm)
-                    e2loss = self.loss_calculation(e2_idx,expert_2_output,self.data_input,self.data_output,self.structure_input,self.structure_output, criterion_e1, norm)
-
-                    if self.validation_dataset is not None:
-                        self.model.eval()
-                        with torch.no_grad():
-                            val_model_output = self.model(self.validation_dataset)
-                            val_loss = self.loss_calculation(val_idx,val_model_output,self.data_input_val,self.data_output_val,self.structure_input_val,self.structure_output_val, criterion_model, norm)
-                        self.model.train()
-                    # if (epoch + 1) % 1 == 0:
-                    # NOTE: forces models parameters to be further with respect to each other
-                    # with torch.no_grad():#
-                    # #simalirityFunction = torch.nn.CosineSimilarity(dim=0, eps=1e-6)
-                    #     param_similarity = 0.
-                    #     for param1, param2,param3,param4 in zip(self.model.parameters(), self.expert_0.parameters(),self.expert_1.parameters(),self.expert_2.parameters()):
-                    #         param_similarity += criterion_model(param1.real,param2.real)
-                    #         param_similarity += criterion_model(param1.real,param3.real)
-                    #         param_similarity += criterion_model(param1.real,param4.real)
-                    #         param_similarity += criterion_model(param2.real, param3.real)
-                    #         param_similarity += criterion_model(param2.real, param4.real)
-                    #         param_similarity += criterion_model(param3.real, param4.real)
-                    # param_similarity = param_similarity/50
-                    # loss -=param_similarity
-                    # e0loss -=param_similarity
-                    # e1loss -=param_similarity
-                    # e2loss -= param_similarity
-                    optimizer.zero_grad(set_to_none=True)
-                    loss.backward()
-                    e0loss.backward()
-                    e1loss.backward()
-                    e2loss.backward()
-                    optimizer.step()
-
-                    self.train_loss.append(loss.item())
-                    self.val_loss.append(val_loss.item())
-                    # t_stop = time.perf_counter()
-                    t += (t_pred - t_start)/4
-
-
-                    if len(self.train_loss) > 10:
-                        loss_recent_history = np.array(self.train_loss)[-10:-1]
-                        mean_hist_losses = np.mean(loss_recent_history)
-                        if loss_recent_history[-1] > loss_recent_history[-2] or reiterate_counter < 50 or loss_recent_history[-1] < loss_recent_history[-2]*0.9 or loss_recent_history[-1] > 0.3:
-                            reiterate_data = 1
-                        else:
-                            reiterate_counter = 0
-                            reiterate_data = 0
-                        gloss = abs(np.sum(np.gradient(loss_recent_history)))
-                        if gloss > 5e-1:
-                            grad_counter =0
-                        else:
-                            grad_counter += 1
-                        # NOTE: lowering lr for  better performance and reset lr within conditions
-                        if grad_counter == 3 or reiterate_data == 0:
-                            for param_group in optimizer.param_groups:
-                                param_group['lr'] = param_group['lr']*0.95
-                                if param_group['lr'] < 1e-5 or reiterate_data == 0:
-                                    param_group['lr'] = 1e-3
-                                    reiterate_counter = 0
-                                    reiterate_data = 0
-                                    print('optimizer -> lr back to starting point')
-                               # noise_amplitude = noise_amplitude*0.5
-                                # if noise_amplitude < 1e-3:
-                                #     # print('noise amplitude')
-                                #     noise_amplitude = 0.
-                            grad_counter = 0
-                        # NOTE: Averaging models with best loss results within all models
-                        if (epoch + 1) % 1 == 0 or reiterate_data == 0:
-                            if loss.item() < mean_hist_losses  or e0loss.item() < mean_hist_losses or e1loss.item() < mean_hist_losses or e2loss.item() < mean_hist_losses or best_loss < mean_hist_losses or reiterate_data == 0:
-                                if loss < e0loss and loss<e1loss and loss<e2loss:
-                                    best_loss = loss.item()
-                                    best_losses.append(best_loss)
-                                    best_models.append(self.model)
-                                elif e0loss < loss and e0loss < e1loss and e0loss < e2loss:
-                                    best_loss = e0loss.item()
-                                    best_losses.append(best_loss)
-                                    best_models.append(self.expert_0)
-                                elif e1loss < loss and e1loss < e0loss and e1loss < e2loss:
-                                    best_loss = e1loss.item()
-                                    best_losses.append(best_loss)
-                                    best_models.append(self.expert_1)
-                                else:
-                                    best_loss = e2loss.item()
-                                    best_losses.append(best_loss)
-                                    best_models.append(self.expert_2)
-                                if len(best_models) > 300:
-                                    best_losses = torch.tensor(np.array(best_losses))
-                                    n = 10
-                                    _,best_n_losses_idx = torch.topk(best_losses,n,largest=False)
-                                    #best_loss_pos = best_losses.argmin()
-                                    best_losses_norm = 1/(best_losses / best_losses.min())
-                                    with torch.no_grad():
-                                        model_avg_damping = self.model
-                                        model_avg_enhance = self.model
-                                        param_sum_damping = {name: torch.zeros_like(param) for name, param in
-                                                     model_avg_damping.named_parameters()}
-                                        param_sum_enhance = {name: torch.zeros_like(param) for name, param in
-                                                             model_avg_enhance.named_parameters()}
-
-                                        for m in best_n_losses_idx:
-                                            for (name_best, param_best), (name, param) in zip(best_models[0].named_parameters(),best_models[m].named_parameters()):
-                                                param_best_sign = torch.sgn(param_best)
-                                                param_sign = torch.sgn(param)
-
-                                                opposite_sign_mask = param_best_sign != param_sign
-                                                same_sign_mask = param_best_sign == param_sign
-
-                                                param_sum_damping[name][opposite_sign_mask] += param[opposite_sign_mask] * best_losses_norm[m]
-                                                param_sum_enhance[name][same_sign_mask] += param[same_sign_mask] * best_losses_norm[m]
-
-                                        for name, param in model_avg_damping.named_parameters():
-                                            param_avg = param_sum_damping[name] / n
-                                            param.copy_(param_avg)
-
-                                        for name, param in model_avg_enhance.named_parameters():
-                                            param_avg = param_sum_enhance[name] / n
-                                            param.copy_(param_avg)
-
-                                        for (name, param),(name_enh, param_enh), (name_damp, param_damp) in zip(self.model.named_parameters(),model_avg_enhance.named_parameters(), model_avg_damping.named_parameters()):
-                                            param_selector = random.randint(0,4) # Note : 20% chance to enhance or damp parameter
-                                            if param_selector == 0:
-                                                param.copy_(param_enh)
-                                            elif param_selector == 1:
-                                                param.copy_(param_damp)
-                                            else:
-                                                pass
-
-                                        # self.expert_0.weight_reset()# = model_avg_enhance
-                                        #self.seed_setter(int((epoch + 1) * 5))
-                                        # self.expert_1.weight_reset()
-                                        print('model_avg -> weighted average -> main')
-
-                                        torch.save(self.model.state_dict(), 'model.pt')
-                                        best_models = []
-                                        best_losses = []
-                                        best_loss = mean_hist_losses
-
-                    t_epoch_stop = time.perf_counter()
-                    t_epoch +=(t_epoch_stop - t_epoch_start)
-
-                    if (epoch + 1) % print_every_nth_frame == 0:
-                        t_epoch_total = num_epochs * t_epoch
-                        t_epoch_current = epoch * t_epoch
-                        print(f'P: {self.period}/{self.no_of_periods} | E: {((t_epoch_total-t_epoch_current)/(print_every_nth_frame*60)):.2f} [min], '
-                              f'vL: {val_loss.item():.2f}, '
-                              f'mL: {loss.item():.2f}, '
-                              f'dL: {disc_loss.item():.3f}, '
-                              f'e0L: {e0loss.item():.2f}, '
-                              f'e1L: {e1loss.item():.2f}, '
-                              f'e2L: {e2loss.item():.2f}, '
-                              f'tpf: {((self.fsim.grid_size_x * self.fsim.grid_size_y) / (self.model.in_scale ** 2)) * (t * 1e3 / print_every_nth_frame / self.batch_size):.2f} [ms]')
-                        t = 0.
-                        t_epoch=0.
-
-                # if best_model_state is None:
-                #     pass
-                # else:
-                #     self.model.load_state_dict(torch.load('model.pt'))
-            else:
-                pass
-            return self.model
-
-    def dreaming_phase(self):
-        pass
-
-
-    def visualize_lerning(self):
-        plt.plot(self.train_loss)
-        plt.plot(self.val_loss)
-        plt.xlabel('Epoch')
-        plt.ylabel('Loss')
-        plt.grid(True)
-        plt.show()
-
     def examine(self,criterion,device,plot=0):
         self.model.load_state_dict(torch.load('model.pt'))
         folder_names = ['v', 'u', 'velocity_magnitude', 'fuel_density', 'oxidizer_density',
@@ -970,6 +701,284 @@ class teacher(object):
         fig.colorbar(rms_anim, ax=ax3)
         plt.show()
 
+    def learning_phase(self,no_frame_samples, batch_size, input_window_size, first_frame, last_frame,
+                                      frame_skip,criterion,optimizer,disc_optimizer,device,learning=1,num_epochs=1500):
+            (self.no_frame_samples,self.batch_size,self.input_window_size,self.first_frame,
+             self.last_frame,self.frame_skip) = (no_frame_samples, batch_size,
+                                                 input_window_size, first_frame, last_frame,frame_skip)
+
+            criterion_model,criterion_e0,criterion_e1,criterion_e2,criterion_disc = criterion
+            self.num_of_epochs = num_epochs
+            if learning == 1:
+                best_loss = float('inf')
+                best_model_state = None
+                num_epochs = num_epochs
+                t = 0.
+                t_epoch = 0.
+                grad_counter = 0
+                reiterate_data = 0
+                reiterate_counter = 0
+                norm = 'forward'
+                print_every_nth_frame=10
+                best_models = []
+                best_losses = []
+
+                self.data_preparation(1)
+                val_idx = torch.arange(self.data_input_val.shape[0])
+                self.validation_dataset = (
+                self.data_input_val, self.structure_input_val, self.meta_input_h1_val,self.meta_input_h2_val,
+                self.meta_input_h3_val, self.meta_input_h4_val, self.meta_input_h5_val,self.noise_var_in_val,
+                self.meta_output_h1_val,self.meta_output_h2_val, self.meta_output_h3_val, self.meta_output_h4_val,
+                self.meta_output_h5_val,self.noise_var_out_val)
+
+                for epoch in range(num_epochs):
+                    self.epoch = epoch
+                    t_epoch_start = time.perf_counter()
+                    self.seed_setter(int(epoch+1))
+                    if reiterate_data == 0:
+                        self.data_preparation()
+                    else:
+                        reiterate_counter +=1
+
+                    m_idx = torch.arange(int(self.data_input.shape[0]/2))
+                    e0_idx = torch.randint(int(self.data_input.shape[0]),(int(self.data_input.shape[0]/2),))
+                    e1_idx = torch.randint(int(self.data_input.shape[0]),(int(self.data_input.shape[0]/2),))
+                    e2_idx = torch.arange(start=int(self.data_input.shape[0] / 2),end=int(self.data_input.shape[0]))
+
+                    dataset = (self.data_input[m_idx],self.structure_input[m_idx],self.meta_input_h1[m_idx],self.meta_input_h2[m_idx],
+                               self.meta_input_h3[m_idx],self.meta_input_h4[m_idx],self.meta_input_h5[m_idx],self.noise_var_in[m_idx],self.meta_output_h1[m_idx],
+                               self.meta_output_h2[m_idx],self.meta_output_h3[m_idx],self.meta_output_h4[m_idx],self.meta_output_h5[m_idx],self.noise_var_out[m_idx])
+
+
+
+                    dataset_e0 = (self.data_input[e0_idx], self.structure_input[e0_idx], self.meta_input_h1[e0_idx], self.meta_input_h2[e0_idx],
+                               self.meta_input_h3[e0_idx], self.meta_input_h4[e0_idx], self.meta_input_h5[e0_idx], self.noise_var_in[e0_idx],
+                               self.meta_output_h1[e0_idx],
+                               self.meta_output_h2[e0_idx], self.meta_output_h3[e0_idx], self.meta_output_h4[e0_idx], self.meta_output_h5[e0_idx],
+                               self.noise_var_out[e0_idx])
+
+                    dataset_e1 = (self.data_input[e1_idx], self.structure_input[e1_idx], self.meta_input_h1[e1_idx], self.meta_input_h2[e1_idx],
+                                  self.meta_input_h3[e1_idx], self.meta_input_h4[e1_idx], self.meta_input_h5[e1_idx], self.noise_var_in[e1_idx],
+                                  self.meta_output_h1[e1_idx],
+                                  self.meta_output_h2[e1_idx], self.meta_output_h3[e1_idx], self.meta_output_h4[e1_idx], self.meta_output_h5[e1_idx],
+                                  self.noise_var_out[e1_idx])
+
+                    dataset_e2 = (self.data_input[e2_idx], self.structure_input[e2_idx], self.meta_input_h1[e2_idx],
+                                  self.meta_input_h2[e2_idx],
+                                  self.meta_input_h3[e2_idx], self.meta_input_h4[e2_idx], self.meta_input_h5[e2_idx],
+                                  self.noise_var_in[e2_idx],
+                                  self.meta_output_h1[e2_idx],
+                                  self.meta_output_h2[e2_idx], self.meta_output_h3[e2_idx], self.meta_output_h4[e2_idx],
+                                  self.meta_output_h5[e2_idx],
+                                  self.noise_var_out[e2_idx])
+
+
+                    t_start = time.perf_counter()
+                    self.seed_setter(int((epoch+1)*2))
+                    model_output = self.model(dataset)
+                    self.seed_setter(int((epoch+1) * 3))
+                    expert_0_output = self.expert_0(dataset_e0)
+                    self.seed_setter(int((epoch+1) * 4))
+                    expert_1_output = self.expert_1(dataset_e1)
+                    self.seed_setter(int((epoch + 1) * 5))
+                    expert_2_output = self.expert_2(dataset_e2)
+                    t_pred = time.perf_counter()
+
+                    # disc_loss = self.discriminator_loss(m_idx, model_output, self.data_output, self.structure_output,criterion_disc)
+                    disc_loss = self.discriminator_loss(e0_idx, expert_0_output, self.data_output, self.structure_output,criterion_disc)
+                    disc_loss = self.discriminator_loss(e1_idx, expert_1_output, self.data_output, self.structure_output,criterion_disc)+disc_loss
+                    disc_loss = self.discriminator_loss(e2_idx, expert_2_output, self.data_output, self.structure_output,criterion_disc)+disc_loss
+
+                    disc_optimizer.zero_grad(set_to_none=True)
+                    disc_loss.backward()
+                    disc_optimizer.step()
+
+                    loss = self.loss_calculation(m_idx,model_output,self.data_input,self.data_output,self.structure_input,self.structure_output,criterion_model, norm)
+                    e0loss = self.loss_calculation(e0_idx,expert_0_output,self.data_input,self.data_output,self.structure_input,self.structure_output, criterion_e0, norm)
+                    e1loss = self.loss_calculation(e1_idx,expert_1_output,self.data_input,self.data_output,self.structure_input,self.structure_output, criterion_e1, norm)
+                    e2loss = self.loss_calculation(e2_idx,expert_2_output,self.data_input,self.data_output,self.structure_input,self.structure_output, criterion_e1, norm)
+
+                    if self.validation_dataset is not None:
+                        self.model.eval()
+                        with torch.no_grad():
+                            val_model_output = self.model(self.validation_dataset)
+                            val_loss = self.loss_calculation(val_idx,val_model_output,self.data_input_val,self.data_output_val,self.structure_input_val,self.structure_output_val, criterion_model, norm)
+                        self.model.train()
+                    # if (epoch + 1) % 1 == 0:
+                    # NOTE: forces models parameters to be further with respect to each other
+                    # with torch.no_grad():#
+                    # #simalirityFunction = torch.nn.CosineSimilarity(dim=0, eps=1e-6)
+                    #     param_similarity = 0.
+                    #     for param1, param2,param3,param4 in zip(self.model.parameters(), self.expert_0.parameters(),self.expert_1.parameters(),self.expert_2.parameters()):
+                    #         param_similarity += criterion_model(param1.real,param2.real)
+                    #         param_similarity += criterion_model(param1.real,param3.real)
+                    #         param_similarity += criterion_model(param1.real,param4.real)
+                    #         param_similarity += criterion_model(param2.real, param3.real)
+                    #         param_similarity += criterion_model(param2.real, param4.real)
+                    #         param_similarity += criterion_model(param3.real, param4.real)
+                    # param_similarity = param_similarity/100
+                    # loss -=param_similarity
+                    # e0loss -=param_similarity
+                    # e1loss -=param_similarity
+                    # e2loss -= param_similarity
+                    optimizer.zero_grad(set_to_none=True)
+                    loss.backward()
+                    e0loss.backward()
+                    e1loss.backward()
+                    e2loss.backward()
+                    optimizer.step()
+
+                    self.train_loss.append(loss.item())
+                    self.val_loss.append(val_loss.item())
+                    # t_stop = time.perf_counter()
+                    t += (t_pred - t_start)/4
+
+
+                    if len(self.train_loss) > 10:
+                        loss_recent_history = np.array(self.train_loss)[-10:-1]
+                        val_loss_recent_history = np.array(self.val_loss)[-10:-1]
+                        mean_hist_losses = np.mean(loss_recent_history)
+                        if loss_recent_history[-1] > loss_recent_history[-2] or reiterate_counter < 50 or loss_recent_history[-1] < loss_recent_history[-2]*0.9 or loss_recent_history[-1] > 0.3:
+                            reiterate_data = 1
+                        else:
+                            reiterate_counter = 0
+                            reiterate_data = 0
+                        gloss = abs(np.sum(np.gradient(loss_recent_history)))
+                        g_val_loss= np.sum(np.gradient(val_loss_recent_history))
+                        if g_val_loss > 2e1:
+                            reiterate_data = 0
+                        if gloss > 5e-1:
+                            grad_counter =0
+                        else:
+                            grad_counter += 1
+                        # NOTE: lowering lr for  better performance and reset lr within conditions
+                        if grad_counter == 3 or reiterate_data == 0:
+                            for param_group in optimizer.param_groups:
+                                param_group['lr'] = param_group['lr']*0.95
+                                if param_group['lr'] < 1e-5 or reiterate_data == 0:
+                                    param_group['lr'] = 1e-3
+                                    reiterate_counter = 0
+                                    reiterate_data = 0
+                                    print('optimizer -> lr back to starting point')
+                               # noise_amplitude = noise_amplitude*0.5
+                                # if noise_amplitude < 1e-3:
+                                #     # print('noise amplitude')
+                                #     noise_amplitude = 0.
+                            grad_counter = 0
+                        # NOTE: Averaging models with best loss results within all models
+                        if (epoch + 1) % 1 == 0 or reiterate_data == 0:
+                            if loss.item() < mean_hist_losses  or e0loss.item() < mean_hist_losses or e1loss.item() < mean_hist_losses or e2loss.item() < mean_hist_losses or best_loss < mean_hist_losses or reiterate_data == 0:
+                                if loss < e0loss and loss<e1loss and loss<e2loss:
+                                    best_loss = loss.item()
+                                    best_losses.append(best_loss)
+                                    best_models.append(self.model)
+                                elif e0loss < loss and e0loss < e1loss and e0loss < e2loss:
+                                    best_loss = e0loss.item()
+                                    best_losses.append(best_loss)
+                                    best_models.append(self.expert_0)
+                                elif e1loss < loss and e1loss < e0loss and e1loss < e2loss:
+                                    best_loss = e1loss.item()
+                                    best_losses.append(best_loss)
+                                    best_models.append(self.expert_1)
+                                else:
+                                    best_loss = e2loss.item()
+                                    best_losses.append(best_loss)
+                                    best_models.append(self.expert_2)
+                                if len(best_models) > 300:
+                                    best_losses = torch.tensor(np.array(best_losses))
+                                    n = 10
+                                    _,best_n_losses_idx = torch.topk(best_losses,n,largest=False)
+                                    #best_loss_pos = best_losses.argmin()
+                                    best_losses_norm = 1/(best_losses / best_losses.min())
+                                    with torch.no_grad():
+                                        model_avg_damping = self.model
+                                        model_avg_enhance = self.model
+                                        param_sum_damping = {name: torch.zeros_like(param) for name, param in
+                                                     model_avg_damping.named_parameters()}
+                                        param_sum_enhance = {name: torch.zeros_like(param) for name, param in
+                                                             model_avg_enhance.named_parameters()}
+
+                                        for m in best_n_losses_idx:
+                                            for (name_best, param_best), (name, param) in zip(best_models[0].named_parameters(),best_models[m].named_parameters()):
+                                                param_best_sign = torch.sgn(param_best)
+                                                param_sign = torch.sgn(param)
+
+                                                opposite_sign_mask = param_best_sign != param_sign
+                                                same_sign_mask = param_best_sign == param_sign
+
+                                                param_sum_damping[name][opposite_sign_mask] += param[opposite_sign_mask] * best_losses_norm[m]
+                                                param_sum_enhance[name][same_sign_mask] += param[same_sign_mask] * best_losses_norm[m]
+
+                                        for name, param in model_avg_damping.named_parameters():
+                                            param_avg = param_sum_damping[name] / n
+                                            param.copy_(param_avg)
+
+                                        for name, param in model_avg_enhance.named_parameters():
+                                            param_avg = param_sum_enhance[name] / n
+                                            param.copy_(param_avg)
+
+                                        for (name, param),(name_enh, param_enh), (name_damp, param_damp) in zip(self.model.named_parameters(),model_avg_enhance.named_parameters(), model_avg_damping.named_parameters()):
+                                            param_selector = random.randint(0,4) # Note : 20% chance to enhance or damp parameter
+                                            if param_selector == 0:
+                                                param.copy_(param_enh)
+                                            elif param_selector == 1:
+                                                param.copy_(param_damp)
+                                            else:
+                                                pass
+
+                                        # self.expert_0.weight_reset()# = model_avg_enhance
+                                        #self.seed_setter(int((epoch + 1) * 5))
+                                        # self.expert_1.weight_reset()
+
+                                        self.discriminator.weight_reset()
+                                        self.discriminator.init_weights()
+
+                                        print('model_avg -> weighted average -> main')
+
+                                        torch.save(self.model.state_dict(), 'model.pt')
+                                        best_models = []
+                                        best_losses = []
+                                        best_loss = mean_hist_losses
+
+                    t_epoch_stop = time.perf_counter()
+                    t_epoch +=(t_epoch_stop - t_epoch_start)
+
+                    if (epoch + 1) % print_every_nth_frame == 0:
+                        t_epoch_total = num_epochs * t_epoch
+                        t_epoch_current = epoch * t_epoch
+                        print(f'P: {self.period}/{self.no_of_periods} | E: {((t_epoch_total-t_epoch_current)/(print_every_nth_frame*60)):.2f} [min], '
+                              f'vL: {val_loss.item():.2f}, '
+                              f'mL: {loss.item():.2f}, '
+                              f'dL: {disc_loss.item():.3f}, '
+                              f'e0L: {e0loss.item():.2f}, '
+                              f'e1L: {e1loss.item():.2f}, '
+                              f'e2L: {e2loss.item():.2f}, '
+                              f'tpf: {((self.fsim.grid_size_x * self.fsim.grid_size_y) / (self.model.in_scale ** 2)) * (t * 1e3 / print_every_nth_frame / self.batch_size):.2f} [ms]')
+                        t = 0.
+                        t_epoch=0.
+
+                # if best_model_state is None:
+                #     pass
+                # else:
+                #     self.model.load_state_dict(torch.load('model.pt'))
+            else:
+                pass
+            return self.model
+
+    def dreaming_phase(self):
+        pass
+
+
+    def visualize_lerning(self):
+        plt.plot(self.train_loss)
+        plt.plot(self.val_loss)
+        plt.xlabel('Epoch')
+        plt.ylabel('Loss')
+        plt.grid(True)
+        plt.show()
+
+
+
     def loss_calculation(self,idx,model_output,data_input,data_output,structure_input,structure_output,criterion,norm):
         pred_r,pred_g,pred_b,pred_a,pred_s = model_output
 
@@ -1078,8 +1087,8 @@ class teacher(object):
         value_loss = loss_r + loss_g + loss_b + loss_alpha + loss_s
 
         # Solution for learning and maintaining of the proper color and other element space
-        bandwidth = torch.tensor(0.3).to(self.device) # Note: Higher value less noise (gaussian smothing)
-        bins = 100
+        bandwidth = torch.tensor(0.1).to(self.device) # Note: Higher value less noise (gaussian smothing)
+        bins = 50
         r_out = torch.flatten(r_out,start_dim=1)
         pred_r = torch.flatten(pred_r, start_dim=1)
         bins_true = torch.linspace(r_out.min(), r_out.max(), bins).to(self.device)
@@ -1151,6 +1160,8 @@ class teacher(object):
         disc_pred = self.discriminator(combined_data,dataset,shuffle_idx)
         disc_loss = criterion(disc_pred, shuffled_labels)
         return disc_loss
+
+
     @staticmethod
     def seed_setter(seed):
         s = torch.randint(0,seed,(1,))

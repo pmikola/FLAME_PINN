@@ -256,16 +256,16 @@ class Metamorph(nn.Module):
 
         stff_in = torch.flatten(torch.cat([data_input, structure_input], dim=1), start_dim=1)
         x0 = self.SpaceTimeFFTFeature(stff_in, self.weights_data_0, self.weights_data_fft_0, space_time)
-        x0 = self.SpaceTimeFFTFeature(x0, self.weights_data_1, self.weights_data_fft_1, space_time)
-        x0 = self.SpaceTimeFFTFeature(x0, self.weights_data_2, self.weights_data_fft_2, space_time)
-        x1 = self.SpaceTimeFFTFeature(rgbas, self.weights_data_3, self.weights_data_fft_3, space_time)
-        x1 = self.SpaceTimeFFTFeature(x1, self.weights_data_4, self.weights_data_fft_4, space_time)
-        x1 = self.SpaceTimeFFTFeature(x1, self.weights_data_5, self.weights_data_fft_5, space_time)
-        x = x0 + x1
+        x1 = self.SpaceTimeFFTFeature(rgbas, self.weights_data_1, self.weights_data_fft_1, space_time)
+        x = self.SpaceTimeFFTFeature(x0+x1, self.weights_data_2, self.weights_data_fft_2, space_time)
+        x = self.SpaceTimeFFTFeature(x, self.weights_data_3, self.weights_data_fft_3, space_time)
+        x = self.SpaceTimeFFTFeature(x, self.weights_data_4, self.weights_data_fft_4, space_time)
+        x = self.SpaceTimeFFTFeature(x, self.weights_data_5, self.weights_data_fft_5, space_time)
+
         x_mod = self.shapeShift(self.l1h0(x), x_alpha_l1)
         x_mod = self.shapeShift(self.l2h0(x_mod), x_alpha_l2)
 
-        x = self.activate(self.l3h0(x_mod))+x
+        x = self.activate(self.l3h0(x_mod))+x+rgbas
         rres = self.activate(self.l4_h0_r(x))
         gres = self.activate(self.l4_h0_g(x))
         bres = self.activate(self.l4_h0_b(x))
@@ -381,5 +381,5 @@ class Metamorph(nn.Module):
         return space_time.real
 
     def activate(self,x):
-        return torch.tanh(x)#*2#*self.activation_weight
+        return f.gelu(x)#*2#*self.activation_weight
 

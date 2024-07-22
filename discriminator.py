@@ -22,7 +22,7 @@ class Metamorph_discriminator(nn.Module):
         self.activation_weight = nn.Parameter(torch.rand(1, dtype=torch.float))
 
         # Definition of non-linear shifting activation function with parameters
-        self.shifterCoefficients = 4  # No. of polynomial coefficients
+        self.shifterCoefficients = 2  # No. of polynomial coefficients
         self.exponents = torch.arange(1, self.shifterCoefficients+1, 1,
                                       device=self.device)  # Check : from 0 to n or from 1 to n +1?
 
@@ -228,98 +228,18 @@ class Metamorph_discriminator(nn.Module):
         x_alpha_l1 = self.activate(self.l1h01(alpha_l1))
         x_alpha_l2 = self.activate(self.l2h01(alpha_l2))
 
-        # Note: Factorisation for dense layers
         disc_data = disc_data[shuffle_idx]
-        r_along_x = disc_data[:, 0:self.in_scale, :].view(self.batch_size, self.in_scale * self.in_scale)
-        r_along_y = disc_data[:, 0:self.in_scale, :].transpose(1, 2).contiguous().view(self.batch_size,self.in_scale * self.in_scale)
-        r_along_x = self.activate(self.l0h0rx(r_along_x))
-        r_along_y = self.activate(self.l0h0ry(r_along_y))
-
-        g_along_x = disc_data[:, self.in_scale:self.in_scale * 2, :].view(self.batch_size,self.in_scale * self.in_scale)
-        g_along_y = disc_data[:, self.in_scale:self.in_scale * 2, :].transpose(1, 2).contiguous().view(self.batch_size,self.in_scale * self.in_scale)
-        g_along_x = self.activate(self.l0h0gx(g_along_x))
-        g_along_y = self.activate(self.l0h0gy(g_along_y))
-
-        b_along_x = disc_data[:, self.in_scale * 2:self.in_scale * 3, :].view(self.batch_size,self.in_scale * self.in_scale)
-        b_along_y = disc_data[:, self.in_scale * 2:self.in_scale * 3, :].transpose(1, 2).contiguous().view(
-            self.batch_size, self.in_scale * self.in_scale)
-        b_along_x = self.activate(self.l0h0bx(b_along_x))
-        b_along_y = self.activate(self.l0h0by(b_along_y))
-
-        a_along_x = disc_data[:, self.in_scale * 3:self.in_scale * 4, :].view(self.batch_size,self.in_scale * self.in_scale)
-        a_along_y = disc_data[:, self.in_scale * 3:self.in_scale * 4, :].transpose(1, 2).contiguous().view(
-            self.batch_size, self.in_scale * self.in_scale)
-        a_along_x = self.activate(self.l0h0ax(a_along_x))
-        a_along_y = self.activate(self.l0h0ay(a_along_y))
-
-        s_along_x = disc_data[:, self.in_scale * 4:self.in_scale * 5, :].view(self.batch_size, self.in_scale * self.in_scale)
-        s_along_y = disc_data[:, self.in_scale * 4:self.in_scale * 5, :].transpose(1, 2).contiguous().view(self.batch_size, self.in_scale * self.in_scale)
-        s_along_x = self.activate(self.l0h0sx(s_along_x))
-        s_along_y = self.activate(self.l0h0sy(s_along_y))
-        # print(r_along_x.shape,r_along_y.shape)
-        rr = torch.cat([r_along_x * r_along_y], dim=1)
-        gg = torch.cat([g_along_x * g_along_y], dim=1)
-        bb = torch.cat([b_along_x * b_along_y], dim=1)
-        aa = torch.cat([a_along_x * a_along_y], dim=1)
-        ss = torch.cat([s_along_x * s_along_y], dim=1)
-        rgbas = torch.cat([rr, gg, bb, aa, ss], dim=1)
-
         space_time = self.WalshHadamardSpaceTimeFeature(meta_central_points, meta_step, noise_var)
-
         stff_in = torch.flatten(disc_data, start_dim=1)
-        x0 = self.SpaceTimeFFTFeature(stff_in, self.weights_data_0, self.weights_data_fft_0, space_time)
-        x0 = self.SpaceTimeFFTFeature(x0, self.weights_data_1, self.weights_data_fft_1, space_time)
-        x0 = self.SpaceTimeFFTFeature(x0, self.weights_data_2, self.weights_data_fft_2, space_time)
-        x1 = self.SpaceTimeFFTFeature(rgbas, self.weights_data_3, self.weights_data_fft_3, space_time)
-        x1 = self.SpaceTimeFFTFeature(x1, self.weights_data_4, self.weights_data_fft_4, space_time)
-        x1 = self.SpaceTimeFFTFeature(x1, self.weights_data_5, self.weights_data_fft_5, space_time)
-        x = x0 + x1
-        x_mod = self.shapeShift(self.l1h0(rgbas), x_alpha_l1)
+        x = self.SpaceTimeFFTFeature(stff_in, self.weights_data_0, self.weights_data_fft_0, space_time)
+        x_mod = self.shapeShift(self.l1h0(x), x_alpha_l1)
         x_mod = self.shapeShift(self.l2h0(x_mod), x_alpha_l2)
-
-        x = self.activate(self.l3h0(x_mod))+x+rgbas
+        x = self.activate(self.l3h0(x_mod))
         r = self.activate(self.l4_h0_r(x))
         g = self.activate(self.l4_h0_g(x))
         b = self.activate(self.l4_h0_b(x))
         a = self.activate(self.l4_h0_a(x))
         s = self.activate(self.l4_h0_s(x))
-
-        # r = self.activate(self.l5_h0_r(rres))
-        # g = self.activate(self.l5_h0_g(gres))
-        # b = self.activate(self.l5_h0_b(bres))
-        # a = self.activate(self.l5_h0_a(ares))
-        # s = self.activate(self.l5_h0_s(sres))
-        #
-        # r = self.activate(self.l6_h0_r(r))
-        # g = self.activate(self.l6_h0_g(g))
-        # b = self.activate(self.l6_h0_b(b))
-        # a = self.activate(self.l6_h0_a(a))
-        # s = self.activate(self.l6_h0_s(s))
-        #
-        # rres = self.activate(self.l7_h0_r(r))+rres
-        # gres = self.activate(self.l7_h0_g(g))+gres
-        # bres = self.activate(self.l7_h0_b(b))+bres
-        # ares = self.activate(self.l7_h0_a(a))+ares
-        # sres = self.activate(self.l7_h0_s(s))+sres
-        #
-        # r = self.activate(self.l8_h0_r(rres))
-        # g = self.activate(self.l8_h0_g(gres))
-        # b = self.activate(self.l8_h0_b(bres))
-        # a = self.activate(self.l8_h0_a(ares))
-        # s = self.activate(self.l8_h0_s(sres))
-        #
-        # r = self.activate(self.l9_h0_r(r))+rres
-        # g = self.activate(self.l9_h0_g(g))+gres
-        # b = self.activate(self.l9_h0_b(b))+bres
-        # a = self.activate(self.l9_h0_a(a))+ares
-        # s = self.activate(self.l9_h0_s(s))+sres
-        #
-        # r = self.activate(self.l10_h0_r(r))
-        # g = self.activate(self.l10_h0_g(g))
-        # b = self.activate(self.l10_h0_b(b))
-        # a = self.activate(self.l10_h0_a(a))
-        # s = self.activate(self.l10_h0_s(s))
-
         out = torch.cat([r,g,b,a,s], dim=1)
         out = torch.sigmoid(self.l12_disc_output(out))
         return out
@@ -390,5 +310,5 @@ class Metamorph_discriminator(nn.Module):
         return space_time.real
 
     def activate(self,x):
-        return torch.tanh(x)#*2#*self.activation_weight
+        return torch.relu(x)#*2#*self.activation_weight
 
