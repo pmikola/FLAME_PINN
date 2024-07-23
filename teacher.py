@@ -238,11 +238,11 @@ class teacher(object):
             slice_y_out = slice(window_y_out[0], window_y_out[-1] + 1)
 
             # Note : Input data
-            fuel_subslice_in = fuel_slices[idx_input,slice_x_in, slice_y_in] + torch.nan_to_num((noise_variance_in)*torch.rand_like(fuel_slices[idx_input,slice_x_in, slice_y_in]).to(self.device),nan=0.0)
-            r_subslice_in = r_slices[idx_input,slice_x_in, slice_y_in] + torch.nan_to_num((noise_variance_in)*torch.rand_like(r_slices[idx_input,slice_x_in, slice_y_in]).to(self.device),nan=0.0)
-            g_subslice_in = g_slices[idx_input,slice_x_in, slice_y_in] + torch.nan_to_num((noise_variance_in)*torch.rand_like(g_slices[idx_input,slice_x_in, slice_y_in]).to(self.device),nan=0.0)
-            b_subslice_in = b_slices[idx_input,slice_x_in, slice_y_in] + torch.nan_to_num((noise_variance_in)*torch.rand_like(b_slices[idx_input,slice_x_in, slice_y_in]).to(self.device),nan=0.0)
-            alpha_subslice_in = alpha_slices[idx_input,slice_x_in, slice_y_in] + torch.nan_to_num((noise_variance_in)*torch.rand_like(alpha_slices[idx_input,slice_x_in, slice_y_in]).to(self.device),nan=0.0)
+            fuel_subslice_in = fuel_slices[idx_input,slice_x_in, slice_y_in] + torch.nan_to_num(noise_variance_in*torch.rand_like(fuel_slices[idx_input,slice_x_in, slice_y_in]).to(self.device),nan=0.0)
+            r_subslice_in = r_slices[idx_input,slice_x_in, slice_y_in] + torch.nan_to_num(noise_variance_in*torch.rand_like(r_slices[idx_input,slice_x_in, slice_y_in]).to(self.device),nan=0.0)
+            g_subslice_in = g_slices[idx_input,slice_x_in, slice_y_in] + torch.nan_to_num(noise_variance_in*torch.rand_like(g_slices[idx_input,slice_x_in, slice_y_in]).to(self.device),nan=0.0)
+            b_subslice_in = b_slices[idx_input,slice_x_in, slice_y_in] + torch.nan_to_num(noise_variance_in*torch.rand_like(b_slices[idx_input,slice_x_in, slice_y_in]).to(self.device),nan=0.0)
+            alpha_subslice_in = alpha_slices[idx_input,slice_x_in, slice_y_in] + torch.nan_to_num(noise_variance_in*torch.rand_like(alpha_slices[idx_input,slice_x_in, slice_y_in]).to(self.device),nan=0.0)
             data_input_subslice = torch.cat([r_subslice_in,g_subslice_in, b_subslice_in, alpha_subslice_in], dim=0)
 
             meta_step_in = meta_binary_slices[idx_input][0]
@@ -260,11 +260,11 @@ class teacher(object):
 
 
             # Note : Output data
-            fuel_subslice_out = fuel_slices[idx_output,slice_x_out, slice_y_out] + torch.nan_to_num((noise_variance_out)*torch.rand_like(fuel_slices[idx_output,slice_x_out, slice_y_out]).to(self.device),nan=0.0)
-            r_subslice_out = r_slices[idx_output,slice_x_out, slice_y_out] + torch.nan_to_num((noise_variance_out)*torch.rand_like(r_slices[idx_output,slice_x_out, slice_y_out]).to(self.device),nan=0.0)
-            g_subslice_out = g_slices[idx_output,slice_x_out, slice_y_out] + torch.nan_to_num((noise_variance_out)*torch.rand_like(g_slices[idx_output,slice_x_out, slice_y_out]).to(self.device),nan=0.0)
-            b_subslice_out = b_slices[idx_output,slice_x_out, slice_y_out] + torch.nan_to_num((noise_variance_out)*torch.rand_like(b_slices[idx_output,slice_x_out, slice_y_out]),nan=0.0)
-            alpha_subslice_out = alpha_slices[idx_output,slice_x_out, slice_y_out] + torch.nan_to_num((noise_variance_out)*torch.rand_like(alpha_slices[idx_output,slice_x_out, slice_y_out]).to(self.device),nan=0.0)
+            fuel_subslice_out = fuel_slices[idx_output,slice_x_out, slice_y_out] + torch.nan_to_num(noise_variance_out*torch.rand_like(fuel_slices[idx_output,slice_x_out, slice_y_out]).to(self.device),nan=0.0)
+            r_subslice_out = r_slices[idx_output,slice_x_out, slice_y_out] + torch.nan_to_num(noise_variance_out*torch.rand_like(r_slices[idx_output,slice_x_out, slice_y_out]).to(self.device),nan=0.0)
+            g_subslice_out = g_slices[idx_output,slice_x_out, slice_y_out] + torch.nan_to_num(noise_variance_out*torch.rand_like(g_slices[idx_output,slice_x_out, slice_y_out]).to(self.device),nan=0.0)
+            b_subslice_out = b_slices[idx_output,slice_x_out, slice_y_out] + torch.nan_to_num(noise_variance_out*torch.rand_like(b_slices[idx_output,slice_x_out, slice_y_out]),nan=0.0)
+            alpha_subslice_out = alpha_slices[idx_output,slice_x_out, slice_y_out] + torch.nan_to_num(noise_variance_out*torch.rand_like(alpha_slices[idx_output,slice_x_out, slice_y_out]).to(self.device),nan=0.0)
             data_output_subslice = torch.cat([r_subslice_out,g_subslice_out, b_subslice_out, alpha_subslice_out], dim=0)
 
             meta_step_out = meta_binary_slices[idx_output][0]
@@ -784,11 +784,11 @@ class teacher(object):
                     expert_2_output = self.expert_2(dataset_e2)
                     t_pred = time.perf_counter()
 
-                    # disc_loss = self.discriminator_loss(m_idx, model_output, self.data_output, self.structure_output,criterion_disc)
-                    disc_loss = self.discriminator_loss(e0_idx, expert_0_output, self.data_output, self.structure_output,criterion_disc)
-                    disc_loss = self.discriminator_loss(e1_idx, expert_1_output, self.data_output, self.structure_output,criterion_disc)+disc_loss
-                    disc_loss = self.discriminator_loss(e2_idx, expert_2_output, self.data_output, self.structure_output,criterion_disc)+disc_loss
-
+                    disc_loss = self.discriminator_loss(m_idx, model_output, self.data_output, self.structure_output,criterion_disc)
+                    # disc_loss = self.discriminator_loss(e0_idx, expert_0_output, self.data_output, self.structure_output,criterion_disc)
+                    # disc_loss = self.discriminator_loss(e1_idx, expert_1_output, self.data_output, self.structure_output,criterion_disc)+disc_loss
+                    # disc_loss = self.discriminator_loss(e2_idx, expert_2_output, self.data_output, self.structure_output,criterion_disc)+disc_loss
+                    #
                     disc_optimizer.zero_grad(set_to_none=True)
                     disc_loss.backward()
                     disc_optimizer.step()
@@ -797,13 +797,6 @@ class teacher(object):
                     e0loss = self.loss_calculation(e0_idx,expert_0_output,self.data_input,self.data_output,self.structure_input,self.structure_output, criterion_e0, norm)
                     e1loss = self.loss_calculation(e1_idx,expert_1_output,self.data_input,self.data_output,self.structure_input,self.structure_output, criterion_e1, norm)
                     e2loss = self.loss_calculation(e2_idx,expert_2_output,self.data_input,self.data_output,self.structure_input,self.structure_output, criterion_e1, norm)
-
-                    if self.validation_dataset is not None:
-                        self.model.eval()
-                        with torch.no_grad():
-                            val_model_output = self.model(self.validation_dataset)
-                            val_loss = self.loss_calculation(val_idx,val_model_output,self.data_input_val,self.data_output_val,self.structure_input_val,self.structure_output_val, criterion_model, norm)
-                        self.model.train()
                     # if (epoch + 1) % 1 == 0:
                     # NOTE: forces models parameters to be further with respect to each other
                     # with torch.no_grad():#
@@ -828,15 +821,23 @@ class teacher(object):
                     e2loss.backward()
                     optimizer.step()
 
+                    if self.validation_dataset is not None:
+                        self.model.eval()
+                        with torch.no_grad():
+                            val_model_output = self.model(self.validation_dataset)
+                            val_loss = self.loss_calculation(val_idx,val_model_output,self.data_input_val,self.data_output_val,self.structure_input_val,self.structure_output_val, criterion_model, norm)
+                        self.model.train()
+
+
                     self.train_loss.append(loss.item())
                     self.val_loss.append(val_loss.item())
                     # t_stop = time.perf_counter()
                     t += (t_pred - t_start)/4
 
 
-                    if len(self.train_loss) > 10:
+                    if len(self.train_loss) > 20:
                         loss_recent_history = np.array(self.train_loss)[-10:-1]
-                        val_loss_recent_history = np.array(self.val_loss)[-10:-1]
+                        val_loss_recent_history = np.array(self.val_loss)[-20:-1]
                         mean_hist_losses = np.mean(loss_recent_history)
                         if loss_recent_history[-1] > loss_recent_history[-2] or reiterate_counter < 50 or loss_recent_history[-1] < loss_recent_history[-2]*0.9 or loss_recent_history[-1] > 0.3:
                             reiterate_data = 1
@@ -845,7 +846,7 @@ class teacher(object):
                             reiterate_data = 0
                         gloss = abs(np.sum(np.gradient(loss_recent_history)))
                         g_val_loss= np.sum(np.gradient(val_loss_recent_history))
-                        if g_val_loss > 2e1:
+                        if g_val_loss > 5e1:
                             reiterate_data = 0
                         if gloss > 5e-1:
                             grad_counter =0
@@ -860,6 +861,10 @@ class teacher(object):
                                     reiterate_counter = 0
                                     reiterate_data = 0
                                     print('optimizer -> lr back to starting point')
+                            self.discriminator.weight_reset()
+                            self.discriminator.init_weights()
+                            disc_optimizer =  torch.optim.Adam(self.discriminator.parameters(),lr=5e-4, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-6, amsgrad=True)
+
                                # noise_amplitude = noise_amplitude*0.5
                                 # if noise_amplitude < 1e-3:
                                 #     # print('noise amplitude')
@@ -932,13 +937,17 @@ class teacher(object):
 
                                         self.discriminator.weight_reset()
                                         self.discriminator.init_weights()
+                                        disc_optimizer = torch.optim.Adam(self.discriminator.parameters(), lr=5e-4,
+                                                                          betas=(0.9, 0.999), eps=1e-08,
+                                                                          weight_decay=1e-6, amsgrad=True)
 
                                         print('model_avg -> weighted average -> main')
-
-                                        torch.save(self.model.state_dict(), 'model.pt')
                                         best_models = []
                                         best_losses = []
                                         best_loss = mean_hist_losses
+                                        if loss < min(self.train_loss[:-1]) and val_loss < min(self.val_loss[:-1]):
+                                            torch.save(self.model.state_dict(), 'model.pt')
+
 
                     t_epoch_stop = time.perf_counter()
                     t_epoch +=(t_epoch_stop - t_epoch_start)
@@ -1088,7 +1097,7 @@ class teacher(object):
 
         # Solution for learning and maintaining of the proper color and other element space
         bandwidth = torch.tensor(0.1).to(self.device) # Note: Higher value less noise (gaussian smothing)
-        bins = 50
+        bins = 255
         r_out = torch.flatten(r_out,start_dim=1)
         pred_r = torch.flatten(pred_r, start_dim=1)
         bins_true = torch.linspace(r_out.min(), r_out.max(), bins).to(self.device)

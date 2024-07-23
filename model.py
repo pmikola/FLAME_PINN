@@ -33,6 +33,10 @@ class Metamorph(nn.Module):
         self.weights_data_3 = nn.Parameter(torch.rand(5 * self.in_scale**2, dtype=torch.float))
         self.weights_data_4 = nn.Parameter(torch.rand(5 * self.in_scale**2, dtype=torch.float))
         self.weights_data_5 = nn.Parameter(torch.rand(5 * self.in_scale**2, dtype=torch.float))
+        self.weights_data_6 = nn.Parameter(torch.rand(5 * self.in_scale ** 2, dtype=torch.float))
+        self.weights_data_7 = nn.Parameter(torch.rand(5 * self.in_scale ** 2, dtype=torch.float))
+        self.weights_data_8 = nn.Parameter(torch.rand(5 * self.in_scale ** 2, dtype=torch.float))
+        self.weights_data_9 = nn.Parameter(torch.rand(5 * self.in_scale ** 2, dtype=torch.float))
 
         self.weights_data_fft_0 = nn.Parameter(torch.rand(5 * self.in_scale**2, dtype=torch.cfloat))
         self.weights_data_fft_1 = nn.Parameter(torch.rand(5 * self.in_scale**2, dtype=torch.cfloat))
@@ -40,6 +44,10 @@ class Metamorph(nn.Module):
         self.weights_data_fft_3 = nn.Parameter(torch.rand(5 * self.in_scale**2, dtype=torch.cfloat))
         self.weights_data_fft_4 = nn.Parameter(torch.rand(5 * self.in_scale**2, dtype=torch.cfloat))
         self.weights_data_fft_5 = nn.Parameter(torch.rand(5 * self.in_scale**2, dtype=torch.cfloat))
+        self.weights_data_fft_6 = nn.Parameter(torch.rand(5 * self.in_scale ** 2, dtype=torch.cfloat))
+        self.weights_data_fft_7 = nn.Parameter(torch.rand(5 * self.in_scale ** 2, dtype=torch.cfloat))
+        self.weights_data_fft_8 = nn.Parameter(torch.rand(5 * self.in_scale ** 2, dtype=torch.cfloat))
+        self.weights_data_fft_9 = nn.Parameter(torch.rand(5 * self.in_scale ** 2, dtype=torch.cfloat))
 
         # Definition of Walsh-Hadamard rescale layers
         self.Walsh_Hadamard_rescaler_l0wh= nn.Linear(in_features=256, out_features=(5 * self.in_scale**2))
@@ -245,27 +253,48 @@ class Metamorph(nn.Module):
         s_along_x = self.activate(self.l0h0sx(s_along_x))
         s_along_y = self.activate(self.l0h0sy(s_along_y))
         # print(r_along_x.shape,r_along_y.shape)
-        rr = torch.cat([r_along_x * r_along_y], dim=1)
-        gg = torch.cat([g_along_x * g_along_y], dim=1)
-        bb = torch.cat([b_along_x * b_along_y], dim=1)
-        aa = torch.cat([a_along_x * a_along_y], dim=1)
-        ss = torch.cat([s_along_x * s_along_y], dim=1)
-        rgbas = torch.cat([rr, gg, bb, aa, ss], dim=1)
-
+        rr =  r_along_x
+        gg =  g_along_x
+        bb =  b_along_x
+        aa =  a_along_x
+        ss =  s_along_x
+        rgbas_x = torch.cat([rr, gg, bb, aa, ss], dim=1)
+        rr = r_along_y
+        gg = g_along_y
+        bb = b_along_y
+        aa = a_along_y
+        ss = s_along_y
+        rgbas_y = torch.cat([rr, gg, bb, aa, ss], dim=1)
+        # rr = r_along_x+r_along_y
+        # gg = g_along_x+g_along_y
+        # bb = b_along_x+b_along_y
+        # aa = a_along_x+a_along_y
+        # ss = s_along_x+s_along_y
+        # rgbas_sum = torch.cat([rr, gg, bb, aa, ss], dim=1)
+        # rr = r_along_x * r_along_y
+        # gg = g_along_x * g_along_y
+        # bb = b_along_x * b_along_y
+        # aa = a_along_x * a_along_y
+        # ss = s_along_x * s_along_y
+        # rgbas_prod = torch.cat([rr, gg, bb, aa, ss], dim=1)
         space_time = self.WalshHadamardSpaceTimeFeature(meta_central_points, meta_step, noise_var)
 
         stff_in = torch.flatten(torch.cat([data_input, structure_input], dim=1), start_dim=1)
-        x0 = self.SpaceTimeFFTFeature(stff_in, self.weights_data_0, self.weights_data_fft_0, space_time)
-        x1 = self.SpaceTimeFFTFeature(rgbas, self.weights_data_1, self.weights_data_fft_1, space_time)
-        x = self.SpaceTimeFFTFeature(x0+x1, self.weights_data_2, self.weights_data_fft_2, space_time)
-        x = self.SpaceTimeFFTFeature(x, self.weights_data_3, self.weights_data_fft_3, space_time)
-        x = self.SpaceTimeFFTFeature(x, self.weights_data_4, self.weights_data_fft_4, space_time)
-        x = self.SpaceTimeFFTFeature(x, self.weights_data_5, self.weights_data_fft_5, space_time)
-
-        x_mod = self.shapeShift(self.l1h0(x), x_alpha_l1)
+        x0 = self.SpaceTimeFFTFeature(rgbas_x, self.weights_data_0, self.weights_data_fft_0, space_time)
+        x1 = self.SpaceTimeFFTFeature(rgbas_y, self.weights_data_1, self.weights_data_fft_1, space_time)
+        x0 = self.SpaceTimeFFTFeature(x0, self.weights_data_2, self.weights_data_fft_2, space_time)
+        x1 = self.SpaceTimeFFTFeature(x1, self.weights_data_3, self.weights_data_fft_3, space_time)
+        x0 = self.SpaceTimeFFTFeature(x0, self.weights_data_4, self.weights_data_fft_4, space_time)
+        x1 = self.SpaceTimeFFTFeature(x1, self.weights_data_5, self.weights_data_fft_5, space_time)
+        x0 = self.SpaceTimeFFTFeature(x0, self.weights_data_6, self.weights_data_fft_6, space_time)
+        x1 = self.SpaceTimeFFTFeature(x1, self.weights_data_7, self.weights_data_fft_7, space_time)
+        x0 = self.SpaceTimeFFTFeature(x0, self.weights_data_8, self.weights_data_fft_8, space_time)
+        x1 = self.SpaceTimeFFTFeature(x1, self.weights_data_9, self.weights_data_fft_9, space_time)
+        x = x0 + x1
+        x_mod = self.shapeShift(self.l1h0(stff_in), x_alpha_l1)
         x_mod = self.shapeShift(self.l2h0(x_mod), x_alpha_l2)
 
-        x = self.activate(self.l3h0(x_mod))+x+rgbas
+        x = self.activate(self.l3h0(x_mod))+x#+rgbas_prod+rgbas_sum
         rres = self.activate(self.l4_h0_r(x))
         gres = self.activate(self.l4_h0_g(x))
         bres = self.activate(self.l4_h0_b(x))
@@ -278,11 +307,11 @@ class Metamorph(nn.Module):
         a = self.activate(self.l5_h0_a(ares))
         s = self.activate(self.l5_h0_s(sres))
 
-        r = self.activate(self.l6_h0_r(r))
-        g = self.activate(self.l6_h0_g(g))
-        b = self.activate(self.l6_h0_b(b))
-        a = self.activate(self.l6_h0_a(a))
-        s = self.activate(self.l6_h0_s(s))
+        r = self.activate(self.l6_h0_r(r))+rres
+        g = self.activate(self.l6_h0_g(g))+gres
+        b = self.activate(self.l6_h0_b(b))+bres
+        a = self.activate(self.l6_h0_a(a))+ares
+        s = self.activate(self.l6_h0_s(s))+sres
 
         rres = self.activate(self.l7_h0_r(r))+rres
         gres = self.activate(self.l7_h0_g(g))+gres
@@ -296,11 +325,11 @@ class Metamorph(nn.Module):
         a = self.activate(self.l8_h0_a(ares))
         s = self.activate(self.l8_h0_s(sres))
 
-        r =  self.activate(self.l9_h0_r(r))
-        g =  self.activate(self.l9_h0_g(g))
-        b =  self.activate(self.l9_h0_b(b))
-        a =  self.activate(self.l9_h0_a(a))
-        s =  self.activate(self.l9_h0_s(s))
+        r =  self.activate(self.l9_h0_r(r))+rres
+        g =  self.activate(self.l9_h0_g(g))+gres
+        b =  self.activate(self.l9_h0_b(b))+bres
+        a =  self.activate(self.l9_h0_a(a))+ares
+        s =  self.activate(self.l9_h0_s(s))+sres
 
         r =  self.activate(self.l10_h0_r(r))+rres
         g =  self.activate(self.l10_h0_g(g))+gres
@@ -349,7 +378,7 @@ class Metamorph(nn.Module):
         iFFWW_real = iFFWW.real
         iFFWW_imag = iFFWW.imag
         ifft_data = iFFWW_real+iFFWW_imag
-        data = self.activate(ifft_data)+self.activate(weights_data*data)+space_time
+        data = self.activate(ifft_data)+weights_data+space_time+data
         # Attention :  Above is implemented simplified FNO LAYER
         # data = torch.tanh(data)
         return data.real
@@ -381,5 +410,5 @@ class Metamorph(nn.Module):
         return space_time.real
 
     def activate(self,x):
-        return f.gelu(x)#*2#*self.activation_weight
+        return torch.tanh(x)#*2#*self.activation_weight
 
