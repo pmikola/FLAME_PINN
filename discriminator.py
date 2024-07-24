@@ -227,7 +227,7 @@ class Metamorph_discriminator(nn.Module):
 
         # x_alpha_l1 = self.activate(self.l1h01(alpha_l1))
         # x_alpha_l2 = self.activate(self.l2h01(alpha_l2))
-        noise_variance = 1.
+        noise_variance = 0.5
         disc_data = disc_data[shuffle_idx]+torch.nan_to_num(noise_variance * torch.rand_like(disc_data[shuffle_idx]), nan=0.0)
 
         space_time = self.WalshHadamardSpaceTimeFeature(meta_central_points, meta_step, noise_var)
