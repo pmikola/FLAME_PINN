@@ -49,6 +49,17 @@ class Metamorph(nn.Module):
         self.weights_data_fft_8 = nn.Parameter(torch.rand((self.in_scale,self.in_scale,5), dtype=torch.cfloat))
         self.weights_data_fft_9 = nn.Parameter(torch.rand((self.in_scale,self.in_scale,5), dtype=torch.cfloat))
 
+        self.space_time_0 = nn.Parameter(torch.rand((self.in_scale, self.in_scale, 5), dtype=torch.cfloat))
+        self.space_time_1 = nn.Parameter(torch.rand((self.in_scale, self.in_scale, 5), dtype=torch.cfloat))
+        self.space_time_2 = nn.Parameter(torch.rand((self.in_scale, self.in_scale, 5), dtype=torch.cfloat))
+        self.space_time_3 = nn.Parameter(torch.rand((self.in_scale, self.in_scale, 5), dtype=torch.cfloat))
+        self.space_time_4 = nn.Parameter(torch.rand((self.in_scale, self.in_scale, 5), dtype=torch.cfloat))
+        self.space_time_5 = nn.Parameter(torch.rand((self.in_scale, self.in_scale, 5), dtype=torch.cfloat))
+        self.space_time_6 = nn.Parameter(torch.rand((self.in_scale, self.in_scale, 5), dtype=torch.cfloat))
+        self.space_time_7 = nn.Parameter(torch.rand((self.in_scale, self.in_scale, 5), dtype=torch.cfloat))
+        self.space_time_8 = nn.Parameter(torch.rand((self.in_scale, self.in_scale, 5), dtype=torch.cfloat))
+        self.space_time_9 = nn.Parameter(torch.rand((self.in_scale, self.in_scale, 5), dtype=torch.cfloat))
+
         # Definition of Walsh-Hadamard rescale layers
         self.Walsh_Hadamard_rescaler_l0wh= nn.Linear(in_features=256, out_features=(self.in_scale**2))
         self.Walsh_Hadamard_rescaler_l1wh= nn.Linear(in_features=(self.in_scale**2), out_features=(self.in_scale**2))
@@ -196,9 +207,7 @@ class Metamorph(nn.Module):
         (data_input, structure_input, meta_input_h1, meta_input_h2, meta_input_h3,
          meta_input_h4, meta_input_h5, noise_var_in, meta_output_h1, meta_output_h2,
          meta_output_h3, meta_output_h4, meta_output_h5, noise_var_out) = din
-        # print(data_input.shape,meta_input_h1.shape,meta_input_h2.shape,meta_input_h3.shape,
-        #  meta_input_h4.shape,meta_input_h5.shape,meta_output_h1.shape,meta_output_h2.shape,
-        #  meta_output_h3.shape,meta_output_h4.shape,meta_output_h5.shape,meta_central_points.shape)
+
         # Question : Do highest hierarchy should have parameters that are learning
         #  or just be top layer without any additional coefss (regarding polyNonlinear)
         meta_central_points = torch.cat([meta_input_h3.float(), meta_output_h3.float()], dim=1)
@@ -268,14 +277,14 @@ class Metamorph(nn.Module):
         ss = s_along_x * s_along_y
         rgbas_prod = torch.cat([rr.unsqueeze(-1), gg.unsqueeze(-1), bb.unsqueeze(-1), aa.unsqueeze(-1), ss.unsqueeze(-1)], dim=3)
         space_time = self.WalshHadamardSpaceTimeFeature(meta_central_points, meta_step, noise_var)
-        x0 = self.SpaceTimeFFTFeature(stff_in, self.weights_data_0, self.weights_data_fft_0, space_time)
-        x1 = self.SpaceTimeFFTFeature(rgbas_prod, self.weights_data_1, self.weights_data_fft_1, space_time)
-        x0 = self.SpaceTimeFFTFeature(x0, self.weights_data_2, self.weights_data_fft_2, space_time)
-        x1 = self.SpaceTimeFFTFeature(x1, self.weights_data_3, self.weights_data_fft_3, space_time)
-        x0 = self.SpaceTimeFFTFeature(x0, self.weights_data_4, self.weights_data_fft_4, space_time)
-        x1 = self.SpaceTimeFFTFeature(x1, self.weights_data_5, self.weights_data_fft_5, space_time)
-        x0 = self.SpaceTimeFFTFeature(x0, self.weights_data_6, self.weights_data_fft_6, space_time)
-        x1 = self.SpaceTimeFFTFeature(x1, self.weights_data_7, self.weights_data_fft_7, space_time)
+        x0 = self.SpaceTimeFFTFeature(stff_in, self.weights_data_0, self.weights_data_fft_0,self.space_time_0, space_time)
+        x1 = self.SpaceTimeFFTFeature(rgbas_prod, self.weights_data_1, self.weights_data_fft_1,self.space_time_1, space_time)
+        x0 = self.SpaceTimeFFTFeature(x0, self.weights_data_2, self.weights_data_fft_2,self.space_time_2, space_time)
+        x1 = self.SpaceTimeFFTFeature(x1, self.weights_data_3, self.weights_data_fft_3,self.space_time_3, space_time)
+        x0 = self.SpaceTimeFFTFeature(x0, self.weights_data_4, self.weights_data_fft_4,self.space_time_4, space_time)
+        x1 = self.SpaceTimeFFTFeature(x1, self.weights_data_5, self.weights_data_fft_5,self.space_time_5, space_time)
+        x0 = self.SpaceTimeFFTFeature(x0, self.weights_data_6, self.weights_data_fft_6,self.space_time_6, space_time)
+        x1 = self.SpaceTimeFFTFeature(x1, self.weights_data_7, self.weights_data_fft_7,self.space_time_7, space_time)
 
         x = x0 + x1
         x = torch.flatten(x,start_dim=1)
@@ -356,15 +365,18 @@ class Metamorph(nn.Module):
         else:
             raise ValueError("Unsupported input dimensions")
 
-    def SpaceTimeFFTFeature(self,data,weights_data,weights_data_fft, space_time):
+    def SpaceTimeFFTFeature(self,data,weights_data,weights_data_fft,weights_space_time, space_time):
         # Attention :  Below is implemented simplified FNO LAYER
         fft_data = torch.fft.fftn(data,dim=(1,2,3),norm='forward')
         FFwithW = torch.einsum("bijk,nmo->bimo",fft_data, weights_data_fft)
         iFFW= torch.fft.ifftn(FFwithW,dim=(1,2,3), norm='forward')
-        data = self.activate(iFFW+space_time)+self.activate(weights_data*data)#+data
+        data = self.activate(iFFW)+self.activate(weights_data*data)+self.activate(space_time*weights_space_time)#+data
         # Attention :  Above is implemented simplified FNO LAYER
+        dimag = data.imag
+        dreal = data.real
+        data = dimag + dreal
         # data = torch.tanh(data)
-        return data.real
+        return data
 
     def WalshHadamardSpaceTimeFeature(self,meta_central_points, meta_step,noise_var):
         # NOTE: Walsh-Hadamard transform for space and time coding
