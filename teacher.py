@@ -871,6 +871,8 @@ class teacher(object):
                                 #     noise_amplitude = 0.
                             grad_counter = 0
                         # NOTE: Averaging models with best loss results within all models
+                        if loss < min(self.train_loss[:-1]) and val_loss < min(self.val_loss[:-1]) and epoch > 100:
+                            torch.save(self.model.state_dict(), 'model.pt')
                         if (epoch + 1) % 1 == 0 or reiterate_data == 0:
                             if loss.item() < mean_hist_losses  or e0loss.item() < mean_hist_losses or e1loss.item() < mean_hist_losses or e2loss.item() < mean_hist_losses or best_loss < mean_hist_losses or reiterate_data == 0:
                                 if loss < e0loss and loss<e1loss and loss<e2loss:
@@ -945,8 +947,7 @@ class teacher(object):
                                         best_models = []
                                         best_losses = []
                                         best_loss = mean_hist_losses
-                                        if loss < min(self.train_loss[:-1]) and val_loss < min(self.val_loss[:-1]):
-                                            torch.save(self.model.state_dict(), 'model.pt')
+
 
 
                     t_epoch_stop = time.perf_counter()
