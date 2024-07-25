@@ -44,7 +44,7 @@ optimizer = torch.optim.Adam([
     {'params': t.expert_0.parameters()},
     {'params': t.expert_1.parameters()},
     {'params': t.expert_2.parameters()}
-], lr=1e-3, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-6, amsgrad=True)
+], lr=5e-4, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-6, amsgrad=True)
 disc_optimizer =  torch.optim.Adam(t.discriminator.parameters(),lr=5e-4, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-6, amsgrad=True)
 # torch.autograd.set_detect_anomaly(True)
 # Note: Eon > Era > Period > Epoch

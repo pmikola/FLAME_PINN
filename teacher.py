@@ -69,6 +69,7 @@ class teacher(object):
         self.num_of_epochs = 0
         self.train_loss = []
         self.val_loss = []
+        self.d_loss = []
     def generate_structure(self):
         no_structure = random.randint(0, self.fsim.grid_size_y - self.fsim.N_boundary)
         self.fsim.idx = torch.randint(low=self.fsim.N_boundary,high=self.fsim.grid_size_x-self.fsim.N_boundary,size=(no_structure,))
@@ -323,7 +324,7 @@ class teacher(object):
                     choose_diffrent_frame = 1
 
             mod = 4
-            if self.epoch > self.num_of_epochs*0.3 or create_val_dataset == 1:
+            if self.epoch > self.num_of_epochs*0.25 or create_val_dataset == 1:
                 pass
             else:
                 data_in_cnz = torch.count_nonzero(data_input_subslice)
@@ -831,6 +832,7 @@ class teacher(object):
 
                     self.train_loss.append(loss.item())
                     self.val_loss.append(val_loss.item())
+                    self.d_loss.append(disc_loss.item())
                     # t_stop = time.perf_counter()
                     t += (t_pred - t_start)/4
 
@@ -857,7 +859,7 @@ class teacher(object):
                             for param_group in optimizer.param_groups:
                                 param_group['lr'] = param_group['lr']*0.95
                                 if param_group['lr'] < 1e-5 or reiterate_data == 0:
-                                    param_group['lr'] = 1e-3
+                                    param_group['lr'] = 5e-4
                                     reiterate_counter = 0
                                     reiterate_data = 0
                                     print('optimizer -> lr back to starting point')
@@ -871,7 +873,7 @@ class teacher(object):
                                 #     noise_amplitude = 0.
                             grad_counter = 0
                         # NOTE: Averaging models with best loss results within all models
-                        if loss < min(self.train_loss[:-1]) and val_loss < min(self.val_loss[:-1]) and epoch > 100:
+                        if loss < min(self.train_loss[:-1]) and val_loss < min(self.val_loss[:-1]) and epoch > 50:
                             torch.save(self.model.state_dict(), 'model.pt')
                         if (epoch + 1) % 1 == 0 or reiterate_data == 0:
                             if loss.item() < mean_hist_losses  or e0loss.item() < mean_hist_losses or e1loss.item() < mean_hist_losses or e2loss.item() < mean_hist_losses or best_loss < mean_hist_losses or reiterate_data == 0:
@@ -891,7 +893,7 @@ class teacher(object):
                                     best_loss = e2loss.item()
                                     best_losses.append(best_loss)
                                     best_models.append(self.expert_2)
-                                if len(best_models) > 300:
+                                if len(best_models) > 150:
                                     best_losses = torch.tensor(np.array(best_losses))
                                     n = 10
                                     _,best_n_losses_idx = torch.topk(best_losses,n,largest=False)
@@ -958,8 +960,8 @@ class teacher(object):
                         t_epoch_current = epoch * t_epoch
                         print(f'P: {self.period}/{self.no_of_periods} | E: {((t_epoch_total-t_epoch_current)/(print_every_nth_frame*60)):.2f} [min], '
                               f'vL: {val_loss.item():.2f}, '
-                              f'mL: {loss.item():.2f}, '
                               f'dL: {disc_loss.item():.3f}, '
+                              f'mL: {loss.item():.2f}, '
                               f'e0L: {e0loss.item():.2f}, '
                               f'e1L: {e1loss.item():.2f}, '
                               f'e2L: {e2loss.item():.2f}, '
