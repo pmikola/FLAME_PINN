@@ -365,12 +365,14 @@ class Metamorph(nn.Module):
         else:
             raise ValueError("Unsupported input dimensions")
 
-    def SpaceTimeFFTFeature(self,data,weights_data,weights_data_fft,weights_space_time, space_time):
+    def SpaceTimeFFTFeature(self,data,weights_data,weights_data_fft,weights_space_time_noise, space_time_noise):
         # Attention :  Below is implemented simplified FNO LAYER
         fft_data = torch.fft.fftn(data,dim=(1,2,3),norm='forward')
-        FFwithW = torch.einsum("bijk,nmo->bimo",fft_data, weights_data_fft)
-        iFFW= torch.fft.ifftn(FFwithW,dim=(1,2,3), norm='forward')
-        data = self.activate(iFFW)+self.activate(weights_data*data)+self.activate(space_time*weights_space_time)#+data
+        FFTwithW = torch.einsum("bijk,nmo->bimo",fft_data, weights_data_fft)
+        Wspace_time_noise = space_time_noise * weights_space_time_noise
+        FFTWeightSpaceTimeNoise = torch.einsum("bimo,bprs->birs",FFTwithW,Wspace_time_noise)
+        iFFW= torch.fft.ifftn(FFTWeightSpaceTimeNoise,dim=(1,2,3), norm='forward')
+        data = self.activate(iFFW)+self.activate(weights_data*data)
         # Attention :  Above is implemented simplified FNO LAYER
         dimag = data.imag
         dreal = data.real
