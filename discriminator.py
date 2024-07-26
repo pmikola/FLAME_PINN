@@ -207,26 +207,6 @@ class Metamorph_discriminator(nn.Module):
         meta_central_points = torch.cat([meta_input_h3.float(), meta_output_h3.float()], dim=1)
         noise_var = torch.cat([noise_var_in, noise_var_out], dim=1)
         meta_step = torch.cat([meta_input_h2.float(), meta_output_h2.float()], dim=1)
-        meta_h1 = torch.cat([meta_input_h1.float(), meta_output_h1.float()], dim=1)
-
-        # theta = self.activate(self.l0h4(noise_var))
-        # theta_l1 = self.activate(self.l1h4(theta))
-        # theta_l2 = self.activate(self.l2h4(theta_l1))
-        #
-        # gamma = self.activate(self.l0h3(meta_central_points))
-        # gamma_l1 = self.shapeShift(self.l1h3(gamma), theta_l1)
-        # gamma_l2 = self.shapeShift(self.l2h3(gamma_l1), theta_l2)
-        # #
-        # beta = self.activate(self.l0h2(meta_step))
-        # beta_l1 = self.shapeShift(self.l1h2(beta), gamma_l1)
-        # beta_l2 = self.shapeShift(self.l2h2(beta_l1), gamma_l2)
-        #
-        # alpha = self.activate(self.l0h1(meta_h1))
-        # alpha_l1 = self.shapeShift(self.l1h1(alpha), beta_l1)
-        # alpha_l2 = self.shapeShift(self.l2h1(alpha_l1), beta_l2)
-
-        # x_alpha_l1 = self.activate(self.l1h01(alpha_l1))
-        # x_alpha_l2 = self.activate(self.l2h01(alpha_l2))
         noise_variance = 0.5
         disc_data = disc_data[shuffle_idx]+torch.nan_to_num(noise_variance * torch.rand_like(disc_data[shuffle_idx]), nan=0.0)
 
@@ -234,8 +214,7 @@ class Metamorph_discriminator(nn.Module):
         stff_in = torch.flatten(disc_data, start_dim=1)
         x = self.SpaceTimeFFTFeature(stff_in, self.weights_data_0, self.weights_data_fft_0, space_time)
         # Note : Delete space x time x noise contexts of generator data
-        #x_mod = self.shapeShift(self.l1h0(x), x_alpha_l1)
-        #x_mod = self.shapeShift(self.l2h0(x_mod), x_alpha_l2)
+
         x = self.activate(self.l3h0(x))
         r = self.activate(self.l4_h0_r(x))
         g = self.activate(self.l4_h0_g(x))

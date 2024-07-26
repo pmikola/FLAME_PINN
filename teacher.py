@@ -447,7 +447,7 @@ class teacher(object):
         fuel_slices = self.data_tensor[fdens_idx]
         min_val = fuel_slices.min()
         max_val = fuel_slices.max()
-        fuel_slices = (fuel_slices - min_val) / ((max_val - min_val) + 1e-10)
+        fuel_slices = (fuel_slices - min_val) / ((max_val - min_val) + 1e-12)
 
         r_slices = self.data_tensor[r_idx]
         g_slices = self.data_tensor[g_idx]
@@ -893,7 +893,7 @@ class teacher(object):
                                     best_models.append(self.expert_2)
                                 if len(best_models) > 100:
                                     best_losses = torch.tensor(np.array(best_losses))
-                                    n = 10
+                                    n = 5
                                     _,best_n_losses_idx = torch.topk(best_losses,n,largest=False)
                                     #best_loss_pos = best_losses.argmin()
                                     best_losses_norm = 1/(best_losses / best_losses.min())
