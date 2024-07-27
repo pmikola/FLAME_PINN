@@ -69,7 +69,7 @@ class Metamorph(nn.Module):
         self.no_meta_h2 = 32 * 2
         self.no_meta_h1 = 224 * 2
         self.dens_width = 2 * self.shifterCoefficients
-        self.flat_size = 10*self.in_scale**2 # Note: n neurons per every pixel
+        self.flat_size = 5*self.in_scale**2 # Note: n neurons per every pixel
         self.diffiusion_context = 32*2
 
         # Definition of layer 0,1,2 for lvl 4 in hierarchy - theta - diffusion noise context
@@ -335,29 +335,29 @@ class Metamorph(nn.Module):
         a =  self.activate(self.l10_h0_a(a))+ares
         s =  self.activate(self.l10_h0_s(s))+sres
 
-        r = self.l11_h0_r(r).reshape(self.batch_size, self.in_scale, self.in_scale)
-        g = self.l11_h0_g(g).reshape(self.batch_size, self.in_scale, self.in_scale)
-        b = self.l11_h0_b(b).reshape(self.batch_size, self.in_scale, self.in_scale)
-        a = self.l11_h0_a(a).reshape(self.batch_size, self.in_scale, self.in_scale)
-        s = self.l11_h0_s(s).reshape(self.batch_size, self.in_scale, self.in_scale)
+        r = self.l11_h0_r(r).view(self.batch_size, self.in_scale, self.in_scale)
+        g = self.l11_h0_g(g).view(self.batch_size, self.in_scale, self.in_scale)
+        b = self.l11_h0_b(b).view(self.batch_size, self.in_scale, self.in_scale)
+        a = self.l11_h0_a(a).view(self.batch_size, self.in_scale, self.in_scale)
+        s = self.l11_h0_s(s).view(self.batch_size, self.in_scale, self.in_scale)
         return r,g,b,a,s
 
 
     def shapeShift(self,x, h):
         if x.dim() == 3:
-            coefficients = h.reshape(self.batch_size,x.shape[1],x.shape[2],self.shifterCoefficients)
+            coefficients = h.view(self.batch_size,x.shape[1],x.shape[2],self.shifterCoefficients)
             x_powers = torch.pow(x[0:self.batch_size,:,:].unsqueeze(3), self.exponents.unsqueeze(0).unsqueeze(1))
             craftedPolynomial = torch.sum(coefficients * x_powers, dim=3)
             craftedPolynomial = self.activate(craftedPolynomial)
             return craftedPolynomial
         elif x.dim() == 2:
-            coefficients = h.reshape(self.batch_size,x.shape[1],self.shifterCoefficients)
+            coefficients = h.view(self.batch_size,x.shape[1],self.shifterCoefficients)
             x_powers = torch.pow(x[0:self.batch_size, :].unsqueeze(2), self.exponents.unsqueeze(0).unsqueeze(1))
             craftedPolynomial = torch.sum(coefficients * x_powers, dim=2)
             craftedPolynomial = self.activate(craftedPolynomial)
             return craftedPolynomial
         elif x.dim() == 4:
-            coefficients = h.reshape(self.batch_size, x.shape[1], x.shape[2], x.shape[3], self.shifterCoefficients)
+            coefficients = h.view(self.batch_size, x.shape[1], x.shape[2], x.shape[3], self.shifterCoefficients)
             x_powers = torch.pow(x[0:self.batch_size, :, :, :].unsqueeze(4),self.exponents.unsqueeze(0).unsqueeze(1).unsqueeze(2))
             craftedPolynomial = torch.sum(coefficients * x_powers, dim=4)
             craftedPolynomial = self.activate(craftedPolynomial)
@@ -367,7 +367,7 @@ class Metamorph(nn.Module):
 
     def SpaceTimeFFTFeature(self,data,weights_data,weights_data_fft,weights_space_time_noise, space_time_noise):
         # Attention :  Below is implemented simplified FNO LAYER
-        fft_data = torch.fft.fftn(data,dim=(1,2,3),norm='forward')
+        fft_data = torch.fft.fftn(data*weights_data,dim=(1,2,3),norm='forward')
         FFTwithW = torch.einsum("bijk,nmo->bimo",fft_data, weights_data_fft)
         FFTWeightSpaceTimeNoise = torch.einsum("bimo,prs->birs",space_time_noise,weights_space_time_noise)
         iFFW= torch.fft.ifftn(FFTwithW,dim=(1,2,3), norm='forward')

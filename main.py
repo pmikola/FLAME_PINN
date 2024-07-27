@@ -8,13 +8,14 @@ from torch import nn
 
 from discriminator import Metamorph_discriminator
 from model import Metamorph
+from parameterReinforcer import Metamorph_parameterReinforcer
 from teacher import teacher
 
 
 from flameEngine import flame as fl
 # Start ................
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
+# os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
 no_frame_samples = 50
 batch_size = 512
@@ -31,14 +32,16 @@ for i in range(4):
     models.append(Metamorph(no_frame_samples, batch_size, input_window_size, device).to(device))
 
 discriminator = Metamorph_discriminator(no_frame_samples, batch_size, input_window_size, device).to(device)
-t = teacher(models,discriminator, device)
+parameterReinforcer = Metamorph_parameterReinforcer(device).to(device)
+t = teacher(models,discriminator,parameterReinforcer, device)
 t.fsim = fl.flame_sim(no_frames=no_frames,frame_skip=frame_skip)
 criterion_model = nn.MSELoss(reduction='mean')
 criterion_e0 = nn.MSELoss(reduction='mean')
 criterion_e1 = nn.MSELoss(reduction='mean')
 criterion_e2 = nn.MSELoss(reduction='mean')
 criterion_disc = nn.BCELoss(reduction='mean')
-criterion = criterion_model,criterion_e0,criterion_e1,criterion_e2,criterion_disc
+criterion_RL = nn.BCELoss(reduction='mean')
+criterion = criterion_model,criterion_e0,criterion_e1,criterion_e2,criterion_disc,criterion_RL
 optimizer = torch.optim.Adam([
     {'params': t.model.parameters()},
     {'params': t.expert_0.parameters()},
@@ -46,6 +49,8 @@ optimizer = torch.optim.Adam([
     {'params': t.expert_2.parameters()}
 ], lr=1e-3, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-6, amsgrad=True)
 disc_optimizer =  torch.optim.Adam(t.discriminator.parameters(),lr=5e-4, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-6, amsgrad=True)
+RL_optimizer =  torch.optim.Adam(t.parameterReinforcer.parameters(),lr=5e-4, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-6, amsgrad=True)
+
 # torch.autograd.set_detect_anomaly(True)
 # Note: Eon > Era > Period > Epoch
 no_periods = 1
@@ -59,7 +64,7 @@ for period in range(1,no_periods+1):
     t.fsim.fuel_dens_modifier = 1/t.fsim.dt
     t.fsim.simulate(simulate=0,save_rgb=1,save_alpha=1,save_fuel=1,delete_data=0)
     t.learning_phase(no_frame_samples, batch_size, input_window_size, first_frame,
-                     last_frame,frame_skip*2,criterion,optimizer,disc_optimizer,device,learning=1,num_epochs=5000)
+                     last_frame,frame_skip*2,criterion,optimizer,disc_optimizer,RL_optimizer,device,learning=1,num_epochs=5000)
     # t.fsim.simulate(simulate=0,delete_data=1)
 
 t.visualize_lerning()

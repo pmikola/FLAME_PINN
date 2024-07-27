@@ -3,6 +3,7 @@ import os.path
 import random
 import struct
 import time
+from statistics import mean
 
 import kornia
 import numpy as np
@@ -12,7 +13,7 @@ from torch.autograd import grad
 
 
 class teacher(object):
-    def __init__(self,models,discriminator,device):
+    def __init__(self,models,discriminator,parameterReinforcer,device):
         super(teacher, self).__init__()
 
         self.validation_dataset = None
@@ -22,6 +23,7 @@ class teacher(object):
         self.expert_1 = models[2]#copy.deepcopy(models[2])
         self.expert_2 = models[3]  # copy.deepcopy(models[2])
         self.discriminator = discriminator
+        self.parameterReinforcer = parameterReinforcer
         self.device = device
         self.fsim = None
         self.period = 1
@@ -702,12 +704,12 @@ class teacher(object):
         plt.show()
 
     def learning_phase(self,no_frame_samples, batch_size, input_window_size, first_frame, last_frame,
-                                      frame_skip,criterion,optimizer,disc_optimizer,device,learning=1,num_epochs=1500):
+                                      frame_skip,criterion,optimizer,disc_optimizer,RL_optimizer,device,learning=1,num_epochs=1500):
             (self.no_frame_samples,self.batch_size,self.input_window_size,self.first_frame,
              self.last_frame,self.frame_skip) = (no_frame_samples, batch_size,
                                                  input_window_size, first_frame, last_frame,frame_skip)
 
-            criterion_model,criterion_e0,criterion_e1,criterion_e2,criterion_disc = criterion
+            criterion_model,criterion_e0,criterion_e1,criterion_e2,criterion_disc,criterion_RL = criterion
             self.num_of_epochs = num_epochs
             if learning == 1:
                 best_loss = float('inf')
@@ -720,8 +722,10 @@ class teacher(object):
                 reiterate_counter = 0
                 norm = 'forward'
                 print_every_nth_frame=10
+                model_saved = 0
                 best_models = []
                 best_losses = []
+                zero = torch.tensor([0.]).to(device).float()
 
                 self.data_preparation(1)
                 val_idx = torch.arange(self.data_input_val.shape[0])
@@ -732,6 +736,7 @@ class teacher(object):
                 self.meta_output_h5_val,self.noise_var_out_val)
 
                 for epoch in range(num_epochs):
+
                     self.epoch = epoch
                     t_epoch_start = time.perf_counter()
                     self.seed_setter(int(epoch+1))
@@ -797,23 +802,7 @@ class teacher(object):
                     e0loss = self.loss_calculation(e0_idx,expert_0_output,self.data_input,self.data_output,self.structure_input,self.structure_output, criterion_e0, norm)
                     e1loss = self.loss_calculation(e1_idx,expert_1_output,self.data_input,self.data_output,self.structure_input,self.structure_output, criterion_e1, norm)
                     e2loss = self.loss_calculation(e2_idx,expert_2_output,self.data_input,self.data_output,self.structure_input,self.structure_output, criterion_e1, norm)
-                    # if (epoch + 1) % 1 == 0:
-                    # NOTE: forces models parameters to be further with respect to each other
-                    # with torch.no_grad():#
-                    # #simalirityFunction = torch.nn.CosineSimilarity(dim=0, eps=1e-6)
-                    #     param_similarity = 0.
-                    #     for param1, param2,param3,param4 in zip(self.model.parameters(), self.expert_0.parameters(),self.expert_1.parameters(),self.expert_2.parameters()):
-                    #         param_similarity += criterion_model(param1.real,param2.real)
-                    #         param_similarity += criterion_model(param1.real,param3.real)
-                    #         param_similarity += criterion_model(param1.real,param4.real)
-                    #         param_similarity += criterion_model(param2.real, param3.real)
-                    #         param_similarity += criterion_model(param2.real, param4.real)
-                    #         param_similarity += criterion_model(param3.real, param4.real)
-                    # param_similarity = param_similarity/100
-                    # loss -=param_similarity
-                    # e0loss -=param_similarity
-                    # e1loss -=param_similarity
-                    # e2loss -= param_similarity
+
                     optimizer.zero_grad(set_to_none=True)
                     loss.backward()
                     e0loss.backward()
@@ -831,13 +820,20 @@ class teacher(object):
 
                     self.train_loss.append(loss.item())
                     self.val_loss.append(val_loss.item())
+
+
                     # t_stop = time.perf_counter()
                     t += (t_pred - t_start)/4
-
-
-                    if len(self.train_loss) > 20:
+                    if (epoch + 1) % 10 == 0 and val_loss > min(self.val_loss[:-1]):
+                        model_saved = 0
+                    if  epoch > 25 and model_saved !=1:
+                        if val_loss < min(self.val_loss[:-1]):#loss < min(self.train_loss[:-1]) and
+                            torch.save(self.model.state_dict(), 'model.pt')
+                            print('model_saved')
+                            model_saved = 1
+                    if len(self.train_loss) > 10:
                         loss_recent_history = np.array(self.train_loss)[-10:-1]
-                        val_loss_recent_history = np.array(self.val_loss)[-20:-1]
+                        val_loss_recent_history = np.array(self.val_loss)[-10:-1]
                         mean_hist_losses = np.mean(loss_recent_history)
                         if loss_recent_history[-1] > loss_recent_history[-2] or reiterate_counter < 50 or loss_recent_history[-1] < loss_recent_history[-2]*0.9 or loss_recent_history[-1] > 0.3:
                             reiterate_data = 1
@@ -871,8 +867,7 @@ class teacher(object):
                                 #     noise_amplitude = 0.
                             grad_counter = 0
                         # NOTE: Averaging models with best loss results within all models
-                        if loss < min(self.train_loss[:-1]) and val_loss < min(self.val_loss[:-1]) and epoch > 100:
-                            torch.save(self.model.state_dict(), 'model.pt')
+
                         if (epoch + 1) % 1 == 0 or reiterate_data == 0:
                             if loss.item() < mean_hist_losses  or e0loss.item() < mean_hist_losses or e1loss.item() < mean_hist_losses or e2loss.item() < mean_hist_losses or best_loss < mean_hist_losses or reiterate_data == 0:
                                 if loss < e0loss and loss<e1loss and loss<e2loss:
@@ -891,31 +886,65 @@ class teacher(object):
                                     best_loss = e2loss.item()
                                     best_losses.append(best_loss)
                                     best_models.append(self.expert_2)
-                                if len(best_models) > 100:
+
+                                if len(best_models) > 10:
+                                    bl = torch.tensor(np.array(best_losses))
+                                    n = 5
+                                    _, best_n_losses_idx = torch.topk(bl, n, largest=False)
+                                    best_model_params = torch.zeros(self.parameterReinforcer.modes,
+                                                                    requires_grad=True).to(device)
+                                    for name, param in best_models[best_n_losses_idx[0]].named_parameters():
+                                        fparam = torch.flatten(param)
+                                        fpshape = fparam.shape[0]
+                                        if fpshape < self.parameterReinforcer.modes:
+                                            fparamWHF = torch.fft.fft(fparam)[:fpshape].real
+                                            best_model_params[:fpshape] += fparamWHF
+                                        else:
+                                            fparamWHF = torch.fft.fft(fparam)[:self.parameterReinforcer.modes].real
+                                            best_model_params += fparamWHF
+
+                                    valloss = torch.tensor(np.array([mean(self.val_loss[-5:])]), requires_grad=True).to(
+                                        device).float()
+                                    layers_coefficients = self.parameterReinforcer(best_model_params)
+                                    RLoss = criterion_RL(zero, torch.tanh(valloss / 10))
+                                    RL_optimizer.zero_grad(set_to_none=True)
+                                    RLoss.backward()
+                                    RL_optimizer.step()
+
+                                    with torch.no_grad():
+                                        i = 0
+                                        for (name, param), (nameb, paramb) in zip(self.model.named_parameters(),
+                                                                                  best_models[best_n_losses_idx[0]].named_parameters()):
+                                            p = paramb * layers_coefficients[0][i]*2
+                                            param.copy_(p)
+                                            i += 1
+
+                                if len(best_models) > 200:
                                     best_losses = torch.tensor(np.array(best_losses))
                                     n = 5
                                     _,best_n_losses_idx = torch.topk(best_losses,n,largest=False)
                                     #best_loss_pos = best_losses.argmin()
                                     best_losses_norm = 1/(best_losses / best_losses.min())
+                                    # with torch.no_grad():
+                                    model_avg_damping = self.model
+                                    model_avg_enhance = self.model
+                                    param_sum_damping = {name: torch.zeros_like(param) for name, param in
+                                                 model_avg_damping.named_parameters()}
+                                    param_sum_enhance = {name: torch.zeros_like(param) for name, param in
+                                                         model_avg_enhance.named_parameters()}
+
+                                    for m in best_n_losses_idx:
+                                        for (name_best, param_best), (name, param) in zip(best_models[0].named_parameters(),best_models[m].named_parameters()):
+                                            param_best_sign = torch.sgn(param_best)
+                                            param_sign = torch.sgn(param)
+
+                                            opposite_sign_mask = param_best_sign != param_sign
+                                            same_sign_mask = param_best_sign == param_sign
+
+                                            param_sum_damping[name][opposite_sign_mask] += param[opposite_sign_mask] * best_losses_norm[m]
+                                            param_sum_enhance[name][same_sign_mask] += param[same_sign_mask] * best_losses_norm[m]
+
                                     with torch.no_grad():
-                                        model_avg_damping = self.model
-                                        model_avg_enhance = self.model
-                                        param_sum_damping = {name: torch.zeros_like(param) for name, param in
-                                                     model_avg_damping.named_parameters()}
-                                        param_sum_enhance = {name: torch.zeros_like(param) for name, param in
-                                                             model_avg_enhance.named_parameters()}
-
-                                        for m in best_n_losses_idx:
-                                            for (name_best, param_best), (name, param) in zip(best_models[0].named_parameters(),best_models[m].named_parameters()):
-                                                param_best_sign = torch.sgn(param_best)
-                                                param_sign = torch.sgn(param)
-
-                                                opposite_sign_mask = param_best_sign != param_sign
-                                                same_sign_mask = param_best_sign == param_sign
-
-                                                param_sum_damping[name][opposite_sign_mask] += param[opposite_sign_mask] * best_losses_norm[m]
-                                                param_sum_enhance[name][same_sign_mask] += param[same_sign_mask] * best_losses_norm[m]
-
                                         for name, param in model_avg_damping.named_parameters():
                                             param_avg = param_sum_damping[name] / n
                                             param.copy_(param_avg)
@@ -933,20 +962,18 @@ class teacher(object):
                                             else:
                                                 pass
 
-                                        # self.expert_0.weight_reset()# = model_avg_enhance
-                                        #self.seed_setter(int((epoch + 1) * 5))
-                                        # self.expert_1.weight_reset()
 
-                                        self.discriminator.weight_reset()
-                                        self.discriminator.init_weights()
-                                        disc_optimizer = torch.optim.Adam(self.discriminator.parameters(), lr=5e-4,
-                                                                          betas=(0.9, 0.999), eps=1e-08,
-                                                                          weight_decay=1e-6, amsgrad=True)
 
-                                        print('model_avg -> weighted average -> main')
-                                        best_models = []
-                                        best_losses = []
-                                        best_loss = mean_hist_losses
+
+                                    self.discriminator.weight_reset()
+                                    self.discriminator.init_weights()
+                                    disc_optimizer = torch.optim.Adam(self.discriminator.parameters(), lr=5e-4,
+                                                                      betas=(0.9, 0.999), eps=1e-08,
+                                                                      weight_decay=1e-6, amsgrad=True)
+                                    print('model_avg -> weighted average -> main')
+                                    best_models = []
+                                    best_losses = []
+                                    best_loss = mean_hist_losses
 
 
 

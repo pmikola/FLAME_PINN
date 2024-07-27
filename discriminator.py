@@ -50,7 +50,7 @@ class Metamorph_discriminator(nn.Module):
         self.no_meta_h2 = 32 * 2
         self.no_meta_h1 = 224 * 2
         self.dens_width = 2 * self.shifterCoefficients
-        self.flat_size = 10*self.in_scale**2 # Note: n neurons per every pixel
+        self.flat_size = 5*self.in_scale**2 # Note: n neurons per every pixel
         self.diffiusion_context = 32*2
 
         # Definition of layer 0,1,2 for lvl 4 in hierarchy - theta - diffusion noise context
@@ -195,11 +195,9 @@ class Metamorph_discriminator(nn.Module):
         #  meta_output_h3.shape,meta_output_h4.shape,meta_output_h5.shape,meta_central_points.shape)
         # Question : Do highest hierarchy should have parameters that are learning
         #  or just be top layer without any additional coefss (regarding polyNonlinear)
-        meta_input_h1 = torch.cat([meta_input_h1, meta_input_h1], dim=0)[shuffle_idx]
         meta_input_h2 = torch.cat([meta_input_h2, meta_input_h2], dim=0)[shuffle_idx]
         meta_input_h3 = torch.cat([meta_input_h3, meta_input_h3], dim=0)[shuffle_idx]
         noise_var_in = torch.cat([noise_var_in, noise_var_in], dim=0)[shuffle_idx]
-        meta_output_h1 = torch.cat([meta_output_h1, meta_output_h1], dim=0)[shuffle_idx]
         meta_output_h2 = torch.cat([meta_output_h2, meta_output_h2], dim=0)[shuffle_idx]
         meta_output_h3 = torch.cat([meta_output_h3, meta_output_h3], dim=0)[shuffle_idx]
         noise_var_out = torch.cat([noise_var_out, noise_var_out], dim=0)[shuffle_idx]
@@ -209,7 +207,6 @@ class Metamorph_discriminator(nn.Module):
         meta_step = torch.cat([meta_input_h2.float(), meta_output_h2.float()], dim=1)
         noise_variance = 0.5
         disc_data = disc_data[shuffle_idx]+torch.nan_to_num(noise_variance * torch.rand_like(disc_data[shuffle_idx]), nan=0.0)
-
         space_time = self.WalshHadamardSpaceTimeFeature(meta_central_points, meta_step, noise_var)
         stff_in = torch.flatten(disc_data, start_dim=1)
         x = self.SpaceTimeFFTFeature(stff_in, self.weights_data_0, self.weights_data_fft_0, space_time)
