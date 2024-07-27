@@ -906,7 +906,7 @@ class teacher(object):
                                     valloss = torch.tensor(np.array([mean(self.val_loss[-5:])]), requires_grad=True).to(
                                         device).float()
                                     layers_coefficients = self.parameterReinforcer(best_model_params)
-                                    RLoss = criterion_RL(zero, torch.tanh(valloss / 10))
+                                    RLoss = criterion_RL(zero, valloss)
                                     RL_optimizer.zero_grad(set_to_none=True)
                                     RLoss.backward()
                                     RL_optimizer.step()

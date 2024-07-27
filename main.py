@@ -40,7 +40,7 @@ criterion_e0 = nn.MSELoss(reduction='mean')
 criterion_e1 = nn.MSELoss(reduction='mean')
 criterion_e2 = nn.MSELoss(reduction='mean')
 criterion_disc = nn.BCELoss(reduction='mean')
-criterion_RL = nn.BCELoss(reduction='mean')
+criterion_RL = nn.MSELoss(reduction='mean')
 criterion = criterion_model,criterion_e0,criterion_e1,criterion_e2,criterion_disc,criterion_RL
 optimizer = torch.optim.Adam([
     {'params': t.model.parameters()},
