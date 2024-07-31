@@ -15,7 +15,7 @@ from torch.autograd import grad
 class teacher(object):
     def __init__(self,models,discriminator,parameterReinforcer,device):
         super(teacher, self).__init__()
-
+        self.t = None
         self.validation_dataset = None
         self.max_seed = int(1e2)
         self.model = models[0]
@@ -818,12 +818,22 @@ class teacher(object):
 
                     self.train_loss.append(loss.item())
                     self.val_loss.append(val_loss.item())
+                    # UnderConstruction! UnderConstruction! UnderConstruction!
+                    self.parameterReinforcer.save_state(self.model,loss)
+                    actions = self.parameterReinforcer()
+                    self.parameterReinforcer.save_actions(actions)
+                    self.parameterReinforcer.execute_and_evaluate_actions(self.t,self.model,loss,dataset,m_idx,self.data_input,self.data_output,self.structure_input,self.structure_output,criterion_model, norm)
+                    RLoss = self.parameterReinforcer.RL_loss(criterion_RL,0.01)
+                    RL_optimizer.zero_grad(set_to_none=True)
+                    RLoss.backward()
+                    RL_optimizer.step()
+                    # UnderConstruction! UnderConstruction! UnderConstruction!
                     # t_stop = time.perf_counter()
                     t += (t_pred - t_start)/4
                     if  epoch > 25:
                         if val_loss < min(self.val_loss[:-1]):
                             model_to_Save = self.model
-                            print('model_saved')
+                            print('model_saved \r')
 
                     if len(self.train_loss) > 10:
                         loss_recent_history = np.array(self.train_loss)[-10:-1]
@@ -880,44 +890,6 @@ class teacher(object):
                                     best_loss = e2loss.item()
                                     best_losses.append(best_loss)
                                     best_models.append(self.expert_2)
-
-                                # if len(best_models) > 5:
-                                #     bl = torch.tensor(np.array(best_losses))
-                                #     n = 2
-                                #     _, best_n_losses_idx = torch.topk(bl, n, largest=False)
-                                #     best_model_params = torch.zeros((1,self.parameterReinforcer.modes),
-                                #                                     requires_grad=True).to(device)
-                                #     best_model_temp = torch.zeros((1,self.parameterReinforcer.modes),
-                                #                                     requires_grad=True).to(device)
-                                #     for name, param in best_models[best_n_losses_idx[0]].named_parameters():
-                                #         fparam = torch.flatten(param)
-                                #         fpshape = fparam.shape[0]
-                                #         if fpshape < self.parameterReinforcer.modes:
-                                #             fparamWHF = torch.fft.fft(fparam)[:fpshape].real
-                                #             best_model_temp[:fpshape] = fparamWHF
-                                #             best_model_params = torch.cat([best_model_params,best_model_temp],dim=0)
-                                #             best_model_temp =
-                                #         else:
-                                #             fparamWHF = torch.fft.fft(fparam)[:self.parameterReinforcer.modes].real
-                                #             best_model_temp = fparamWHF
-                                #             best_model_params = torch.cat([best_model_params,best_model_temp],dim=0)
-                                #             best_model_temp =
-                                #
-                                #     rlloss = torch.tensor(np.array([mean(self.val_loss[-5:])]), requires_grad=True).to(
-                                #         device).float()
-                                #     layers_coefficients = self.parameterReinforcer(best_model_params)
-                                #     RLoss = criterion_RL(zero, rlloss)
-                                #     RL_optimizer.zero_grad(set_to_none=True)
-                                #     RLoss.backward()
-                                #     RL_optimizer.step()
-                                #
-                                #     with torch.no_grad():
-                                #         i = 0
-                                #         for (name, param), (nameb, paramb) in zip(self.model.named_parameters(),
-                                #                                                   best_models[best_n_losses_idx[0]].named_parameters()):
-                                #             p = paramb * layers_coefficients[0][i]
-                                #             param.copy_(p)
-                                #             i += 1
 
                                 if len(best_models) > 200:
                                     best_losses = torch.tensor(np.array(best_losses))
@@ -1018,7 +990,7 @@ class teacher(object):
 
 
 
-    def loss_calculation(self,idx,model_output,data_input,data_output,structure_input,structure_output,criterion,norm):
+    def loss_calculation(self,idx,model_output,data_input,data_output,structure_input,structure_output,criterion,norm='forward'):
         pred_r,pred_g,pred_b,pred_a,pred_s = model_output
 
         r_in = data_input[:, 0:self.model.in_scale, :][idx]

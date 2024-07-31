@@ -31,9 +31,13 @@ for i in range(4):
     random.seed(2024+i)
     models.append(Metamorph(no_frame_samples, batch_size, input_window_size, device).to(device))
 
+no_layers = 0
+for (name, param) in models[0].named_parameters():
+    no_layers +=1
 discriminator = Metamorph_discriminator(no_frame_samples, batch_size, input_window_size, device).to(device)
-parameterReinforcer = Metamorph_parameterReinforcer(device).to(device)
+parameterReinforcer = Metamorph_parameterReinforcer(no_layers,32,device).to(device)
 t = teacher(models,discriminator,parameterReinforcer, device)
+t.t = t
 t.fsim = fl.flame_sim(no_frames=no_frames,frame_skip=frame_skip)
 criterion_model = nn.MSELoss(reduction='mean')
 criterion_e0 = nn.MSELoss(reduction='mean')
