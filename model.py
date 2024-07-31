@@ -69,7 +69,7 @@ class Metamorph(nn.Module):
         self.no_meta_h2 = 32 * 2
         self.no_meta_h1 = 224 * 2
         self.dens_width = 2 * self.shifterCoefficients
-        self.flat_size = 5*self.in_scale**2 # Note: n neurons per every pixel
+        self.flat_size = 10*self.in_scale**2 # Note: n neurons per every pixel
         self.diffiusion_context = 32*2
 
         # Definition of layer 0,1,2 for lvl 4 in hierarchy - theta - diffusion noise context

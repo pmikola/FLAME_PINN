@@ -325,7 +325,7 @@ class teacher(object):
                     choose_diffrent_frame = 1
 
             mod = 4
-            if self.epoch > self.num_of_epochs*0.3 or create_val_dataset == 1:
+            if self.epoch > self.num_of_epochs*0.03 or create_val_dataset == 1:
                 pass
             else:
                 data_in_cnz = torch.count_nonzero(data_input_subslice)
@@ -711,9 +711,9 @@ class teacher(object):
 
             criterion_model,criterion_e0,criterion_e1,criterion_e2,criterion_disc,criterion_RL = criterion
             self.num_of_epochs = num_epochs
+            model_to_Save = self.model
             if learning == 1:
                 best_loss = float('inf')
-                best_model_state = None
                 num_epochs = num_epochs
                 t = 0.
                 t_epoch = 0.
@@ -722,7 +722,6 @@ class teacher(object):
                 reiterate_counter = 0
                 norm = 'forward'
                 print_every_nth_frame=10
-                model_saved = 0
                 best_models = []
                 best_losses = []
                 zero = torch.tensor([0.]).to(device).float()
@@ -817,20 +816,15 @@ class teacher(object):
                             val_loss = self.loss_calculation(val_idx,val_model_output,self.data_input_val,self.data_output_val,self.structure_input_val,self.structure_output_val, criterion_model, norm)
                         self.model.train()
 
-
                     self.train_loss.append(loss.item())
                     self.val_loss.append(val_loss.item())
-
-
                     # t_stop = time.perf_counter()
                     t += (t_pred - t_start)/4
-                    if (epoch + 1) % 10 == 0 and val_loss > min(self.val_loss[:-1]):
-                        model_saved = 0
-                    if  epoch > 25 and model_saved !=1:
-                        if val_loss < min(self.val_loss[:-1]):#loss < min(self.train_loss[:-1]) and
-                            torch.save(self.model.state_dict(), 'model.pt')
+                    if  epoch > 25:
+                        if val_loss < min(self.val_loss[:-1]):
+                            model_to_Save = self.model
                             print('model_saved')
-                            model_saved = 1
+
                     if len(self.train_loss) > 10:
                         loss_recent_history = np.array(self.train_loss)[-10:-1]
                         val_loss_recent_history = np.array(self.val_loss)[-10:-1]
@@ -887,37 +881,43 @@ class teacher(object):
                                     best_losses.append(best_loss)
                                     best_models.append(self.expert_2)
 
-                                if len(best_models) > 10:
-                                    bl = torch.tensor(np.array(best_losses))
-                                    n = 5
-                                    _, best_n_losses_idx = torch.topk(bl, n, largest=False)
-                                    best_model_params = torch.zeros(self.parameterReinforcer.modes,
-                                                                    requires_grad=True).to(device)
-                                    for name, param in best_models[best_n_losses_idx[0]].named_parameters():
-                                        fparam = torch.flatten(param)
-                                        fpshape = fparam.shape[0]
-                                        if fpshape < self.parameterReinforcer.modes:
-                                            fparamWHF = torch.fft.fft(fparam)[:fpshape].real
-                                            best_model_params[:fpshape] += fparamWHF
-                                        else:
-                                            fparamWHF = torch.fft.fft(fparam)[:self.parameterReinforcer.modes].real
-                                            best_model_params += fparamWHF
-
-                                    valloss = torch.tensor(np.array([mean(self.val_loss[-5:])]), requires_grad=True).to(
-                                        device).float()
-                                    layers_coefficients = self.parameterReinforcer(best_model_params)
-                                    RLoss = criterion_RL(zero, valloss)
-                                    RL_optimizer.zero_grad(set_to_none=True)
-                                    RLoss.backward()
-                                    RL_optimizer.step()
-
-                                    with torch.no_grad():
-                                        i = 0
-                                        for (name, param), (nameb, paramb) in zip(self.model.named_parameters(),
-                                                                                  best_models[best_n_losses_idx[0]].named_parameters()):
-                                            p = paramb * layers_coefficients[0][i]*2
-                                            param.copy_(p)
-                                            i += 1
+                                # if len(best_models) > 5:
+                                #     bl = torch.tensor(np.array(best_losses))
+                                #     n = 2
+                                #     _, best_n_losses_idx = torch.topk(bl, n, largest=False)
+                                #     best_model_params = torch.zeros((1,self.parameterReinforcer.modes),
+                                #                                     requires_grad=True).to(device)
+                                #     best_model_temp = torch.zeros((1,self.parameterReinforcer.modes),
+                                #                                     requires_grad=True).to(device)
+                                #     for name, param in best_models[best_n_losses_idx[0]].named_parameters():
+                                #         fparam = torch.flatten(param)
+                                #         fpshape = fparam.shape[0]
+                                #         if fpshape < self.parameterReinforcer.modes:
+                                #             fparamWHF = torch.fft.fft(fparam)[:fpshape].real
+                                #             best_model_temp[:fpshape] = fparamWHF
+                                #             best_model_params = torch.cat([best_model_params,best_model_temp],dim=0)
+                                #             best_model_temp =
+                                #         else:
+                                #             fparamWHF = torch.fft.fft(fparam)[:self.parameterReinforcer.modes].real
+                                #             best_model_temp = fparamWHF
+                                #             best_model_params = torch.cat([best_model_params,best_model_temp],dim=0)
+                                #             best_model_temp =
+                                #
+                                #     rlloss = torch.tensor(np.array([mean(self.val_loss[-5:])]), requires_grad=True).to(
+                                #         device).float()
+                                #     layers_coefficients = self.parameterReinforcer(best_model_params)
+                                #     RLoss = criterion_RL(zero, rlloss)
+                                #     RL_optimizer.zero_grad(set_to_none=True)
+                                #     RLoss.backward()
+                                #     RL_optimizer.step()
+                                #
+                                #     with torch.no_grad():
+                                #         i = 0
+                                #         for (name, param), (nameb, paramb) in zip(self.model.named_parameters(),
+                                #                                                   best_models[best_n_losses_idx[0]].named_parameters()):
+                                #             p = paramb * layers_coefficients[0][i]
+                                #             param.copy_(p)
+                                #             i += 1
 
                                 if len(best_models) > 200:
                                     best_losses = torch.tensor(np.array(best_losses))
@@ -934,7 +934,7 @@ class teacher(object):
                                                          model_avg_enhance.named_parameters()}
 
                                     for m in best_n_losses_idx:
-                                        for (name_best, param_best), (name, param) in zip(best_models[0].named_parameters(),best_models[m].named_parameters()):
+                                        for (name_best, param_best), (name, param) in zip(best_models[best_n_losses_idx[0]].named_parameters(),best_models[m].named_parameters()):
                                             param_best_sign = torch.sgn(param_best)
                                             param_sign = torch.sgn(param)
 
@@ -1000,6 +1000,8 @@ class teacher(object):
                 #     self.model.load_state_dict(torch.load('model.pt'))
             else:
                 pass
+            torch.save(model_to_Save.state_dict(), 'model.pt')
+
             return self.model
 
     def dreaming_phase(self):

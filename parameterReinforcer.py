@@ -51,7 +51,9 @@ class Metamorph_parameterReinforcer(nn.Module):
             self.reset_parameters()
 
     def forward(self, params):
-        x = self.SpaceTimeFFTFeature(params,self.weights_data_0,self.weights_data_fft_0)
+        x = self.SpaceTimeFFTFeature(params.unsqueeze(-1),self.weights_data_0,self.weights_data_fft_0)
+        x = self.SpaceTimeFFTFeature(x, self.weights_data_1, self.weights_data_fft_1)
+        x = self.SpaceTimeFFTFeature(x, self.weights_data_2, self.weights_data_fft_2)
         x = self.activate(self.lin1(x))
         x = torch.sigmoid(self.lin2(x))
         return x
@@ -81,9 +83,8 @@ class Metamorph_parameterReinforcer(nn.Module):
     def SpaceTimeFFTFeature(self,data,weights_data,weights_data_fft):
         # Attention :  Below is implemented simplified FNO LAYER
         fft_data = torch.fft.fft(data,norm='forward')
-        FFTwithW = torch.einsum("ab,xy->by",fft_data.unsqueeze(-1), weights_data_fft)
+        FFTwithW = torch.einsum("ab,xy->by",fft_data, weights_data_fft)
         iFFW= torch.fft.ifft(FFTwithW, norm='forward')
-
         data = self.activate(iFFW)
         # Attention :  Above is implemented simplified FNO LAYER
         #dimag = data.imag
