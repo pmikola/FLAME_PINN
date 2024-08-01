@@ -802,6 +802,22 @@ class teacher(object):
                     e1loss = self.loss_calculation(e1_idx,expert_1_output,self.data_input,self.data_output,self.structure_input,self.structure_output, criterion_e1, norm)
                     e2loss = self.loss_calculation(e2_idx,expert_2_output,self.data_input,self.data_output,self.structure_input,self.structure_output, criterion_e1, norm)
 
+                    # UnderConstruction! UnderConstruction! UnderConstruction!
+                    model_p = self.parameterReinforcer.save_state(self.model)
+                    actions = self.parameterReinforcer(model_p)
+                    self.model = self.parameterReinforcer.simple_weight_mutation(self.model, actions)
+                    model_mutated_output = self.model(dataset)
+                    mutated_loss = self.loss_calculation(m_idx, model_mutated_output, self.data_input, self.data_output,
+                                                         self.structure_input, self.structure_output, criterion_model,
+                                                         norm)
+
+                    RLoss = criterion_RL(mutated_loss, loss)
+
+                    RL_optimizer.zero_grad(set_to_none=True)
+                    RLoss.backward(retain_graph=True)
+                    RL_optimizer.step()
+                    # UnderConstruction! UnderConstruction! UnderConstruction!
+
                     optimizer.zero_grad(set_to_none=True)
                     loss.backward()
                     e0loss.backward()
@@ -809,23 +825,7 @@ class teacher(object):
                     e2loss.backward()
                     optimizer.step()
 
-                    # # UnderConstruction! UnderConstruction! UnderConstruction!
-                    # self.parameterReinforcer.save_state(self.model, loss)
-                    # actions = self.parameterReinforcer()
-                    # self.parameterReinforcer.save_actions(actions)
-                    #
-                    # self.model = self.parameterReinforcer.execute_and_evaluate_actions(self.t, self.model, loss,
-                    #                                                                    dataset, m_idx, self.data_input,
-                    #                                                                    self.data_output,
-                    #                                                                    self.structure_input,
-                    #                                                                    self.structure_output,
-                    #                                                                    criterion_model, norm)
-                    # RLoss = self.parameterReinforcer.RL_loss(criterion_RL, 0.1)
-                    # print(RLoss)
-                    # RL_optimizer.zero_grad(set_to_none=True)
-                    # RLoss.backward()
-                    # RL_optimizer.step()
-                    # # UnderConstruction! UnderConstruction! UnderConstruction!
+
 
                     if self.validation_dataset is not None:
                         self.model.eval()
