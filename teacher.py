@@ -807,14 +807,14 @@ class teacher(object):
                     actions = self.parameterReinforcer(model_p)
                     self.model = self.parameterReinforcer.simple_weight_mutation(self.model, actions)
                     model_mutated_output = self.model(dataset)
-                    mutated_loss = self.loss_calculation(m_idx, model_mutated_output, self.data_input, self.data_output,
+                    RLoss = self.loss_calculation(m_idx, model_mutated_output, self.data_input, self.data_output,
                                                          self.structure_input, self.structure_output, criterion_model,
                                                          norm)
 
-                    RLoss = criterion_RL(mutated_loss, loss)
 
+                    # RLoss = criterion_RL(mutated_loss, loss)
                     RL_optimizer.zero_grad(set_to_none=True)
-                    RLoss.backward(retain_graph=True)
+                    RLoss.backward()
                     RL_optimizer.step()
                     # UnderConstruction! UnderConstruction! UnderConstruction!
 
