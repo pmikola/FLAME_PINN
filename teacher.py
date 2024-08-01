@@ -15,7 +15,7 @@ from torch.autograd import grad
 class teacher(object):
     def __init__(self,models,discriminator,parameterReinforcer,device):
         super(teacher, self).__init__()
-        self.t = None
+        #self.t = None
         self.validation_dataset = None
         self.max_seed = int(1e2)
         self.model = models[0]
@@ -724,7 +724,7 @@ class teacher(object):
                 print_every_nth_frame=10
                 best_models = []
                 best_losses = []
-                zero = torch.tensor([0.]).to(device).float()
+                zero = torch.tensor([0.],requires_grad=True).to(device).float()
 
                 self.data_preparation(1)
                 val_idx = torch.arange(self.data_input_val.shape[0])
@@ -802,30 +802,39 @@ class teacher(object):
                     e1loss = self.loss_calculation(e1_idx,expert_1_output,self.data_input,self.data_output,self.structure_input,self.structure_output, criterion_e1, norm)
                     e2loss = self.loss_calculation(e2_idx,expert_2_output,self.data_input,self.data_output,self.structure_input,self.structure_output, criterion_e1, norm)
 
-                    # UnderConstruction! UnderConstruction! UnderConstruction!
-                    model_p = self.parameterReinforcer.save_state(self.model)
-                    actions = self.parameterReinforcer(model_p)
-                    self.model = self.parameterReinforcer.simple_weight_mutation(self.model, actions)
-                    model_mutated_output = self.model(dataset)
-                    RLoss = self.loss_calculation(m_idx, model_mutated_output, self.data_input, self.data_output,
-                                                         self.structure_input, self.structure_output, criterion_model,
-                                                         norm)
-
-
-                    # RLoss = criterion_RL(mutated_loss, loss)
-                    RL_optimizer.zero_grad(set_to_none=True)
-                    RLoss.backward()
-                    RL_optimizer.step()
-                    # UnderConstruction! UnderConstruction! UnderConstruction!
-
                     optimizer.zero_grad(set_to_none=True)
                     loss.backward()
                     e0loss.backward()
                     e1loss.backward()
                     e2loss.backward()
                     optimizer.step()
+                    # if (epoch + 1) % 5 == 0:
+                    # UnderConstruction! UnderConstruction! UnderConstruction!
+
+                    self.model.eval()
+                    model = copy.deepcopy(self.model)
+                    model_p = self.parameterReinforcer.save_state(model)
+                    actions = self.parameterReinforcer(model_p)
+                    with torch.no_grad():
+                        self.model = self.parameterReinforcer.simple_weight_mutation(self.model, actions)
+                        model_mutated_output = model(dataset)
+                        RLoss = self.loss_calculation(m_idx, model_mutated_output, self.data_input, self.data_output,
+                                                      self.structure_input, self.structure_output, criterion_model,
+                                                      norm)
+
+                        if RLoss < loss:
+                            with torch.no_grad():
+                                for (name, param),(better_names,better_params) in zip(self.model.named_parameters(),model.named_parameters()):
+                                    param.copy_(better_params)
+
+                    RLoss = criterion_RL(zero, RLoss.unsqueeze(0))
+                    RL_optimizer.zero_grad(set_to_none=True)
+                    RLoss.backward()
+                    RL_optimizer.step()
 
 
+
+                    # UnderConstruction! UnderConstruction! UnderConstruction!
 
                     if self.validation_dataset is not None:
                         self.model.eval()

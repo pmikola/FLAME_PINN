@@ -129,11 +129,10 @@ class Metamorph_parameterReinforcer(nn.Module):
 
 
     def simple_weight_mutation(self,model,actions):
-        # with torch.no_grad():
         i = 0
         for (name, param) in model.named_parameters():
-            p = param * actions[0,i]
-            param.data = p.detach()
+            p = param * actions[0,i]*2
+            param.copy_(p)
             i += 1
         return model
 

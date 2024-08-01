@@ -16,7 +16,7 @@ from flameEngine import flame as fl
 # Start ................
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
-torch.autograd.set_detect_anomaly(True)
+# torch.autograd.set_detect_anomaly(True) # Note : Tremendously slowing down program - Attention: Be careful!
 
 no_frame_samples = 50
 batch_size = 512
@@ -38,7 +38,6 @@ for (name, param) in models[0].named_parameters():
 discriminator = Metamorph_discriminator(no_frame_samples, batch_size, input_window_size, device).to(device)
 parameterReinforcer = Metamorph_parameterReinforcer(no_layers,10,device).to(device)
 t = teacher(models,discriminator,parameterReinforcer, device)
-t.t = t
 t.fsim = fl.flame_sim(no_frames=no_frames,frame_skip=frame_skip)
 criterion_model = nn.MSELoss(reduction='mean')
 criterion_e0 = nn.MSELoss(reduction='mean')
@@ -69,7 +68,7 @@ for period in range(1,no_periods+1):
     t.fsim.fuel_dens_modifier = 1/t.fsim.dt
     t.fsim.simulate(simulate=0,save_rgb=1,save_alpha=1,save_fuel=1,delete_data=0)
     t.learning_phase(no_frame_samples, batch_size, input_window_size, first_frame,
-                     last_frame,frame_skip*2,criterion,optimizer,disc_optimizer,RL_optimizer,device,learning=1,num_epochs=2000)
+                     last_frame,frame_skip*2,criterion,optimizer,disc_optimizer,RL_optimizer,device,learning=1,num_epochs=1000)
     # t.fsim.simulate(simulate=0,delete_data=1)
 
 t.visualize_lerning()
