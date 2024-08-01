@@ -131,7 +131,7 @@ class Metamorph_parameterReinforcer(nn.Module):
     def simple_weight_mutation(self,model,actions):
         i = 0
         for (name, param) in model.named_parameters():
-            p = param * actions[0,i]*2
+            p = param * actions[0,i]
             param.copy_(p)
             i += 1
         return model
