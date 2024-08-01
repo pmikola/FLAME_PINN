@@ -809,6 +809,24 @@ class teacher(object):
                     e2loss.backward()
                     optimizer.step()
 
+                    # # UnderConstruction! UnderConstruction! UnderConstruction!
+                    # self.parameterReinforcer.save_state(self.model, loss)
+                    # actions = self.parameterReinforcer()
+                    # self.parameterReinforcer.save_actions(actions)
+                    #
+                    # self.model = self.parameterReinforcer.execute_and_evaluate_actions(self.t, self.model, loss,
+                    #                                                                    dataset, m_idx, self.data_input,
+                    #                                                                    self.data_output,
+                    #                                                                    self.structure_input,
+                    #                                                                    self.structure_output,
+                    #                                                                    criterion_model, norm)
+                    # RLoss = self.parameterReinforcer.RL_loss(criterion_RL, 0.1)
+                    # print(RLoss)
+                    # RL_optimizer.zero_grad(set_to_none=True)
+                    # RLoss.backward()
+                    # RL_optimizer.step()
+                    # # UnderConstruction! UnderConstruction! UnderConstruction!
+
                     if self.validation_dataset is not None:
                         self.model.eval()
                         with torch.no_grad():
@@ -818,22 +836,13 @@ class teacher(object):
 
                     self.train_loss.append(loss.item())
                     self.val_loss.append(val_loss.item())
-                    # UnderConstruction! UnderConstruction! UnderConstruction!
-                    self.parameterReinforcer.save_state(self.model,loss)
-                    actions = self.parameterReinforcer()
-                    self.parameterReinforcer.save_actions(actions)
-                    self.parameterReinforcer.execute_and_evaluate_actions(self.t,self.model,loss,dataset,m_idx,self.data_input,self.data_output,self.structure_input,self.structure_output,criterion_model, norm)
-                    RLoss = self.parameterReinforcer.RL_loss(criterion_RL,0.01)
-                    RL_optimizer.zero_grad(set_to_none=True)
-                    RLoss.backward()
-                    RL_optimizer.step()
-                    # UnderConstruction! UnderConstruction! UnderConstruction!
+
                     # t_stop = time.perf_counter()
                     t += (t_pred - t_start)/4
                     if  epoch > 25:
                         if val_loss < min(self.val_loss[:-1]):
                             model_to_Save = self.model
-                            print('model_saved \r')
+                            print('saved_checkpoint')
 
                     if len(self.train_loss) > 10:
                         loss_recent_history = np.array(self.train_loss)[-10:-1]
@@ -934,9 +943,6 @@ class teacher(object):
                                             else:
                                                 pass
 
-
-
-
                                     self.discriminator.weight_reset()
                                     self.discriminator.init_weights()
                                     disc_optimizer = torch.optim.Adam(self.discriminator.parameters(), lr=5e-4,
@@ -973,7 +979,7 @@ class teacher(object):
             else:
                 pass
             torch.save(model_to_Save.state_dict(), 'model.pt')
-
+            print('model_saved on disk')
             return self.model
 
     def dreaming_phase(self):
