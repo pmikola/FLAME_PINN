@@ -7,31 +7,32 @@ import torch.nn as nn
 import torch.optim as optim
 from matplotlib import pyplot as plt
 import torch.nn.functional as f
-
+from collections import deque
 from teacher import teacher
 
 
 class Metamorph_parameterReinforcer(nn.Module):
     # Note : Buzzword - Metamorph will be better name here probably :) or HIPNO
-    def __init__(self,no_layers,batch_size,device):
+    def __init__(self,no_layers,batch_size,modes,memory_size,device):
         super(Metamorph_parameterReinforcer, self).__init__()
 
 
 
         self.device = device
         self.no_layers = no_layers
-        self.modes = 32
-        self.memory_size = 128
-        # self.points_size = int(self.memory_size/6)
         self.batch_size = batch_size
+        self.modes = modes
+        self.memory_size = memory_size
 
-        # # self.reward = torch.zeros(self.batch_size, requires_grad=True).to(self.device)
-        # self.model_parameter_memory = torch.zeros((self.no_layers, self.modes,1),
-        #                            requires_grad=True).to(self.device)
-        # self.loss_memory = torch.zeros(1,requires_grad=True).to(self.device)
-        # self.action_memory = torch.zeros((self.batch_size,self.no_layers, 1),requires_grad=True).to(self.device)
-        # self.rewards_memory = torch.zeros((self.batch_size,1),requires_grad=True).to(self.device)
-        # self.loss_calculation = teacher.loss_calculation
+        self.actions = deque(maxlen=self.memory_size)
+        self.states = deque(maxlen=self.memory_size)
+        self.losses = deque(maxlen=self.memory_size)
+        self.RLosses = deque(maxlen=self.memory_size)
+        self.next_actions = deque(maxlen=self.memory_size)
+        self.next_states = deque(maxlen=self.memory_size)
+        self.rewards = deque(maxlen=self.memory_size)
+        self.next_rewards = deque(maxlen=self.memory_size)
+
         # Definition of weights and weights as convolutions in FFT space used in FFTFeatures
         self.weights_data_0 = nn.Parameter(torch.rand((1,self.modes), dtype=torch.float))
         self.weights_data_fft_0 = nn.Parameter(torch.rand((1,self.modes), dtype=torch.cfloat))
@@ -112,88 +113,76 @@ class Metamorph_parameterReinforcer(nn.Module):
 
     def save_state(self,model):
         i = 0
-        model_p = torch.zeros((self.no_layers, self.modes),
+        model_parameters = torch.zeros((self.no_layers, self.modes),
                                    requires_grad=True).to(self.device)
         for name, param in model.named_parameters():
             fparam = torch.flatten(param)
             fpshape = fparam.shape[0]
             if fpshape < self.modes:
                 fparamWHF = torch.fft.fft(fparam)[:fpshape].real
-                model_p[i,:fpshape] = fparamWHF
+                model_parameters[i,:fpshape] = fparamWHF
                 i+=1
             else:
                 fparamWHF = torch.fft.fft(fparam)[:self.modes].real
-                model_p[i] = fparamWHF
+                model_parameters[i] = fparamWHF
                 i += 1
-        return model_p
+        self.states.append(model_parameters.detach())
+        return model_parameters
 
+    def save_next_state(self,model):
+        i = 0
+        model_parameters = torch.zeros((self.no_layers, self.modes),
+                                   requires_grad=True).to(self.device)
+        for name, param in model.named_parameters():
+            fparam = torch.flatten(param)
+            fpshape = fparam.shape[0]
+            if fpshape < self.modes:
+                fparamWHF = torch.fft.fft(fparam)[:fpshape].real
+                model_parameters[i,:fpshape] = fparamWHF
+                i+=1
+            else:
+                fparamWHF = torch.fft.fft(fparam)[:self.modes].real
+                model_parameters[i] = fparamWHF
+                i += 1
+        self.next_states.append(model_parameters.detach())
+        return model_parameters
 
-    def simple_weight_mutation(self,model,actions):
+    def save_action(self,action):
+        self.actions.append(action)
+
+    def save_next_action(self,action):
+        self.next_actions.append(action)
+
+    def calculate_reward(self,loss,RLoss):
+        reward = torch.tensor([0.]).to(self.device)
+        if loss < RLoss:
+            reward -=2*RLoss/loss
+        elif loss == RLoss:
+            pass
+        else: reward +=2*loss/RLoss
+        self.rewards.append(reward.detach())
+
+    def calculate_next_reward(self,loss,RLoss):
+        reward = torch.tensor([0.]).to(self.device)
+        if loss < RLoss:
+            reward = RLoss/loss
+        elif loss == RLoss:
+            pass
+        else: reward +=2*loss/RLoss
+        self.next_rewards.append(reward.detach())
+
+    def PolicyFunction(self,gamma=0.1):
+        pass # TODO after loooooong weeknd
+
+    def weight_mutation(self,model,action):
         i = 0
         for (name, param) in model.named_parameters():
-            p = param * actions[0,i]
+            p = param * action[0,i]
             param.copy_(p)
             i += 1
         return model
 
-    # def execute_and_evaluate_actions(self,t,model,loss,dataset,idx,data_input,data_output,
-    #                                  structure_input,structure_output,criterion, norm):
-    #     # with torch.no_grad():
-    #     losses = torch.full((1,), 100, device=self.device)
-    #     model_test = copy.deepcopy(model)
-    #     # with torch.no_grad():
-    #     for j in range(self.n.shape[0]):
-    #         i = 0
-    #         with torch.no_grad():
-    #             for (name,param), (test_name,test_param) in zip(model.named_parameters(),model_test.named_parameters()):
-    #                 p = param * self.action_memory[j,i,self.n[j]]
-    #                 test_param.copy_(p)
-    #                 i += 1
-    #             model_output  = model_test(dataset)
-    #             # model_output = r.detach(), g.detach(), b.detach(), a.detach(), s.detach()
-    #             partial_loss = t.loss_calculation(idx,model_output,data_input,data_output,structure_input,
-    #                                                  structure_output,criterion,norm)
-    #             losses = torch.cat([losses,partial_loss.unsqueeze(0)]).detach()
-    #     min_loss_idx = self.caluclate_reward(loss.unsqueeze(0),losses)
-    #     with torch.no_grad():
-    #         i = 0
-    #         for (name, param) in model.named_parameters():
-    #             p = param * self.action_memory[min_loss_idx, i, self.n[min_loss_idx]]
-    #             param.copy_(p)
-    #             i += 1
-    #     return model
-    #
-    # def caluclate_reward(self,base_loss,losses):
-    #     loss_vector = (losses < base_loss).float()[1:]
-    #     min_loss_idx = torch.argmin(losses[1:])
-    #     delta_loss = (base_loss - losses[1:])
-    #     reward = delta_loss / (delta_loss.min())
-    #     if loss_vector[min_loss_idx]:
-    #         reward[min_loss_idx] = reward[min_loss_idx]* 2
-    #     self.save_rewards(reward)
-    #     return min_loss_idx
-    #
-    #
-    # def save_rewards(self,reward):
-    #     if self.model_parameter_memory.shape[2] > self.memory_size:
-    #         temp_r = self.rewards_memory[:,1:]
-    #         self.rewards_memory[:,0:-1] = temp_r
-    #         self.rewards_memory[:,-1] = reward.unsqueeze(-1)
-    #     else:
-    #         self.rewards_memory = torch.cat([self.rewards_memory, reward.unsqueeze(-1)], dim=1)
-    #
-    # def RL_loss(self,criterion,gamma):
-    #     # q_values = self.action_memory[:, :, self.n[-1]]
-    #     # q_values.data[:,:] = 1.
-    #     # self.action_memory.data[:, :, self.n[-1]] = q_values
-    #     # next_q_values,idx_next_q_values = self.action_memory.max(dim=2,keepdim=True)
-    #     # self.action_memory.data[idx_next_q_values] = 1.
-    #     # rewards_values = self.rewards_memory
-    #     # target_q_values = rewards_values.unsqueeze(1) + gamma * self.action_memory
-    #
-    #     RLoss = criterion(self.action_memory[:, :, self.n[-1]].unsqueeze(2), self.action_memory[:, :, self.n[-1]].unsqueeze(2))
-    #     print(RLoss.grad_fn)
-    #     return RLoss
+
     def activate(self,x):
         return torch.tanh(x)#*2#*self.activation_weight
 

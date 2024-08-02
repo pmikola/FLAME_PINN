@@ -813,26 +813,37 @@ class teacher(object):
 
                     self.model.eval()
                     model = copy.deepcopy(self.model)
-                    model_p = self.parameterReinforcer.save_state(model)
-                    actions = self.parameterReinforcer(model_p)
+                    state = self.parameterReinforcer.save_state(model)
+                    action = self.parameterReinforcer(state)
+                    self.parameterReinforcer.save_action(action.detach())
                     with torch.no_grad():
-                        self.model = self.parameterReinforcer.simple_weight_mutation(self.model, actions)
+                        model = self.parameterReinforcer.weight_mutation(model, action)
                         model_mutated_output = model(dataset)
                         RLoss = self.loss_calculation(m_idx, model_mutated_output, self.data_input, self.data_output,
                                                       self.structure_input, self.structure_output, criterion_model,
                                                       norm)
+                        self.parameterReinforcer.calculate_reward(loss.detach(), RLoss.detach())
+                        for (name, param),(post_action_names,post_action_params) in zip(self.model.named_parameters(),model.named_parameters()):
+                            param.copy_(post_action_params)
 
-                        if RLoss < loss:
-                            with torch.no_grad():
-                                for (name, param),(better_names,better_params) in zip(self.model.named_parameters(),model.named_parameters()):
-                                    param.copy_(better_params)
+                    self.model.eval()
+                    model = copy.deepcopy(self.model)
+                    next_state = self.parameterReinforcer.save_next_state(model)
+                    next_action = self.parameterReinforcer(next_state)
+                    self.parameterReinforcer.save_next_action(next_action.detach())
+                    with torch.no_grad():
+                        model = self.parameterReinforcer.weight_mutation(model, next_action)
+                        model_mutated_output = model(dataset)
+                        next_RLoss = self.loss_calculation(m_idx, model_mutated_output, self.data_input, self.data_output,
+                                                      self.structure_input, self.structure_output, criterion_model,
+                                                      norm)
+                        self.parameterReinforcer.calculate_next_reward(loss.detach(), next_RLoss.detach())
 
-                    RLoss = criterion_RL(zero, RLoss.unsqueeze(0))
+                    self.parameterReinforcer.PolicyFunction(gamma=0.1)
+                    RLoss = criterion_RL(zero, RLoss.unsqueeze(0)+next_RLoss.unsqueeze(0))
                     RL_optimizer.zero_grad(set_to_none=True)
                     RLoss.backward()
                     RL_optimizer.step()
-
-
 
                     # UnderConstruction! UnderConstruction! UnderConstruction!
 
@@ -972,6 +983,7 @@ class teacher(object):
                         t_epoch_current = epoch * t_epoch
                         print(f'P: {self.period}/{self.no_of_periods} | E: {((t_epoch_total-t_epoch_current)/(print_every_nth_frame*60)):.2f} [min], '
                               f'vL: {val_loss.item():.2f}, '
+                              f'Reward: {self.parameterReinforcer.rewards[-1].item():.2f}, '
                               f'mL: {loss.item():.2f}, '
                               f'dL: {disc_loss.item():.3f}, '
                               f'e0L: {e0loss.item():.2f}, '
