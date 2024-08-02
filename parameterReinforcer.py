@@ -172,7 +172,7 @@ class Metamorph_parameterReinforcer(nn.Module):
         self.next_rewards.append(reward.detach())
 
     def PolicyFunction(self,gamma=0.1):
-        pass # TODO after loooooong weeknd
+        pass # TODO after loooooong weeknd SARSA
 
     def weight_mutation(self,model,action):
         i = 0
