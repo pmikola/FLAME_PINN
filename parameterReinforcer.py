@@ -12,12 +12,9 @@ from teacher import teacher
 
 
 class Metamorph_parameterReinforcer(nn.Module):
-    # Note : Buzzword - Metamorph will be better name here probably :) or HIPNO
+    # Note : On-Policy method (for now)
     def __init__(self,no_layers,batch_size,modes,memory_size,device):
         super(Metamorph_parameterReinforcer, self).__init__()
-
-
-
         self.device = device
         self.no_layers = no_layers
         self.batch_size = batch_size
@@ -171,8 +168,12 @@ class Metamorph_parameterReinforcer(nn.Module):
         else: reward +=2*loss/RLoss
         self.next_rewards.append(reward.detach())
 
-    def PolicyFunction(self,gamma=0.1):
-        pass # TODO after loooooong weeknd SARSA
+    def PolicyFunctionLoss(self,gamma=0.1):
+        # TODO: Calculate policy loss function from state action space using output action that
+        # TODO : corresponds to number of activations of main neural network (so the output of policy network
+        # TODO: should be - softmax(features,no_layers x actions_per_layer)
+        # TODO: use differentiable torchtopk algorithm or something similar (maby shapeshift again)
+        return loss
 
     def weight_mutation(self,model,action):
         i = 0

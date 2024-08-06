@@ -839,7 +839,7 @@ class teacher(object):
                                                       norm)
                         self.parameterReinforcer.calculate_next_reward(loss.detach(), next_RLoss.detach())
 
-                    self.parameterReinforcer.PolicyFunction(gamma=0.1)
+                    RLoss = self.parameterReinforcer.PolicyFunctionLoss(gamma=0.1)
                     RLoss = criterion_RL(zero, RLoss.unsqueeze(0)+next_RLoss.unsqueeze(0))
                     RL_optimizer.zero_grad(set_to_none=True)
                     RLoss.backward()
