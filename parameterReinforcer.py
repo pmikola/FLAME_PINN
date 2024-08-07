@@ -13,13 +13,15 @@ from teacher import teacher
 
 class Metamorph_parameterReinforcer(nn.Module):
     # Note : On-Policy method (for now)
-    def __init__(self,no_layers,batch_size,modes,memory_size,device):
+    def __init__(self,no_layers,batch_size,modes,action_per_layer,memory_size,device):
         super(Metamorph_parameterReinforcer, self).__init__()
         self.device = device
         self.no_layers = no_layers
         self.batch_size = batch_size
         self.modes = modes
         self.memory_size = memory_size
+        self.action_per_layer = action_per_layer
+        self.masks = deque(maxlen=self.no_layers*self.action_per_layer)
 
         self.actions = deque(maxlen=self.memory_size)
         self.states = deque(maxlen=self.memory_size)
@@ -29,6 +31,10 @@ class Metamorph_parameterReinforcer(nn.Module):
         self.next_states = deque(maxlen=self.memory_size)
         self.rewards = deque(maxlen=self.memory_size)
         self.next_rewards = deque(maxlen=self.memory_size)
+
+        # Definition of target policy function
+        self.target_policy = torch.rand(self.batch_size, self.no_layers, self.action_per_layer,requires_grad=True).to(self.device)
+        self.pred_policy = torch.rand(self.batch_size, self.no_layers, self.action_per_layer,requires_grad=True).to(self.device)
 
         # Definition of weights and weights as convolutions in FFT space used in FFTFeatures
         self.weights_data_0 = nn.Parameter(torch.rand((1,self.modes), dtype=torch.float))
@@ -40,7 +46,8 @@ class Metamorph_parameterReinforcer(nn.Module):
 
         # Definition of output dens layers
         self.lin1 = nn.Linear(self.no_layers,self.modes)
-        self.lin2 = nn.Linear(self.modes,self.no_layers)
+        self.lin2 = nn.Linear(self.modes,self.no_layers*self.action_per_layer)
+        self.softmax = nn.LogSoftmax(dim=2)
         self.init_weights()
 
     def init_weights(self):
@@ -65,35 +72,16 @@ class Metamorph_parameterReinforcer(nn.Module):
             self.reset_parameters()
 
     def forward(self,model_p):
+        #x = torch.cat([model_p,self.masks])
+
         x = self.SpaceTimeFFTFeature(model_p.unsqueeze(0),self.weights_data_0,self.weights_data_fft_0)
         x = self.SpaceTimeFFTFeature(x, self.weights_data_1, self.weights_data_fft_1)
         x = self.SpaceTimeFFTFeature(x, self.weights_data_2, self.weights_data_fft_2)
         x = torch.flatten(x,start_dim=1)
         x = self.activate(self.lin1(x))
-        x = torch.sigmoid(self.lin2(x))
+        x = self.lin2(x).view(self.batch_size,self.no_layers,self.action_per_layer)
+        # x = self.softmax(x)
         return x
-
-    def shapeShift(self,x, h):
-        if x.dim() == 3:
-            coefficients = h.reshape(self.batch_size,x.shape[1],x.shape[2],self.shifterCoefficients)
-            x_powers = torch.pow(x[0:self.batch_size,:,:].unsqueeze(3), self.exponents.unsqueeze(0).unsqueeze(1))
-            craftedPolynomial = torch.sum(coefficients * x_powers, dim=3)
-            craftedPolynomial = self.activate(craftedPolynomial)
-            return craftedPolynomial
-        elif x.dim() == 2:
-            coefficients = h.reshape(self.batch_size,x.shape[1],self.shifterCoefficients)
-            x_powers = torch.pow(x[0:self.batch_size, :].unsqueeze(2), self.exponents.unsqueeze(0).unsqueeze(1))
-            craftedPolynomial = torch.sum(coefficients * x_powers, dim=2)
-            craftedPolynomial = self.activate(craftedPolynomial)
-            return craftedPolynomial
-        elif x.dim() == 4:
-            coefficients = h.reshape(self.batch_size, x.shape[1], x.shape[2], x.shape[3], self.shifterCoefficients)
-            x_powers = torch.pow(x[0:self.batch_size, :, :, :].unsqueeze(4),self.exponents.unsqueeze(0).unsqueeze(1).unsqueeze(2))
-            craftedPolynomial = torch.sum(coefficients * x_powers, dim=4)
-            craftedPolynomial = self.activate(craftedPolynomial)
-            return craftedPolynomial
-        else:
-            raise ValueError("Unsupported input dimensions")
 
     def SpaceTimeFFTFeature(self,data,weights_data,weights_data_fft):
         # Attention :  Below is implemented simplified FNO LAYER
@@ -117,11 +105,11 @@ class Metamorph_parameterReinforcer(nn.Module):
             fpshape = fparam.shape[0]
             if fpshape < self.modes:
                 fparamWHF = torch.fft.fft(fparam)[:fpshape].real
-                model_parameters[i,:fpshape] = fparamWHF
+                model_parameters[i,:fpshape] = fparamWHF.detach().clone()
                 i+=1
             else:
                 fparamWHF = torch.fft.fft(fparam)[:self.modes].real
-                model_parameters[i] = fparamWHF
+                model_parameters[i] = fparamWHF.detach().clone()
                 i += 1
         self.states.append(model_parameters.detach())
         return model_parameters
@@ -135,14 +123,29 @@ class Metamorph_parameterReinforcer(nn.Module):
             fpshape = fparam.shape[0]
             if fpshape < self.modes:
                 fparamWHF = torch.fft.fft(fparam)[:fpshape].real
-                model_parameters[i,:fpshape] = fparamWHF
+                model_parameters[i,:fpshape] = fparamWHF.detach().clone()
                 i+=1
             else:
                 fparamWHF = torch.fft.fft(fparam)[:self.modes].real
-                model_parameters[i] = fparamWHF
+                model_parameters[i] = fparamWHF.detach().clone()
                 i += 1
         self.next_states.append(model_parameters.detach())
         return model_parameters
+
+    def create_masks(self,model):
+        for (name, param) in model.named_parameters():
+            for i in range(self.action_per_layer):
+                self.masks.append(torch.rand_like(param.detach()))
+
+    def weight_mutation(self,model,action):
+        i = 0
+        p_action = torch.exp(action)
+        p_action_value, p_action_idx = torch.max(p_action, dim=-1)
+        for (name, param) in model.named_parameters():
+            p = param * self.masks[self.action_per_layer*i+p_action_idx[:,i]]
+            param.copy_(p)
+            i += 1
+        return model
 
     def save_action(self,action):
         self.actions.append(action)
@@ -150,39 +153,35 @@ class Metamorph_parameterReinforcer(nn.Module):
     def save_next_action(self,action):
         self.next_actions.append(action)
 
-    def calculate_reward(self,loss,RLoss):
+    def calculate_reward(self,loss,MLoss):
         reward = torch.tensor([0.]).to(self.device)
-        if loss < RLoss:
-            reward -=2*RLoss/loss
-        elif loss == RLoss:
+        if loss < MLoss:
+            reward = reward + 1/1 * (loss/MLoss)
+
+        elif loss == MLoss:
             pass
-        else: reward +=2*loss/RLoss
+        else: reward =reward + 1 * (loss/MLoss)
         self.rewards.append(reward.detach())
 
-    def calculate_next_reward(self,loss,RLoss):
+    def calculate_next_reward(self,loss,MLoss):
         reward = torch.tensor([0.]).to(self.device)
-        if loss < RLoss:
-            reward = RLoss/loss
-        elif loss == RLoss:
+        if loss < MLoss:
+            reward = reward + 1/1 * (loss/MLoss)
+        elif loss == MLoss:
             pass
-        else: reward +=2*loss/RLoss
+        else:
+            reward =reward + 1 * (loss / MLoss)
         self.next_rewards.append(reward.detach())
 
-    def PolicyFunctionLoss(self,gamma=0.1):
-        # TODO: Calculate policy loss function from state action space using output action that
-        # TODO : corresponds to number of activations of main neural network (so the output of policy network
-        # TODO: should be - softmax(features,no_layers x actions_per_layer)
-        # TODO: use differentiable torchtopk algorithm or something similar (maby shapeshift again)
-        
-        return loss
+    def PolicyFunctionLoss(self,alpha=0.5,gamma=0.1):
+        target_policy = self.target_policy + alpha*(self.next_rewards[-1]+gamma*self.next_actions[-1]- self.actions[-1])
+        self.target_policy.data.copy_(target_policy)
+        return target_policy
 
-    def weight_mutation(self,model,action):
-        i = 0
-        for (name, param) in model.named_parameters():
-            p = param * action[0,i]
-            param.copy_(p)
-            i += 1
-        return model
+    def next_to_current(self):
+        self.actions,self.next_actions = self.next_actions,self.actions
+        self.states, self.next_states = self.next_states, self.states
+        self.rewards, self.next_rewards = self.next_rewards, self.rewards
 
 
     def activate(self,x):
