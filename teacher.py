@@ -815,7 +815,7 @@ class teacher(object):
                     model = copy.deepcopy(self.model)
                     state = self.parameterReinforcer.save_state(model)
                     action = self.parameterReinforcer(state)
-                    self.parameterReinforcer.save_action(action.detach())
+                    self.parameterReinforcer.save_action(action)
                     with torch.no_grad():
                         model = self.parameterReinforcer.weight_mutation(model, action)
                         model_mutated_output = model(dataset)
@@ -823,23 +823,22 @@ class teacher(object):
                                                       self.structure_input, self.structure_output, criterion_model,
                                                       norm)
                         self.parameterReinforcer.calculate_reward(loss.detach(), mutation_loss.detach())
-                        for (name, param),(post_action_names,post_action_params) in zip(self.model.named_parameters(),model.named_parameters()):
-                            param.copy_(post_action_params)
 
+                        # for (name, param),(post_action_names,post_action_params) in zip(self.model.named_parameters(),model.named_parameters()):
+                        #     param.copy_(post_action_params)
 
-                    model = copy.deepcopy(self.model)
-                    model.eval()
+                    next_model = copy.deepcopy(self.model)
                     next_state = self.parameterReinforcer.save_next_state(model)
                     next_action = self.parameterReinforcer(next_state)
-                    self.parameterReinforcer.save_next_action(next_action.detach())
+                    self.parameterReinforcer.save_next_action(next_action)
                     with torch.no_grad():
-                        model = self.parameterReinforcer.weight_mutation(model, next_action)
-                        model_mutated_output = model(dataset)
+                        next_model = self.parameterReinforcer.weight_mutation(next_model, next_action)
+                        model_mutated_output = next_model(dataset)
                         next_mutation_loss = self.loss_calculation(m_idx, model_mutated_output, self.data_input, self.data_output,
                                                       self.structure_input, self.structure_output, criterion_model,
                                                       norm)
                         self.parameterReinforcer.calculate_next_reward(loss.detach(), next_mutation_loss.detach())
-                    target_policy = self.parameterReinforcer.PolicyFunctionLoss(alpha=1.,gamma=0.9)
+                    target_policy = self.parameterReinforcer.PolicyFunctionLoss(alpha=1.,gamma=0.1)
                     # print(torch.flatten(action[-1]).max(),torch.flatten(target_policy.squeeze(0).max()))
                     RLoss = criterion_RL(action[-1],target_policy.squeeze(0))
                     RL_optimizer.zero_grad(set_to_none=True)

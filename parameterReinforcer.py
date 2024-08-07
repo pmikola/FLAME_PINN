@@ -98,8 +98,7 @@ class Metamorph_parameterReinforcer(nn.Module):
 
     def save_state(self,model):
         i = 0
-        model_parameters = torch.zeros((self.no_layers, self.modes),
-                                   requires_grad=True).to(self.device)
+        model_parameters = torch.zeros((self.no_layers, self.modes)).to(self.device)
         for name, param in model.named_parameters():
             fparam = torch.flatten(param)
             fpshape = fparam.shape[0]
@@ -116,8 +115,7 @@ class Metamorph_parameterReinforcer(nn.Module):
 
     def save_next_state(self,model):
         i = 0
-        model_parameters = torch.zeros((self.no_layers, self.modes),
-                                   requires_grad=True).to(self.device)
+        model_parameters = torch.zeros((self.no_layers, self.modes)).to(self.device)
         for name, param in model.named_parameters():
             fparam = torch.flatten(param)
             fpshape = fparam.shape[0]
@@ -139,7 +137,7 @@ class Metamorph_parameterReinforcer(nn.Module):
 
     def weight_mutation(self,model,action):
         i = 0
-        p_action = torch.exp(action)
+        p_action = torch.exp(action.detach())
         p_action_value, p_action_idx = torch.max(p_action, dim=-1)
         for (name, param) in model.named_parameters():
             p = param * self.masks[self.action_per_layer*i+p_action_idx[:,i]]
@@ -148,13 +146,13 @@ class Metamorph_parameterReinforcer(nn.Module):
         return model
 
     def save_action(self,action):
-        self.actions.append(action)
+        self.actions.append(action.detach())
 
     def save_next_action(self,action):
-        self.next_actions.append(action)
+        self.next_actions.append(action.detach())
 
     def calculate_reward(self,loss,MLoss):
-        reward = torch.tensor([0.]).to(self.device)
+        reward = torch.tensor([0.]).to(self.device).detach()
         if loss < MLoss:
             reward = reward + 1/1 * (loss/MLoss)
 
@@ -164,7 +162,7 @@ class Metamorph_parameterReinforcer(nn.Module):
         self.rewards.append(reward.detach())
 
     def calculate_next_reward(self,loss,MLoss):
-        reward = torch.tensor([0.]).to(self.device)
+        reward = torch.tensor([0.]).to(self.device).detach()
         if loss < MLoss:
             reward = reward + 1/1 * (loss/MLoss)
         elif loss == MLoss:
@@ -175,7 +173,7 @@ class Metamorph_parameterReinforcer(nn.Module):
 
     def PolicyFunctionLoss(self,alpha=0.5,gamma=0.1):
         target_policy = self.target_policy + alpha*(self.next_rewards[-1]+gamma*self.next_actions[-1]- self.actions[-1])
-        self.target_policy.data.copy_(target_policy)
+        # self.target_policy.data.copy_(target_policy.detach())
         return target_policy
 
     def next_to_current(self):
