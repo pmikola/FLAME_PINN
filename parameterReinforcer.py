@@ -2,6 +2,7 @@ import copy
 import random
 import time
 
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -33,8 +34,7 @@ class Metamorph_parameterReinforcer(nn.Module):
         self.next_rewards = deque(maxlen=self.memory_size)
 
         # Definition of target policy function
-        self.target_policy = torch.rand(self.batch_size, self.no_layers, self.action_per_layer,requires_grad=True).to(self.device)
-        self.pred_policy = torch.rand(self.batch_size, self.no_layers, self.action_per_layer,requires_grad=True).to(self.device)
+        self.q_value = torch.rand(self.batch_size, self.no_layers, self.action_per_layer,requires_grad=True).to(self.device)
 
         # Definition of weights and weights as convolutions in FFT space used in FFTFeatures
         self.weights_data_0 = nn.Parameter(torch.rand((1,self.modes), dtype=torch.float))
@@ -47,7 +47,7 @@ class Metamorph_parameterReinforcer(nn.Module):
         # Definition of output dens layers
         self.lin1 = nn.Linear(self.no_layers,self.modes)
         self.lin2 = nn.Linear(self.modes,self.no_layers*self.action_per_layer)
-        self.softmax = nn.LogSoftmax(dim=2)
+        self.softmax = nn.Softmax(dim=2)
         self.init_weights()
 
     def init_weights(self):
@@ -88,11 +88,8 @@ class Metamorph_parameterReinforcer(nn.Module):
         fft_data = torch.fft.fft(data,norm='forward')
         FFTwithW = torch.einsum("bfp,mn->bfm",fft_data, weights_data_fft)
         iFFW= torch.fft.ifft(FFTwithW, norm='forward')
-        data = self.activate(iFFW)
+        data = self.activate(iFFW.real)
         # Attention :  Above is implemented simplified FNO LAYER
-        #dimag = data.imag
-        dreal = data.real
-        data = dreal
         # data = torch.tanh(data)
         return data
 
@@ -135,15 +132,23 @@ class Metamorph_parameterReinforcer(nn.Module):
             for i in range(self.action_per_layer):
                 self.masks.append(torch.rand_like(param.detach()))
 
-    def weight_mutation(self,model,action):
+    def mutate_parameters(self, model, action):
         i = 0
-        p_action = torch.exp(action.detach())
-        p_action_value, p_action_idx = torch.max(p_action, dim=-1)
+        p_action = action.detach()
+        p_action_idx = torch.argmax(p_action, dim=-1)
         for (name, param) in model.named_parameters():
             p = param * self.masks[self.action_per_layer*i+p_action_idx[:,i]]
             param.copy_(p)
             i += 1
         return model
+
+    def exploit_explore_action_selector(self,action,p=0.3):
+        selector = torch.randint(1,10,(1,))
+        if  selector < 10*p:
+            action = torch.rand(self.batch_size, self.no_layers, self.action_per_layer,requires_grad=True).to(self.device)
+        else:
+            pass
+        return action
 
     def save_action(self,action):
         self.actions.append(action.detach())
@@ -152,34 +157,43 @@ class Metamorph_parameterReinforcer(nn.Module):
         self.next_actions.append(action.detach())
 
     def calculate_reward(self,loss,MLoss):
-        reward = torch.tensor([0.]).to(self.device).detach()
-        if loss < MLoss:
-            reward = reward + 1/1 * (loss/MLoss)
-
-        elif loss == MLoss:
-            pass
-        else: reward =reward + 1 * (loss/MLoss)
+        reward = torch.tensor([0.]).to(self.device)
+        multipliers = np.linspace(1, 3, 100).tolist()
+        if MLoss < loss:
+            reward += 1
+            for multiplier in multipliers:
+                if MLoss * multiplier < loss:
+                    reward += 1
+                else:
+                    break
         self.rewards.append(reward.detach())
 
     def calculate_next_reward(self,loss,MLoss):
-        reward = torch.tensor([0.]).to(self.device).detach()
-        if loss < MLoss:
-            reward = reward + 1/1 * (loss/MLoss)
-        elif loss == MLoss:
-            pass
-        else:
-            reward =reward + 1 * (loss / MLoss)
+        reward = torch.tensor([0.]).to(self.device)
+        multipliers = np.linspace(1, 3, 100).tolist()
+        if MLoss < loss:
+            reward += 1
+            for multiplier in multipliers:
+                if MLoss * multiplier < loss:
+                    reward += 1
+                else:
+                    break
         self.next_rewards.append(reward.detach())
 
-    def PolicyFunctionLoss(self,alpha=0.5,gamma=0.1):
-        target_policy = self.target_policy + alpha*(self.next_rewards[-1]+gamma*self.next_actions[-1]- self.actions[-1])
+    def Q_Value(self,alpha=0.1,gamma=0.99,sa_index=-1):
+        # next_best_action_index = torch.argmax(self.next_actions[sa_index],dim=2)
+        # best_actions = self.next_actions[sa_index].gather(2, next_best_action_index.unsqueeze(-1))
+        td_target = (self.next_rewards[sa_index]+gamma*self.next_actions[sa_index])
+        td_error = td_target - self.actions[sa_index]
+        self.q_value = self.actions[sa_index] + alpha*td_error
         # self.target_policy.data.copy_(target_policy.detach())
-        return target_policy
+        return self.q_value
+
 
     def next_to_current(self):
-        self.actions,self.next_actions = self.next_actions,self.actions
-        self.states, self.next_states = self.next_states, self.states
-        self.rewards, self.next_rewards = self.next_rewards, self.rewards
+        self.actions = self.next_actions
+        self.states = self.next_states
+        self.rewards = self.next_rewards
 
 
     def activate(self,x):

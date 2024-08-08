@@ -815,36 +815,39 @@ class teacher(object):
                     model = copy.deepcopy(self.model)
                     state = self.parameterReinforcer.save_state(model)
                     action = self.parameterReinforcer(state)
+                    action = self.parameterReinforcer.exploit_explore_action_selector(action)
                     self.parameterReinforcer.save_action(action)
                     with torch.no_grad():
-                        model = self.parameterReinforcer.weight_mutation(model, action)
+                        model = self.parameterReinforcer.mutate_parameters(model, action)
                         model_mutated_output = model(dataset)
                         mutation_loss = self.loss_calculation(m_idx, model_mutated_output, self.data_input, self.data_output,
                                                       self.structure_input, self.structure_output, criterion_model,
                                                       norm)
                         self.parameterReinforcer.calculate_reward(loss.detach(), mutation_loss.detach())
-
-                        # for (name, param),(post_action_names,post_action_params) in zip(self.model.named_parameters(),model.named_parameters()):
-                        #     param.copy_(post_action_params)
+                        if (epoch + 1) % 100 == 0:
+                            for (name, param),(post_action_names,post_action_params) in zip(self.model.named_parameters(),model.named_parameters()):
+                                param.copy_(post_action_params)
+                            print("parameters mutated!")
 
                     next_model = copy.deepcopy(self.model)
                     next_state = self.parameterReinforcer.save_next_state(model)
                     next_action = self.parameterReinforcer(next_state)
+                    next_action = self.parameterReinforcer.exploit_explore_action_selector(next_action)
                     self.parameterReinforcer.save_next_action(next_action)
                     with torch.no_grad():
-                        next_model = self.parameterReinforcer.weight_mutation(next_model, next_action)
+                        next_model = self.parameterReinforcer.mutate_parameters(next_model, next_action)
                         model_mutated_output = next_model(dataset)
                         next_mutation_loss = self.loss_calculation(m_idx, model_mutated_output, self.data_input, self.data_output,
                                                       self.structure_input, self.structure_output, criterion_model,
                                                       norm)
                         self.parameterReinforcer.calculate_next_reward(loss.detach(), next_mutation_loss.detach())
-                    target_policy = self.parameterReinforcer.PolicyFunctionLoss(alpha=1.,gamma=0.1)
+                    Q_target = self.parameterReinforcer.Q_Value()
                     # print(torch.flatten(action[-1]).max(),torch.flatten(target_policy.squeeze(0).max()))
-                    RLoss = criterion_RL(action[-1],target_policy.squeeze(0))
+                    RLoss = criterion_RL(action,Q_target)
                     RL_optimizer.zero_grad(set_to_none=True)
                     RLoss.backward()
                     RL_optimizer.step()
-
+                    del model,next_model
                     # self.parameterReinforcer.next_to_current()
                     self.model.train()
                     # UnderConstruction! UnderConstruction! UnderConstruction!
@@ -986,8 +989,8 @@ class teacher(object):
                         print(f'P: {self.period}/{self.no_of_periods} | E: {((t_epoch_total-t_epoch_current)/(print_every_nth_frame*60)):.2f} [min], '
                               f'vL: {val_loss.item():.3f}, '
                               f'mL: {loss.item():.3f}, '
-                              f'R: {self.parameterReinforcer.rewards[-1].item():.3f}, '
-                              f'RLoss {RLoss.item():.2f} '
+                              f'R: {self.parameterReinforcer.rewards[-1].item():.0f}, '
+                              f'RLoss {RLoss.item():.5f} '
                               f'dL: {disc_loss.item():.3f}, '
                               f'e0L: {e0loss.item():.2f}, '
                               f'e1L: {e1loss.item():.2f}, '
