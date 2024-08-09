@@ -36,7 +36,7 @@ no_layers = 0
 for (name, param) in models[0].named_parameters():
     no_layers +=1
 discriminator = Metamorph_discriminator(no_frame_samples, batch_size, input_window_size, device).to(device)
-parameterReinforcer = Metamorph_parameterReinforcer(no_layers,1,200,10,64,device).to(device)
+parameterReinforcer = Metamorph_parameterReinforcer(no_layers,32,200,10,64,device).to(device)
 parameterReinforcer.create_masks(models[0])
 t = teacher(models,discriminator,parameterReinforcer, device)
 t.fsim = fl.flame_sim(no_frames=no_frames,frame_skip=frame_skip)
@@ -68,8 +68,8 @@ for period in range(1,no_periods+1):
     # t.generate_structure()
     t.fsim.fuel_dens_modifier = 1/t.fsim.dt
     t.fsim.simulate(simulate=0,save_rgb=1,save_alpha=1,save_fuel=1,delete_data=0)
-    t.learning_phase(no_frame_samples, batch_size, input_window_size, first_frame,
-                     last_frame,frame_skip*2,criterion,optimizer,disc_optimizer,RL_optimizer,device,learning=1,num_epochs=1000)
+    t.learning_phase(t,no_frame_samples, batch_size, input_window_size, first_frame,
+                     last_frame,frame_skip*2,criterion,optimizer,disc_optimizer,RL_optimizer,device,learning=1,num_epochs=1500)
     # t.fsim.simulate(simulate=0,delete_data=1)
 
 t.visualize_lerning()
