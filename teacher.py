@@ -851,13 +851,12 @@ class teacher(object):
                     # print(torch.flatten(action[-1]).max(),torch.flatten(target_policy.squeeze(0).max()))
                     RLoss = criterion_RL(action, Q_target)
 
-                    model_r = copy.deepcopy(self.model)
                     RLoss += self.parameterReinforcer.experience_replay(teacher,RL_optimizer,criterion_RL,self.data_input,
                                                                self.data_output,
                                                                self.structure_input,
                                                                self.structure_output,
                                                                criterion_model,
-                                                               norm,model_r,
+                                                               norm,next_model,
                                                                self.parameterReinforcer,
                                                                dataset,m_idx,10)
                     #RLoss = RLoss + RLoss_replay
