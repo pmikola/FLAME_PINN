@@ -1,6 +1,7 @@
 import copy
 import random
 import time
+from operator import itemgetter
 from statistics import mean
 
 import numpy as np
@@ -35,8 +36,8 @@ class Metamorph_parameterReinforcer(nn.Module):
         self.next_states = deque(maxlen=self.memory_size)
         self.rewards = deque(maxlen=self.memory_size)
         self.next_rewards = deque(maxlen=self.memory_size)
-        self.reward = torch.tensor([0.]).to(self.device)
-        self.next_reward = torch.tensor([0.]).to(self.device)
+        self.reward = torch.zeros(self.batch_size).to(self.device)
+        self.next_reward = torch.zeros(self.batch_size).to(self.device)
 
         # Definition of target policy function
         self.q_target = torch.rand(self.batch_size, self.no_layers, self.action_per_layer,requires_grad=True).to(self.device)
@@ -142,22 +143,15 @@ class Metamorph_parameterReinforcer(nn.Module):
                 self.masks.append(torch.rand_like(param.detach()))
 
     def mutate_parameters(self, model, action):
-
-        p_action = action
-        if p_action.shape[0] > 1:
-            p_a_values  = torch.mean(p_action, dim=0)
-            p_action_idx = torch.argmax(p_a_values, dim=-1).unsqueeze(0).unsqueeze(-1)
-        else:
-            p_action_idx = torch.argmax(p_action, dim=-1)
+        p_action_idx = torch.argmax(action, dim=-1)
         i = 0
-
         for (name, param) in model.named_parameters():
-            p = param * self.masks[self.action_per_layer*i+p_action_idx[:,i]]
+            p = param * self.masks[self.action_per_layer*i+p_action_idx[i]]
             param.copy_(p)
             i += 1
         return model
 
-    def exploit_explore_action_selector(self,action,p=0.3):
+    def exploit_explore_action_selector(self,action,p=0.1):
         selector = torch.randint(1,10,(1,))
         if  selector > 10*p:
             action = torch.rand(self.batch_size, self.no_layers, self.action_per_layer,requires_grad=True).to(self.device)
@@ -180,97 +174,137 @@ class Metamorph_parameterReinforcer(nn.Module):
         self.next_MLosses.append(MLoss.detach())
 
     def calculate_reward(self,loss,MLoss,reiterate=1):
+        MLoss = torch.tensor(MLoss).to(self.device)
         if not reiterate:
-            nr_mean = torch.tensor(mean(self.reward)).to(self.device)
+            nr_mean = torch.tensor(torch.mean(self.reward)).to(self.device)
             if self.rewards[-1] < nr_mean:
                 self.rewards[-1] -= 100
-            self.reward = torch.tensor([0.]).to(self.device)
-        else:pass
-        self.save_losses(loss,MLoss)
-        multipliers = torch.linspace(1, 10, 100).tolist()
-        for multiplier in multipliers:
-            if torch.mean(torch.tensor(self.losses))*multiplier > torch.mean(torch.tensor(self.MLosses)):
-                self.reward = self.reward - 1.
-            if MLoss * multiplier < loss:
-                self.reward = self.reward + 1.
-            else:
-                break
+            self.reward = torch.zeros_like(MLoss).to(self.device)
+        else:
+            pass
+        self.save_losses(loss, MLoss)
+        MLosses_tensor = torch.stack([ml.clone().detach().to(self.device) for ml in self.MLosses])
+        multipliers = torch.linspace(1, 10, 100).to(self.device)
+        losses_mean = torch.mean(torch.tensor(self.losses)).to(self.device)
+        MLosses_mean = torch.mean(MLosses_tensor).to(self.device)
+        multipliers = multipliers.view(1, -1)
+        condition_1 = (losses_mean * multipliers > MLosses_mean).any(dim=1)
+        condition_2 = (MLoss.view(-1, 1) * multipliers < loss).any(dim=1)
+        condition_1 = condition_1.expand_as(MLoss)
+        condition_2 = condition_2.expand_as(MLoss)
+        self.reward[condition_1] -= 1
+        self.reward[condition_2] += 1
         self.rewards.append(self.reward.detach())
 
     def calculate_next_reward(self,loss,MLoss,reiterate=1):
+        MLoss = torch.tensor(MLoss).to(self.device)
         if not reiterate:
-            nr_mean = torch.tensor(mean(self.next_reward)).to(self.device)
+            nr_mean = torch.tensor(torch.mean(self.next_reward)).to(self.device)
             if self.next_rewards[-1] < nr_mean:
-                self.next_rewards[-1] = 100
-            self.next_reward = torch.tensor([0.]).to(self.device)
-        else:pass
-        multipliers = torch.linspace(1, 10, 100).tolist()
+                self.next_rewards[-1] -= 100
+            self.next_reward = torch.zeros_like(MLoss).to(self.device)
+        else:
+            pass
+
         self.save_next_losses(loss, MLoss)
-        for multiplier in multipliers:
-            if torch.mean(torch.tensor(self.next_losses))*multiplier > torch.mean(torch.tensor(self.next_MLosses)):
-                self.next_reward = self.next_reward - 1.
-            if MLoss * multiplier < loss:
-                self.next_reward  = self.next_reward + 1.
-            else:
-                break
+        MLosses_tensor = torch.stack([ml.clone().detach().to(self.device) for ml in self.MLosses])
+        multipliers = torch.linspace(1, 10, 100).to(self.device)
+        losses_mean = torch.mean(torch.tensor(self.losses)).to(self.device)
+        MLosses_mean = torch.mean(MLosses_tensor).to(self.device)
+        multipliers = multipliers.view(1, -1)
+        condition_1 = (losses_mean * multipliers > MLosses_mean).any(dim=1)
+        condition_2 = (MLoss.view(-1, 1) * multipliers < loss).any(dim=1)
+        condition_1 = condition_1.expand_as(MLoss)
+        condition_2 = condition_2.expand_as(MLoss)
+        self.next_reward[condition_1] -= 1
+        self.next_reward[condition_2] += 1
         self.next_rewards.append(self.next_reward.detach())
 
-    def Q_Value(self,sa_index,alpha=1.,gamma=0.99):
+    def Q_Value(self,sa_index=-1,alpha=1.,gamma=0.99):
+        # print(self.next_actions[sa_index].shape,self.next_rewards[sa_index].shape)
+
         best_action_indices  =  torch.argmax(self.next_actions[sa_index],dim=2)
         best_next_q_values = torch.gather(self.next_actions[sa_index], 1, best_action_indices.unsqueeze(-1))
-        td_target = (self.next_rewards[sa_index] + gamma * best_next_q_values)
-        td_error = td_target - self.actions[sa_index]
-        self.q_target = self.actions[sa_index] + alpha * td_error
-        return self.q_target,self.actions[sa_index]
+        q_values = torch.gather(self.actions[sa_index], 1, best_action_indices.unsqueeze(-1))
+
+        # best_next_q_values = self.next_actions[sa_index]
+        next_rewards = self.next_rewards[sa_index].unsqueeze(1).unsqueeze(2)
+        td_target = (next_rewards + gamma * best_next_q_values)
+        td_error = td_target - q_values
+        q_target = q_values + alpha * td_error
+        return q_target,best_action_indices
 
     def Q_Value_experience_replay(self,teacher,RL_optimizer,criterion_RL,idx,data_input,data_output,structure_input,structure_output,
                                                  criterion_model,norm,model_b,RLmodel,dataset,dataset_idx,
                                                  no_samples,alpha=0.1,gamma=0.99):
 
-        # model_output = model_b(dataset)
-        # loss = teacher.loss_calculation(dataset_idx, model_output, data_input, data_output, structure_input,
-        #                              structure_output, criterion_model, norm)
-
+        model_output = model_b(dataset)
+        loss = teacher.loss_calculation(dataset_idx, model_output, data_input, data_output, structure_input,
+                                     structure_output, criterion_model, norm)
+        model = copy.deepcopy(model_b)
+        _ = self.save_state(model)
         states = [self.states[i] for i in idx]
         states = torch.stack(states,dim=0)
         action = RLmodel(states)
+        action = self.exploit_explore_action_selector(action)
+        self.save_action(action)
+        mutation_losses = []
         with torch.no_grad():
-            model_r = RLmodel.mutate_parameters(model_b, action)
-            model_mutated_output = model_r(dataset)
-            mutation_loss = teacher.loss_calculation(dataset_idx, model_mutated_output, data_input,
-                                                  data_output,
-                                                  structure_input, structure_output,
-                                                  criterion_model,
-                                                  norm)
+            for a in range(action.shape[0]):
+                model_mutated = self.mutate_parameters(model, action[a])
+                model_mutated_output = model_mutated(dataset)
+                mutation_loss = teacher.loss_calculation(dataset_idx, model_mutated_output, data_input,
+                                                      data_output,
+                                                      structure_input, structure_output,
+                                                      criterion_model,
+                                                      norm)
+                mutation_losses.append(mutation_loss.detach())
+            # mutation_loss_idx, mutation_loss = min(enumerate(mutation_losses), key=itemgetter(1))
+        self.calculate_reward(loss.detach(), mutation_losses)
+        next_model = copy.deepcopy(model)
+        _ = self.save_next_state(next_model)
         next_states = [self.next_states[i] for i in idx]
         next_states = torch.stack(next_states, dim=0)
         next_action = RLmodel(next_states)
-
+        next_action = self.exploit_explore_action_selector(next_action)
+        self.save_next_action(next_action)
+        next_mutation_losses = []
         with torch.no_grad():
-            model_r = RLmodel.mutate_parameters(model_r, next_action)
-            model_mutated_output = model_r(dataset)
-            next_mutation_loss = teacher.loss_calculation(dataset_idx, model_mutated_output, data_input,
-                                                     data_output,
-                                                     structure_input, structure_output,
-                                                     criterion_model,
-                                                     norm)
-
-
-        RLoss = criterion_RL((mutation_loss+next_mutation_loss).unsqueeze(0),torch.tensor([0.]).to(self.device))
-
-        return RLoss
+            for a in range(next_action.shape[0]):
+                next_model_mutated = self.mutate_parameters(next_model, next_action[a])
+                model_mutated_output = next_model_mutated(dataset)
+                next_mutation_loss = teacher.loss_calculation(dataset_idx, model_mutated_output, data_input,
+                                                         data_output,
+                                                         structure_input, structure_output,
+                                                         criterion_model,
+                                                         norm)
+                next_mutation_losses.append(next_mutation_loss.detach())
+            # next_mutation_loss_idx, next_mutation_loss = min(enumerate(next_mutation_losses), key=itemgetter(1))
+        self.calculate_next_reward(loss.detach(), next_mutation_losses)
+        Q_target, q_idx = self.Q_Value()
+        q_values = torch.gather(action, 1, q_idx.unsqueeze(-1))
+        RLoss = criterion_RL(q_values, Q_target)
+        RL_optimizer.zero_grad(set_to_none=True)
+        RLoss.backward()
+        RL_optimizer.step()
+        del model, next_model,model_mutated,next_model_mutated
+        return RLmodel,RLoss
 
     def experience_replay(self,teacher,RL_optimizer,criterion_RL, data_input,data_output,
                           structure_input,structure_output,
                           criterion_model,norm,
                           model_r,RLmodel,dataset,
-                          dataset_idx,no_samples):
-        idx = range(0,len(self.actions),1)
+                          dataset_idx):
+        if len(self.actions) + 1 <2:
+            idx = range(0,1,1)
+        else:
+            idx = range(0, len(self.actions), 1)
+        no_samples = self.batch_size
         idx = random.choices(idx, k=no_samples)
-        RLoss = self.Q_Value_experience_replay(teacher,RL_optimizer,criterion_RL,idx,data_input,data_output,structure_input,structure_output,
+        RLmodel,RLoss = self.Q_Value_experience_replay(teacher,RL_optimizer,criterion_RL,idx,data_input,data_output,structure_input,structure_output,
                                                  criterion_model,norm,model_r,RLmodel,dataset,dataset_idx,
                                                  no_samples,alpha=0.1,gamma=0.99)
-        return RLoss
+        return RLmodel,RLoss
 
     def next_to_current(self):
         self.actions = self.next_actions

@@ -36,7 +36,7 @@ no_layers = 0
 for (name, param) in models[0].named_parameters():
     no_layers +=1
 discriminator = Metamorph_discriminator(no_frame_samples, batch_size, input_window_size, device).to(device)
-parameterReinforcer = Metamorph_parameterReinforcer(no_layers,32,200,10,64,device).to(device)
+parameterReinforcer = Metamorph_parameterReinforcer(no_layers,5,200,10,64,device).to(device)
 parameterReinforcer.create_masks(models[0])
 t = teacher(models,discriminator,parameterReinforcer, device)
 t.fsim = fl.flame_sim(no_frames=no_frames,frame_skip=frame_skip)

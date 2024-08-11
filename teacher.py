@@ -1,4 +1,5 @@
 import copy
+import itertools
 import os.path
 import random
 import struct
@@ -812,42 +813,8 @@ class teacher(object):
 
                     # UnderConstruction! UnderConstruction! UnderConstruction!
                     self.model.eval()
-                    model = copy.deepcopy(self.model)
-                    state = self.parameterReinforcer.save_state(model)
-                    action = self.parameterReinforcer(state)
-                    action = self.parameterReinforcer.exploit_explore_action_selector(action)
-                    self.parameterReinforcer.save_action(action)
-                    with torch.no_grad():
-                        model = self.parameterReinforcer.mutate_parameters(model, action)
-                        model_mutated_output = model(dataset)
-                        mutation_loss = self.loss_calculation(m_idx, model_mutated_output, self.data_input,
-                                                              self.data_output,
-                                                              self.structure_input, self.structure_output,
-                                                              criterion_model,
-                                                              norm)
-                        self.parameterReinforcer.calculate_reward(loss.detach(), mutation_loss.detach())
-
-
-                    next_model = copy.deepcopy(self.model)
-                    next_state = self.parameterReinforcer.save_next_state(model)
-                    next_action = self.parameterReinforcer(next_state)
-                    next_action = self.parameterReinforcer.exploit_explore_action_selector(next_action)
-                    self.parameterReinforcer.save_next_action(next_action)
-                    with torch.no_grad():
-                        next_model = self.parameterReinforcer.mutate_parameters(next_model, next_action)
-                        model_mutated_output = next_model(dataset)
-                        next_mutation_loss = self.loss_calculation(m_idx, model_mutated_output, self.data_input,
-                                                                   self.data_output,
-                                                                   self.structure_input, self.structure_output,
-                                                                   criterion_model,
-                                                                   norm)
-                        self.parameterReinforcer.calculate_next_reward(loss.detach(), next_mutation_loss.detach())
-                    Q_target,Q_preds = self.parameterReinforcer.Q_Value(-1)
-                    # print(torch.flatten(action[-1]).max(),torch.flatten(target_policy.squeeze(0).max()))
-                    RLoss = criterion_RL(action, Q_target)
-
                     model_b = copy.deepcopy(self.model)
-                    RLoss += self.parameterReinforcer.experience_replay(teacher, RL_optimizer, criterion_RL,
+                    self.parameterReinforcer,RLoss= self.parameterReinforcer.experience_replay(teacher, RL_optimizer, criterion_RL,
                                                                         self.data_input,
                                                                         self.data_output,
                                                                         self.structure_input,
@@ -855,27 +822,23 @@ class teacher(object):
                                                                         criterion_model,
                                                                         norm, model_b,
                                                                         self.parameterReinforcer,
-                                                                        dataset, m_idx, 5)
+                                                                        dataset, m_idx)
 
 
-                    RL_optimizer.zero_grad(set_to_none=True)
-                    RLoss.backward()
-                    RL_optimizer.step()
-
-                    with torch.no_grad():
-                        if mutation_loss*2 <  loss and reiterate_data:
-                            for (name, param), (post_action_names, post_action_params) in zip(
-                                    self.model.named_parameters(), model.named_parameters()):
-                                param.copy_(post_action_params)
-                            print("parameters mutated from model!")
-                        elif next_mutation_loss*2 < loss and reiterate_data:
-                            for (name, param), (post_action_names, post_action_params) in zip(
-                                    self.model.named_parameters(), next_model.named_parameters()):
-                                param.copy_(post_action_params)
-                                print("parameters mutated from next model!")
-                            else:pass
+                    # with torch.no_grad():
+                    #     if mutation_loss*2 <  loss and reiterate_data:
+                    #         for (name, param), (post_action_names, post_action_params) in zip(
+                    #                 self.model.named_parameters(), model.named_parameters()):
+                    #             param.copy_(post_action_params)
+                    #         print("parameters mutated from model!")
+                    #     elif next_mutation_loss*2 < loss and reiterate_data:
+                    #         for (name, param), (post_action_names, post_action_params) in zip(
+                    #                 self.model.named_parameters(), next_model.named_parameters()):
+                    #             param.copy_(post_action_params)
+                    #             print("parameters mutated from next model!")
+                    #         else:pass
                         # self.parameterReinforcer.next_to_current()
-                    del model_b, model, next_model
+                    del model_b
                     self.model.train()
                     # UnderConstruction! UnderConstruction! UnderConstruction!
 
@@ -1005,18 +968,15 @@ class teacher(object):
                                     best_losses = []
                                     best_loss = mean_hist_losses
 
-
-
                     t_epoch_stop = time.perf_counter()
                     t_epoch +=(t_epoch_stop - t_epoch_start)
-
                     if (epoch + 1) % print_every_nth_frame == 0:
                         t_epoch_total = num_epochs * t_epoch
                         t_epoch_current = epoch * t_epoch
                         print(f'P: {self.period}/{self.no_of_periods} | E: {((t_epoch_total-t_epoch_current)/(print_every_nth_frame*60)):.2f} [min], '
                               f'vL: {val_loss.item():.3f}, '
                               f'mL: {loss.item():.3f}, '
-                              f'R: {torch.sum(torch.tensor(self.parameterReinforcer.rewards)[print_every_nth_frame:-1]).item():.2f}, '
+                              f'R: {torch.max(self.parameterReinforcer.rewards[-1]):.2f}, '
                               f'RLoss {RLoss.item():.5f} '
                               f'dL: {disc_loss.item():.3f}, '
                               f'e0L: {e0loss.item():.2f}, '
