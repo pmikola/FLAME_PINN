@@ -69,7 +69,7 @@ class Metamorph(nn.Module):
         self.no_meta_h2 = 32 * 2
         self.no_meta_h1 = 224 * 2
         self.dens_width = 2 * self.shifterCoefficients
-        self.flat_size = 5*self.in_scale**2 # Note: n neurons per every pixel
+        self.flat_size = 10*self.in_scale**2 # Note: n neurons per every pixel
         self.diffiusion_context = 32*2
 
         # Definition of layer 0,1,2 for lvl 4 in hierarchy - theta - diffusion noise context
@@ -139,41 +139,41 @@ class Metamorph(nn.Module):
         self.l4_h0_a = nn.Linear(in_features=int(self.in_scale ** 2) * 5, out_features=int(self.flat_size / 2))
         self.l4_h0_s = nn.Linear(in_features=int(self.in_scale ** 2) * 5, out_features=int(self.flat_size / 2))
 
-        self.l5_h0_r = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l5_h0_g = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l5_h0_b = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l5_h0_a = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l5_h0_s = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
+        self.l5_h0_r = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 4))
+        self.l5_h0_g = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 4))
+        self.l5_h0_b = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 4))
+        self.l5_h0_a = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 4))
+        self.l5_h0_s = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 4))
 
-        self.l6_h0_r = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l6_h0_g = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l6_h0_b = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l6_h0_a = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l6_h0_s = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
+        self.l6_h0_r = nn.Linear(in_features=int(self.flat_size / 4), out_features=int(self.flat_size / 4))
+        self.l6_h0_g = nn.Linear(in_features=int(self.flat_size / 4), out_features=int(self.flat_size / 4))
+        self.l6_h0_b = nn.Linear(in_features=int(self.flat_size / 4), out_features=int(self.flat_size / 4))
+        self.l6_h0_a = nn.Linear(in_features=int(self.flat_size / 4), out_features=int(self.flat_size / 4))
+        self.l6_h0_s = nn.Linear(in_features=int(self.flat_size / 4), out_features=int(self.flat_size / 4))
 
-        self.l7_h0_r = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l7_h0_g = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l7_h0_b = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l7_h0_a = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l7_h0_s = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
+        self.l7_h0_r = nn.Linear(in_features=int(self.flat_size / 4), out_features=int(self.flat_size / 2))
+        self.l7_h0_g = nn.Linear(in_features=int(self.flat_size / 4), out_features=int(self.flat_size / 2))
+        self.l7_h0_b = nn.Linear(in_features=int(self.flat_size / 4), out_features=int(self.flat_size / 2))
+        self.l7_h0_a = nn.Linear(in_features=int(self.flat_size / 4), out_features=int(self.flat_size / 2))
+        self.l7_h0_s = nn.Linear(in_features=int(self.flat_size / 4), out_features=int(self.flat_size / 2))
 
-        self.l8_h0_r = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l8_h0_g = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l8_h0_b = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l8_h0_a = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l8_h0_s = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
+        self.l8_h0_r = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 4))
+        self.l8_h0_g = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 4))
+        self.l8_h0_b = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 4))
+        self.l8_h0_a = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 4))
+        self.l8_h0_s = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 4))
 
-        self.l9_h0_r = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l9_h0_g = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l9_h0_b = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l9_h0_a = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l9_h0_s = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
+        self.l9_h0_r = nn.Linear(in_features=int(self.flat_size / 4), out_features=int(self.flat_size / 4))
+        self.l9_h0_g = nn.Linear(in_features=int(self.flat_size / 4), out_features=int(self.flat_size / 4))
+        self.l9_h0_b = nn.Linear(in_features=int(self.flat_size / 4), out_features=int(self.flat_size / 4))
+        self.l9_h0_a = nn.Linear(in_features=int(self.flat_size / 4), out_features=int(self.flat_size / 4))
+        self.l9_h0_s = nn.Linear(in_features=int(self.flat_size / 4), out_features=int(self.flat_size / 4))
 
-        self.l10_h0_r = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l10_h0_g = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l10_h0_b = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l10_h0_a = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l10_h0_s = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
+        self.l10_h0_r = nn.Linear(in_features=int(self.flat_size / 4), out_features=int(self.flat_size / 2))
+        self.l10_h0_g = nn.Linear(in_features=int(self.flat_size / 4), out_features=int(self.flat_size / 2))
+        self.l10_h0_b = nn.Linear(in_features=int(self.flat_size / 4), out_features=int(self.flat_size / 2))
+        self.l10_h0_a = nn.Linear(in_features=int(self.flat_size / 4), out_features=int(self.flat_size / 2))
+        self.l10_h0_s = nn.Linear(in_features=int(self.flat_size / 4), out_features=int(self.flat_size / 2))
 
         self.l11_h0_r = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.in_scale ** 2), bias=True)
         self.l11_h0_g = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.in_scale ** 2), bias=True)

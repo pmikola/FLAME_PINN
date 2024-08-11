@@ -740,6 +740,7 @@ class teacher(object):
                     self.seed_setter(int(epoch+1))
                     if reiterate_data == 0:
                         self.data_preparation()
+                        print("new sets of data prepared!")
                     else:
                         reiterate_counter +=1
 
@@ -808,10 +809,8 @@ class teacher(object):
                     e2loss.backward()
                     optimizer.step()
                     # if (epoch + 1) % 5 == 0:
-                    # UnderConstruction! UnderConstruction! UnderConstruction!
 
                     # UnderConstruction! UnderConstruction! UnderConstruction!
-
                     self.model.eval()
                     model = copy.deepcopy(self.model)
                     state = self.parameterReinforcer.save_state(model)
@@ -827,11 +826,7 @@ class teacher(object):
                                                               criterion_model,
                                                               norm)
                         self.parameterReinforcer.calculate_reward(loss.detach(), mutation_loss.detach())
-                        if (epoch + 1) % 100 == 0:
-                            for (name, param), (post_action_names, post_action_params) in zip(
-                                    self.model.named_parameters(), model.named_parameters()):
-                                param.copy_(post_action_params)
-                            print("parameters mutated!")
+
 
                     next_model = copy.deepcopy(self.model)
                     next_state = self.parameterReinforcer.save_next_state(model)
@@ -851,21 +846,36 @@ class teacher(object):
                     # print(torch.flatten(action[-1]).max(),torch.flatten(target_policy.squeeze(0).max()))
                     RLoss = criterion_RL(action, Q_target)
 
-                    RLoss += self.parameterReinforcer.experience_replay(teacher,RL_optimizer,criterion_RL,self.data_input,
-                                                               self.data_output,
-                                                               self.structure_input,
-                                                               self.structure_output,
-                                                               criterion_model,
-                                                               norm,next_model,
-                                                               self.parameterReinforcer,
-                                                               dataset,m_idx,10)
-                    #RLoss = RLoss + RLoss_replay
+                    model_b = copy.deepcopy(self.model)
+                    RLoss += self.parameterReinforcer.experience_replay(teacher, RL_optimizer, criterion_RL,
+                                                                        self.data_input,
+                                                                        self.data_output,
+                                                                        self.structure_input,
+                                                                        self.structure_output,
+                                                                        criterion_model,
+                                                                        norm, model_b,
+                                                                        self.parameterReinforcer,
+                                                                        dataset, m_idx, 5)
+
+
                     RL_optimizer.zero_grad(set_to_none=True)
                     RLoss.backward()
                     RL_optimizer.step()
-                    del model, next_model
 
-                    # self.parameterReinforcer.next_to_current()
+                    with torch.no_grad():
+                        if mutation_loss*2 <  loss and reiterate_data:
+                            for (name, param), (post_action_names, post_action_params) in zip(
+                                    self.model.named_parameters(), model.named_parameters()):
+                                param.copy_(post_action_params)
+                            print("parameters mutated from model!")
+                        elif next_mutation_loss*2 < loss and reiterate_data:
+                            for (name, param), (post_action_names, post_action_params) in zip(
+                                    self.model.named_parameters(), next_model.named_parameters()):
+                                param.copy_(post_action_params)
+                                print("parameters mutated from next model!")
+                            else:pass
+                        # self.parameterReinforcer.next_to_current()
+                    del model_b, model, next_model
                     self.model.train()
                     # UnderConstruction! UnderConstruction! UnderConstruction!
 
@@ -897,7 +907,7 @@ class teacher(object):
                             reiterate_data = 0
                         gloss = abs(np.sum(np.gradient(loss_recent_history)))
                         g_val_loss= np.sum(np.gradient(val_loss_recent_history))
-                        if g_val_loss > 5e1:
+                        if g_val_loss > 2e1:
                             reiterate_data = 0
                         if gloss > 5e-1:
                             grad_counter =0
@@ -1006,7 +1016,7 @@ class teacher(object):
                         print(f'P: {self.period}/{self.no_of_periods} | E: {((t_epoch_total-t_epoch_current)/(print_every_nth_frame*60)):.2f} [min], '
                               f'vL: {val_loss.item():.3f}, '
                               f'mL: {loss.item():.3f}, '
-                              f'R: {torch.mean(torch.tensor(self.parameterReinforcer.rewards)).item():.2f}, '
+                              f'R: {torch.sum(torch.tensor(self.parameterReinforcer.rewards)[print_every_nth_frame:-1]).item():.2f}, '
                               f'RLoss {RLoss.item():.5f} '
                               f'dL: {disc_loss.item():.3f}, '
                               f'e0L: {e0loss.item():.2f}, '

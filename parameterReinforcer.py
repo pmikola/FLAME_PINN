@@ -142,13 +142,15 @@ class Metamorph_parameterReinforcer(nn.Module):
                 self.masks.append(torch.rand_like(param.detach()))
 
     def mutate_parameters(self, model, action):
-        i = 0
+
         p_action = action
         if p_action.shape[0] > 1:
             p_a_values  = torch.mean(p_action, dim=0)
             p_action_idx = torch.argmax(p_a_values, dim=-1).unsqueeze(0).unsqueeze(-1)
         else:
             p_action_idx = torch.argmax(p_action, dim=-1)
+        i = 0
+
         for (name, param) in model.named_parameters():
             p = param * self.masks[self.action_per_layer*i+p_action_idx[:,i]]
             param.copy_(p)
@@ -178,11 +180,14 @@ class Metamorph_parameterReinforcer(nn.Module):
         self.next_MLosses.append(MLoss.detach())
 
     def calculate_reward(self,loss,MLoss,reiterate=1):
-        if reiterate:
+        if not reiterate:
+            nr_mean = torch.tensor(mean(self.reward)).to(self.device)
+            if self.rewards[-1] < nr_mean:
+                self.rewards[-1] -= 100
             self.reward = torch.tensor([0.]).to(self.device)
         else:pass
         self.save_losses(loss,MLoss)
-        multipliers = torch.linspace(1, 3, 100).tolist()
+        multipliers = torch.linspace(1, 10, 100).tolist()
         for multiplier in multipliers:
             if torch.mean(torch.tensor(self.losses))*multiplier > torch.mean(torch.tensor(self.MLosses)):
                 self.reward = self.reward - 1.
@@ -193,10 +198,13 @@ class Metamorph_parameterReinforcer(nn.Module):
         self.rewards.append(self.reward.detach())
 
     def calculate_next_reward(self,loss,MLoss,reiterate=1):
-        if reiterate:
+        if not reiterate:
+            nr_mean = torch.tensor(mean(self.next_reward)).to(self.device)
+            if self.next_rewards[-1] < nr_mean:
+                self.next_rewards[-1] = 100
             self.next_reward = torch.tensor([0.]).to(self.device)
         else:pass
-        multipliers = torch.linspace(1, 3, 100).tolist()
+        multipliers = torch.linspace(1, 10, 100).tolist()
         self.save_next_losses(loss, MLoss)
         for multiplier in multipliers:
             if torch.mean(torch.tensor(self.next_losses))*multiplier > torch.mean(torch.tensor(self.next_MLosses)):
@@ -208,26 +216,26 @@ class Metamorph_parameterReinforcer(nn.Module):
         self.next_rewards.append(self.next_reward.detach())
 
     def Q_Value(self,sa_index,alpha=1.,gamma=0.99):
-        best_actions =  torch.argmax(self.next_actions[sa_index],dim=2)
-        td_target = (self.next_rewards[sa_index] + gamma * best_actions.unsqueeze(-1))
+        best_action_indices  =  torch.argmax(self.next_actions[sa_index],dim=2)
+        best_next_q_values = torch.gather(self.next_actions[sa_index], 1, best_action_indices.unsqueeze(-1))
+        td_target = (self.next_rewards[sa_index] + gamma * best_next_q_values)
         td_error = td_target - self.actions[sa_index]
         self.q_target = self.actions[sa_index] + alpha * td_error
-        # self.target_policy.data.copy_(target_policy.detach())
         return self.q_target,self.actions[sa_index]
 
-    def Q_Value_best_experience_replay(self,teacher,RL_optimizer,criterion_RL,idx,data_input,data_output,structure_input,structure_output,
-                                                 criterion_model,norm,model_r,RLmodel,dataset,dataset_idx,
+    def Q_Value_experience_replay(self,teacher,RL_optimizer,criterion_RL,idx,data_input,data_output,structure_input,structure_output,
+                                                 criterion_model,norm,model_b,RLmodel,dataset,dataset_idx,
                                                  no_samples,alpha=0.1,gamma=0.99):
 
-        model_output = model_r(dataset)
-        loss = teacher.loss_calculation(dataset_idx, model_output, data_input, data_output, structure_input,
-                                     structure_output, criterion_model, norm)
+        # model_output = model_b(dataset)
+        # loss = teacher.loss_calculation(dataset_idx, model_output, data_input, data_output, structure_input,
+        #                              structure_output, criterion_model, norm)
 
         states = [self.states[i] for i in idx]
         states = torch.stack(states,dim=0)
         action = RLmodel(states)
         with torch.no_grad():
-            model_r = RLmodel.mutate_parameters(model_r, action)
+            model_r = RLmodel.mutate_parameters(model_b, action)
             model_mutated_output = model_r(dataset)
             mutation_loss = teacher.loss_calculation(dataset_idx, model_mutated_output, data_input,
                                                   data_output,
@@ -246,7 +254,10 @@ class Metamorph_parameterReinforcer(nn.Module):
                                                      structure_input, structure_output,
                                                      criterion_model,
                                                      norm)
-            RLoss = criterion_RL(mutation_loss+next_mutation_loss,loss*0.5)
+
+
+        RLoss = criterion_RL((mutation_loss+next_mutation_loss).unsqueeze(0),torch.tensor([0.]).to(self.device))
+
         return RLoss
 
     def experience_replay(self,teacher,RL_optimizer,criterion_RL, data_input,data_output,
@@ -256,10 +267,10 @@ class Metamorph_parameterReinforcer(nn.Module):
                           dataset_idx,no_samples):
         idx = range(0,len(self.actions),1)
         idx = random.choices(idx, k=no_samples)
-        RLmodel = self.Q_Value_best_experience_replay(teacher,RL_optimizer,criterion_RL,idx,data_input,data_output,structure_input,structure_output,
+        RLoss = self.Q_Value_experience_replay(teacher,RL_optimizer,criterion_RL,idx,data_input,data_output,structure_input,structure_output,
                                                  criterion_model,norm,model_r,RLmodel,dataset,dataset_idx,
                                                  no_samples,alpha=0.1,gamma=0.99)
-        return RLmodel
+        return RLoss
 
     def next_to_current(self):
         self.actions = self.next_actions
