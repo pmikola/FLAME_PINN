@@ -224,10 +224,10 @@ class Metamorph_parameterReinforcer(nn.Module):
         # print(self.next_actions[sa_index].shape,self.next_rewards[sa_index].shape)
 
         best_action_indices  =  torch.argmax(self.next_actions[sa_index],dim=2)
-        best_next_q_values = torch.gather(self.next_actions[sa_index], 1, best_action_indices.unsqueeze(-1))
-        q_values = torch.gather(self.actions[sa_index], 1, best_action_indices.unsqueeze(-1))
-
-        # best_next_q_values = self.next_actions[sa_index]
+        # best_next_q_values = torch.gather(self.next_actions[sa_index], 1, best_action_indices.unsqueeze(-1))
+        # q_values = torch.gather(self.actions[sa_index], 1, best_action_indices.unsqueeze(-1))
+        q_values = self.actions[sa_index]
+        best_next_q_values = self.next_actions[sa_index]
         next_rewards = self.next_rewards[sa_index].unsqueeze(1).unsqueeze(2)
         td_target = (next_rewards + gamma * best_next_q_values)
         td_error = td_target - q_values
@@ -272,8 +272,8 @@ class Metamorph_parameterReinforcer(nn.Module):
         with torch.no_grad():
             for a in range(next_action.shape[0]):
                 next_model_mutated = self.mutate_parameters(next_model, next_action[a])
-                model_mutated_output = next_model_mutated(dataset)
-                next_mutation_loss = teacher.loss_calculation(dataset_idx, model_mutated_output, data_input,
+                next_model_mutated_output = next_model_mutated(dataset)
+                next_mutation_loss = teacher.loss_calculation(dataset_idx, next_model_mutated_output, data_input,
                                                          data_output,
                                                          structure_input, structure_output,
                                                          criterion_model,
@@ -282,8 +282,8 @@ class Metamorph_parameterReinforcer(nn.Module):
             # next_mutation_loss_idx, next_mutation_loss = min(enumerate(next_mutation_losses), key=itemgetter(1))
         self.calculate_next_reward(loss.detach(), next_mutation_losses)
         Q_target, q_idx = self.Q_Value()
-        q_values = torch.gather(action, 1, q_idx.unsqueeze(-1))
-        RLoss = criterion_RL(q_values, Q_target)
+        # q_values = torch.gather(action, 1, q_idx.unsqueeze(-1))
+        RLoss = criterion_RL(action, Q_target)
         RL_optimizer.zero_grad(set_to_none=True)
         RLoss.backward()
         RL_optimizer.step()
