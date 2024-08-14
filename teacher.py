@@ -700,7 +700,7 @@ class teacher(object):
 
             ims.append([rgb_pred_anim, rgb_true_anim,rms_anim,title_pred,title_true,title_rms])
         ani = animation.ArtistAnimation(fig, ims, interval=1, blit=True, repeat_delay=100)
-        # ani.save("flame_animation.gif")
+        ani.save("flame_animation_RL_basic.gif")
         fig.colorbar(rms_anim, ax=ax3)
         plt.show()
 
@@ -719,21 +719,22 @@ class teacher(object):
                 t = 0.
                 t_epoch = 0.
                 grad_counter = 0
-                reiterate_data = 0
+                reiterate_data = 1
                 reiterate_counter = 0
                 norm = 'forward'
                 print_every_nth_frame=10
                 best_models = []
                 best_losses = []
-                zero = torch.tensor([0.],requires_grad=True).to(device).float()
+                # zero = torch.tensor([0.],requires_grad=True).to(device).float()
                 self.data_preparation(1)
+                self.data_preparation()
                 val_idx = torch.arange(self.data_input_val.shape[0])
                 self.validation_dataset = (
                 self.data_input_val, self.structure_input_val, self.meta_input_h1_val,self.meta_input_h2_val,
                 self.meta_input_h3_val, self.meta_input_h4_val, self.meta_input_h5_val,self.noise_var_in_val,
                 self.meta_output_h1_val,self.meta_output_h2_val, self.meta_output_h3_val, self.meta_output_h4_val,
                 self.meta_output_h5_val,self.noise_var_out_val)
-
+                self.parameterReinforcer.create_masks(self.data_input_val)
                 for epoch in range(num_epochs):
 
                     self.epoch = epoch
@@ -777,10 +778,27 @@ class teacher(object):
                                   self.meta_output_h5[e2_idx],
                                   self.noise_var_out[e2_idx])
 
+                    # UnderConstruction! UnderConstruction! UnderConstruction!
+                    self.model.eval()
+                    model_b = copy.deepcopy(self.model)
+                    self.parameterReinforcer, RLoss,dataset_mutated = self.parameterReinforcer.experience_replay(teacher, RL_optimizer,
+                                                                                                 criterion_RL,
+                                                                                                 self.data_input,
+                                                                                                 self.data_output,
+                                                                                                 self.structure_input,
+                                                                                                 self.structure_output,
+                                                                                                 criterion_model,
+                                                                                                 norm, model_b,
+                                                                                                 self.parameterReinforcer,
+                                                                                                 dataset, m_idx)
+                    # self.parameterReinforcer.next_to_current()
+                    del model_b
+                    self.model.train()
+                    # UnderConstruction! UnderConstruction! UnderConstruction!
 
                     t_start = time.perf_counter()
                     self.seed_setter(int((epoch+1)*2))
-                    model_output = self.model(dataset)
+                    model_output = self.model(dataset_mutated)
                     self.seed_setter(int((epoch+1) * 3))
                     expert_0_output = self.expert_0(dataset_e0)
                     self.seed_setter(int((epoch+1) * 4))
@@ -803,6 +821,8 @@ class teacher(object):
                     e1loss = self.loss_calculation(e1_idx,expert_1_output,self.data_input,self.data_output,self.structure_input,self.structure_output, criterion_e1, norm)
                     e2loss = self.loss_calculation(e2_idx,expert_2_output,self.data_input,self.data_output,self.structure_input,self.structure_output, criterion_e1, norm)
 
+
+
                     optimizer.zero_grad(set_to_none=True)
                     loss.backward()
                     e0loss.backward()
@@ -811,36 +831,7 @@ class teacher(object):
                     optimizer.step()
                     # if (epoch + 1) % 5 == 0:
 
-                    # UnderConstruction! UnderConstruction! UnderConstruction!
-                    self.model.eval()
-                    model_b = copy.deepcopy(self.model)
-                    self.parameterReinforcer,RLoss= self.parameterReinforcer.experience_replay(teacher, RL_optimizer, criterion_RL,
-                                                                        self.data_input,
-                                                                        self.data_output,
-                                                                        self.structure_input,
-                                                                        self.structure_output,
-                                                                        criterion_model,
-                                                                        norm, model_b,
-                                                                        self.parameterReinforcer,
-                                                                        dataset, m_idx)
 
-
-                    # with torch.no_grad():
-                    #     if mutation_loss*2 <  loss and reiterate_data:
-                    #         for (name, param), (post_action_names, post_action_params) in zip(
-                    #                 self.model.named_parameters(), model.named_parameters()):
-                    #             param.copy_(post_action_params)
-                    #         print("parameters mutated from model!")
-                    #     elif next_mutation_loss*2 < loss and reiterate_data:
-                    #         for (name, param), (post_action_names, post_action_params) in zip(
-                    #                 self.model.named_parameters(), next_model.named_parameters()):
-                    #             param.copy_(post_action_params)
-                    #             print("parameters mutated from next model!")
-                    #         else:pass
-                        # self.parameterReinforcer.next_to_current()
-                    del model_b
-                    self.model.train()
-                    # UnderConstruction! UnderConstruction! UnderConstruction!
 
                     if self.validation_dataset is not None:
                         self.model.eval()
@@ -863,16 +854,19 @@ class teacher(object):
                         loss_recent_history = np.array(self.train_loss)[-10:-1]
                         val_loss_recent_history = np.array(self.val_loss)[-10:-1]
                         mean_hist_losses = np.mean(loss_recent_history)
-                        if loss_recent_history[-1] > loss_recent_history[-2] or reiterate_counter < 50 or loss_recent_history[-1] < loss_recent_history[-2]*0.9 or loss_recent_history[-1] > 0.3:
+                        if loss_recent_history[-1] > loss_recent_history[-2] or loss_recent_history[-1] < loss_recent_history[-2]*0.9 or loss_recent_history[-1] > 0.3:
                             reiterate_data = 1
                         else:
                             reiterate_counter = 0
                             reiterate_data = 0
+                        if  reiterate_counter > 100:
+                            reiterate_counter = 0
+                            reiterate_data = 0
                         gloss = abs(np.sum(np.gradient(loss_recent_history)))
                         g_val_loss= np.sum(np.gradient(val_loss_recent_history))
-                        if g_val_loss > 2e1:
+                        if g_val_loss > 5e1:
                             reiterate_data = 0
-                        if gloss > 5e-1:
+                        if gloss > 5e1:
                             grad_counter =0
                         else:
                             grad_counter += 1
@@ -976,7 +970,7 @@ class teacher(object):
                         print(f'P: {self.period}/{self.no_of_periods} | E: {((t_epoch_total-t_epoch_current)/(print_every_nth_frame*60)):.2f} [min], '
                               f'vL: {val_loss.item():.3f}, '
                               f'mL: {loss.item():.3f}, '
-                              f'R: {torch.max(self.parameterReinforcer.rewards[-1]):.2f}, '
+                              f'R: {torch.mean(self.parameterReinforcer.next_rewards[-1]):.2f}, '
                               f'RLoss {RLoss.item():.5f} '
                               f'dL: {disc_loss.item():.3f}, '
                               f'e0L: {e0loss.item():.2f}, '

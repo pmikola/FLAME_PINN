@@ -36,8 +36,8 @@ no_layers = 0
 for (name, param) in models[0].named_parameters():
     no_layers +=1
 discriminator = Metamorph_discriminator(no_frame_samples, batch_size, input_window_size, device).to(device)
-parameterReinforcer = Metamorph_parameterReinforcer(no_layers,5,200,10,64,device).to(device)
-parameterReinforcer.create_masks(models[0])
+parameterReinforcer = Metamorph_parameterReinforcer(no_layers,5,100,50,64,device).to(device)
+
 t = teacher(models,discriminator,parameterReinforcer, device)
 t.fsim = fl.flame_sim(no_frames=no_frames,frame_skip=frame_skip)
 criterion_model = nn.MSELoss(reduction='mean')
@@ -54,7 +54,7 @@ optimizer = torch.optim.Adam([
     {'params': t.expert_2.parameters()}
 ], lr=1e-3, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-6, amsgrad=True)
 disc_optimizer =  torch.optim.Adam(t.discriminator.parameters(),lr=5e-4, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-6, amsgrad=True)
-RL_optimizer =  torch.optim.Adam(t.parameterReinforcer.parameters(),lr=5e-4, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-6, amsgrad=True)
+RL_optimizer =  torch.optim.Adam(t.parameterReinforcer.parameters(),lr=5e-3, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-6, amsgrad=True)
 
 # torch.autograd.set_detect_anomaly(True)
 # Note: Eon > Era > Period > Epoch
@@ -69,7 +69,7 @@ for period in range(1,no_periods+1):
     t.fsim.fuel_dens_modifier = 1/t.fsim.dt
     t.fsim.simulate(simulate=0,save_rgb=1,save_alpha=1,save_fuel=1,delete_data=0)
     t.learning_phase(t,no_frame_samples, batch_size, input_window_size, first_frame,
-                     last_frame,frame_skip*2,criterion,optimizer,disc_optimizer,RL_optimizer,device,learning=1,num_epochs=500)
+                     last_frame,frame_skip*2,criterion,optimizer,disc_optimizer,RL_optimizer,device,learning=1,num_epochs=2500)
     # t.fsim.simulate(simulate=0,delete_data=1)
 
 t.visualize_lerning()
