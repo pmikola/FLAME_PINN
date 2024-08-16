@@ -204,9 +204,25 @@ class Metamorph(nn.Module):
             self.reset_parameters()
 
     def forward(self, din):
+        old_batch_size = self.batch_size
         (data_input, structure_input, meta_input_h1, meta_input_h2, meta_input_h3,
          meta_input_h4, meta_input_h5, noise_var_in, meta_output_h1, meta_output_h2,
          meta_output_h3, meta_output_h4, meta_output_h5, noise_var_out) = din
+
+        if data_input.shape[0] != self.batch_size:
+            self.batch_size = data_input.shape[0]*old_batch_size
+            din = [data_input, structure_input, meta_input_h1, meta_input_h2, meta_input_h3,
+             meta_input_h4, meta_input_h5, noise_var_in, meta_output_h1, meta_output_h2,
+             meta_output_h3, meta_output_h4, meta_output_h5, noise_var_out]
+            stacked_vars = []
+            for var in din:
+                permuted_var = var.permute(1, 0, *range(2, var.ndimension()))
+                stacked_var = permuted_var.reshape(-1, *var.shape[2:])
+                stacked_vars.append(stacked_var)
+            (data_input, structure_input, meta_input_h1, meta_input_h2,
+             meta_input_h3,meta_input_h4, meta_input_h5, noise_var_in,
+             meta_output_h1, meta_output_h2,meta_output_h3, meta_output_h4,
+             meta_output_h5, noise_var_out) = stacked_vars
 
         # Question : Do highest hierarchy should have parameters that are learning
         #  or just be top layer without any additional coefss (regarding polyNonlinear)
@@ -340,8 +356,8 @@ class Metamorph(nn.Module):
         b = self.l11_h0_b(b).view(self.batch_size, self.in_scale, self.in_scale)
         a = self.l11_h0_a(a).view(self.batch_size, self.in_scale, self.in_scale)
         s = self.l11_h0_s(s).view(self.batch_size, self.in_scale, self.in_scale)
+        self.batch_size = old_batch_size
         return r,g,b,a,s
-
 
     def shapeShift(self,x, h):
         if x.dim() == 3:

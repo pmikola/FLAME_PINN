@@ -820,15 +820,24 @@ class teacher(object):
                     e0loss = self.loss_calculation(e0_idx,expert_0_output,self.data_input,self.data_output,self.structure_input,self.structure_output, criterion_e0, norm)
                     e1loss = self.loss_calculation(e1_idx,expert_1_output,self.data_input,self.data_output,self.structure_input,self.structure_output, criterion_e1, norm)
                     e2loss = self.loss_calculation(e2_idx,expert_2_output,self.data_input,self.data_output,self.structure_input,self.structure_output, criterion_e1, norm)
-
-
-
-                    optimizer.zero_grad(set_to_none=True)
-                    loss.backward()
-                    e0loss.backward()
-                    e1loss.backward()
-                    e2loss.backward()
-                    optimizer.step()
+                    if loss.dim()>0:
+                        lidx = torch.argmin(loss)
+                        e0idx = torch.argmin(e0loss)
+                        e1idx = torch.argmin(e1loss)
+                        e2idx = torch.argmin(e2loss)
+                        optimizer.zero_grad(set_to_none=True)
+                        loss[lidx].backward()
+                        e0loss[e0idx].backward()
+                        e1loss[e1idx].backward()
+                        e2loss[e2idx].backward()
+                        optimizer.step()
+                    else:
+                        optimizer.zero_grad(set_to_none=True)
+                        loss.backward()
+                        e0loss.backward()
+                        e1loss.backward()
+                        e2loss.backward()
+                        optimizer.step()
                     # if (epoch + 1) % 5 == 0:
 
 
@@ -1006,7 +1015,6 @@ class teacher(object):
 
     def loss_calculation(self,idx,model_output,data_input,data_output,structure_input,structure_output,criterion,norm='forward'):
         pred_r,pred_g,pred_b,pred_a,pred_s = model_output
-
         r_in = data_input[:, 0:self.model.in_scale, :][idx]
         g_in = data_input[:,self.model.in_scale:self.model.in_scale * 2,:][idx]
         b_in = data_input[:,self.model.in_scale * 2:self.model.in_scale * 3,:][idx]
@@ -1019,11 +1027,25 @@ class teacher(object):
         a_out = data_output[:, self.model.in_scale * 3:self.model.in_scale * 4, :][idx]
         s_out = structure_output[idx]
 
+
+        if pred_r.shape[0] != self.batch_size:
+            n = int(pred_r.shape[0] / self.batch_size)
+            r_in = r_in.repeat(n, 1, 1)
+            g_in = g_in.repeat(n, 1, 1)
+            b_in = b_in.repeat(n, 1, 1)
+            a_in = a_in.repeat(n, 1, 1)
+            s_in = s_in.repeat(n, 1, 1)
+
+            r_out = r_out.repeat(n,1,1)
+            g_out = g_out.repeat(n,1,1)
+            b_out = b_out.repeat(n,1,1)
+            a_out = a_out.repeat(n,1,1)
+            s_out = s_out.repeat(n,1,1)
+
         # Solution for learning of the dynamics in loss calculation
         # NOTE: Firs order difference
         diff_r_true = r_out - r_in
         diff_r_pred = pred_r - r_in
-        # diff_r_pred = torch.gradient(torch.cat([data_in_r.unsqueeze(3),pred_r.unsqueeze(3)],dim=3),dim=3)[0][:, :, :, 1]
         loss_diff_r = criterion(diff_r_pred, diff_r_true)
         diff_g_true = g_out- g_in
         diff_g_pred = pred_g - g_in
@@ -1037,7 +1059,7 @@ class teacher(object):
         diff_s_true = s_out - s_in
         diff_s_pred = pred_s - s_in
         loss_diff_s = criterion(diff_s_pred, diff_s_true)
-        diff_loss = loss_diff_r + loss_diff_g + loss_diff_b + loss_diff_a + loss_diff_s
+        diff_loss = torch.mean(loss_diff_r + loss_diff_g + loss_diff_b + loss_diff_a + loss_diff_s,dim=[1,2])
 
         # Note: Gradient loss
         grad_r_true = torch.gradient(r_out, dim=[1, 2])[0]
@@ -1056,9 +1078,7 @@ class teacher(object):
         grad_s_pred = torch.gradient(pred_s)[0]
         grad_s = criterion(grad_s_pred, grad_s_true)
 
-        grad_loss = grad_r + grad_g + grad_b + grad_a + grad_s
-
-
+        grad_loss = torch.mean(grad_r + grad_g + grad_b + grad_a + grad_s,dim=[1,2])
 
         # Note: Fourier loss
         fft_out_pred_r = torch.real(torch.fft.rfft2(pred_r, norm=norm))
@@ -1083,7 +1103,7 @@ class teacher(object):
         fft_loss_b = criterion(fft_out_pred_b, fft_out_true_b)
         fft_loss_a = criterion(fft_out_pred_a, fft_out_true_a)
         fft_loss_s = criterion(fft_out_pred_s, fft_out_true_s)
-        fft_loss = fft_loss_r + fft_loss_g + fft_loss_b + fft_loss_a + fft_loss_s
+        fft_loss = torch.mean(fft_loss_r + fft_loss_g + fft_loss_b + fft_loss_a + fft_loss_s,dim=[1,2])
 
         # Note: Fourier Gradient Loss
         diff_fft_true_r = fft_out_true_r - fft_in_true_r
@@ -1101,7 +1121,7 @@ class teacher(object):
         diff_fft_true_s = fft_out_true_s - fft_in_true_s
         diff_fft_pred_s = fft_out_pred_s - fft_in_true_s
         diff_fft_loss_s = criterion(diff_fft_pred_s, diff_fft_true_s)
-        diff_fft_loss = diff_fft_loss_r + diff_fft_loss_g + diff_fft_loss_b + diff_fft_loss_a + diff_fft_loss_s
+        diff_fft_loss = torch.mean(diff_fft_loss_r + diff_fft_loss_g + diff_fft_loss_b + diff_fft_loss_a + diff_fft_loss_s,dim=[1,2])
 
         # Note : Exact value loss
         loss_r = criterion(pred_r, r_out)
@@ -1109,7 +1129,7 @@ class teacher(object):
         loss_b = criterion(pred_b, b_out)
         loss_alpha = criterion(pred_a, a_out)
         loss_s = criterion(pred_s, s_out)
-        value_loss = loss_r + loss_g + loss_b + loss_alpha + loss_s
+        value_loss = torch.mean(loss_r + loss_g + loss_b + loss_alpha + loss_s,dim=[1,2])
 
         # Solution for learning and maintaining of the proper color and other element space
         bandwidth = torch.tensor(0.1).to(self.device) # Note: Higher value less noise (gaussian smothing)
@@ -1153,10 +1173,16 @@ class teacher(object):
         s_true_hist = kornia.enhance.histogram(s_out, bins=bins_true, bandwidth=bandwidth)
         s_pred_hist = kornia.enhance.histogram(pred_s, bins=bins_pred, bandwidth=bandwidth)
         s_hist_loss = criterion(s_pred_hist, s_true_hist)
-
-        hist_loss = r_hist_loss + b_hist_loss + g_hist_loss + a_hist_loss +s_hist_loss
+        hist_loss = torch.mean(r_hist_loss + b_hist_loss + g_hist_loss + a_hist_loss +s_hist_loss,dim=1 )
         hist_loss = hist_loss*10
+
         LOSS = value_loss + diff_loss + grad_loss + fft_loss + diff_fft_loss+hist_loss # Attention: Aggregate all losses here
+        if pred_r.shape[0] != self.batch_size:
+            n = int(pred_r.shape[0] / self.batch_size)
+            LOSS = torch.chunk(LOSS, n, dim=0)
+            LOSS = torch.stack([split.mean(dim=0) for split in LOSS])
+        else:
+            LOSS = torch.mean(LOSS)
         return LOSS
 
     def discriminator_loss(self,idx,model_output,data_output,structure_output,criterion):

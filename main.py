@@ -40,10 +40,10 @@ parameterReinforcer = Metamorph_parameterReinforcer(no_layers,5,100,50,64,device
 
 t = teacher(models,discriminator,parameterReinforcer, device)
 t.fsim = fl.flame_sim(no_frames=no_frames,frame_skip=frame_skip)
-criterion_model = nn.MSELoss(reduction='mean')
-criterion_e0 = nn.MSELoss(reduction='mean')
-criterion_e1 = nn.MSELoss(reduction='mean')
-criterion_e2 = nn.MSELoss(reduction='mean')
+criterion_model = nn.MSELoss(reduction='none')
+criterion_e0 = nn.MSELoss(reduction='none')
+criterion_e1 = nn.MSELoss(reduction='none')
+criterion_e2 = nn.MSELoss(reduction='none')
 criterion_disc = nn.BCELoss(reduction='mean')
 criterion_RL = nn.MSELoss(reduction='mean')#nn.CrossEntropyLoss(reduction='mean')
 criterion = criterion_model,criterion_e0,criterion_e1,criterion_e2,criterion_disc,criterion_RL

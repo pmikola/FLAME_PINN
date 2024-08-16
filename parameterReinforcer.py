@@ -182,7 +182,7 @@ class Metamorph_parameterReinforcer(nn.Module):
         self.next_MLosses.append(MLoss.detach())
 
     def calculate_reward(self,loss,MLoss,reiterate=1):
-        MLoss = torch.tensor(MLoss).to(self.device)
+        MLoss = torch.stack(MLoss).to(self.device)
         # if not reiterate:
         self.reward = torch.zeros_like(MLoss).to(self.device)
         # else:
@@ -192,7 +192,7 @@ class Metamorph_parameterReinforcer(nn.Module):
         multipliers = torch.linspace(1, 10, 100).to(self.device)
         #losses_mean = torch.mean(torch.tensor(self.losses)).to(self.device)
         #MLosses_mean = torch.mean(MLosses_tensor).to(self.device)
-        loss_min = torch.min(torch.tensor(self.losses)).to(self.device)
+        loss_min = torch.min(torch.stack(list(self.losses))).to(self.device)
         multipliers = multipliers.view(1, -1)
         #condition_1 = (losses_mean * multipliers > MLosses_mean)
         condition_2 = (MLoss.view(-1, 1) * multipliers.permute(0, 1) < loss_min)
@@ -201,7 +201,7 @@ class Metamorph_parameterReinforcer(nn.Module):
         self.rewards.append(self.reward.detach())
 
     def calculate_next_reward(self,loss,MLoss,reiterate=1):
-        MLoss = torch.tensor(MLoss).to(self.device)
+        MLoss = torch.stack(MLoss).to(self.device)
         # if not reiterate:
         self.next_reward = torch.zeros_like(MLoss).to(self.device)
         # else:
@@ -210,11 +210,12 @@ class Metamorph_parameterReinforcer(nn.Module):
         #MLosses_tensor = torch.stack([ml.clone().detach().to(self.device) for ml in self.MLosses])
         multipliers = torch.linspace(1, 10, 100).to(self.device)
         # losses_mean = torch.mean(torch.tensor(self.losses)).to(self.device)
-        loss_min = torch.min(torch.tensor(self.losses)).to(self.device)
+        loss_min = torch.min(torch.stack(list(self.losses))).to(self.device)
         #MLosses_mean = torch.mean(MLosses_tensor).to(self.device)
         multipliers = multipliers.view(1, -1)
         #condition_1 = (losses_mean * multipliers > MLosses_mean)
         condition_2 = (MLoss.view(-1, 1) * multipliers.permute(0, 1) < loss_min)
+
         self.next_reward += torch.sum(condition_2.float(), dim=1) * 0.01
         # self.next_reward -= torch.sum(condition_1.float()) * 0.01
         self.next_rewards.append(self.next_reward.detach())
@@ -226,11 +227,10 @@ class Metamorph_parameterReinforcer(nn.Module):
         q_values = torch.gather(self.actions[sa_index], 1, best_action_indices.unsqueeze(-1))
         # q_values = self.actions[sa_index]
         # best_next_q_values = self.next_actions[sa_index]
-        next_rewards = self.next_rewards[sa_index].unsqueeze(1)
-        td_target = (next_rewards + gamma * best_next_q_values)
+        next_rewards = self.next_rewards[sa_index].t()
+        td_target = next_rewards + gamma * best_next_q_values
         td_error = td_target - q_values
         q_target = q_values + alpha * td_error
-
         return q_target,best_action_indices
 
     def mutations_batch(self,teacher,model,dataset,action,loss_calc_data):
@@ -243,14 +243,13 @@ class Metamorph_parameterReinforcer(nn.Module):
             mih3[:self.batch_size], mih4[:self.batch_size], mih5[:self.batch_size], nvi[:self.batch_size],
             moh1[:self.batch_size], moh2[:self.batch_size], moh3[:self.batch_size], moh4[:self.batch_size],
             moh5[:self.batch_size], nvo[:self.batch_size])
-        print(di[:self.batch_size].shape)
+
         # for i in range(self.batch_size):
         #
         #     dataset_m = (
         #     di[i], si[i], mih1[i], mih2[i], mih3[i], mih4[i], mih5[i], nvi[i], moh1[i], moh2[i], moh3[i], moh4[i],
         #     moh5[i], nvo[i])
         mutated_output = model(dataset_m)
-        print('dupa')
         mutation_loss = teacher.loss_calculation(dataset_idx,
                                                      mutated_output,
                                                      data_input,
