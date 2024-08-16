@@ -1030,17 +1030,17 @@ class teacher(object):
 
         if pred_r.shape[0] != self.batch_size:
             n = int(pred_r.shape[0] / self.batch_size)
-            r_in = r_in.repeat(n, 1, 1)
-            g_in = g_in.repeat(n, 1, 1)
-            b_in = b_in.repeat(n, 1, 1)
-            a_in = a_in.repeat(n, 1, 1)
-            s_in = s_in.repeat(n, 1, 1)
+            r_in = r_in.repeat(n, 1, 1).detach()
+            g_in = g_in.repeat(n, 1, 1).detach()
+            b_in = b_in.repeat(n, 1, 1).detach()
+            a_in = a_in.repeat(n, 1, 1).detach()
+            s_in = s_in.repeat(n, 1, 1).detach()
 
-            r_out = r_out.repeat(n,1,1)
-            g_out = g_out.repeat(n,1,1)
-            b_out = b_out.repeat(n,1,1)
-            a_out = a_out.repeat(n,1,1)
-            s_out = s_out.repeat(n,1,1)
+            r_out = r_out.repeat(n,1,1).detach()
+            g_out = g_out.repeat(n,1,1).detach()
+            b_out = b_out.repeat(n,1,1).detach()
+            a_out = a_out.repeat(n,1,1).detach()
+            s_out = s_out.repeat(n,1,1).detach()
 
         # Solution for learning of the dynamics in loss calculation
         # NOTE: Firs order difference
@@ -1132,7 +1132,7 @@ class teacher(object):
         value_loss = torch.mean(loss_r + loss_g + loss_b + loss_alpha + loss_s,dim=[1,2])
 
         # Solution for learning and maintaining of the proper color and other element space
-        bandwidth = torch.tensor(0.1).to(self.device) # Note: Higher value less noise (gaussian smothing)
+        bandwidth = torch.tensor(0.1).to(self.device) # Note: Higher value less noise (gaussian smoothing)
         bins = 255
         r_out = torch.flatten(r_out,start_dim=1)
         pred_r = torch.flatten(pred_r, start_dim=1)

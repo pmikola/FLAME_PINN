@@ -19,7 +19,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # torch.autograd.set_detect_anomaly(True) # Note : Tremendously slowing down program - Attention: Be careful!
 
 no_frame_samples = 50
-batch_size = 512
+batch_size = 256
 input_window_size = 7
 
 no_frames = 1000
@@ -36,7 +36,7 @@ no_layers = 0
 for (name, param) in models[0].named_parameters():
     no_layers +=1
 discriminator = Metamorph_discriminator(no_frame_samples, batch_size, input_window_size, device).to(device)
-parameterReinforcer = Metamorph_parameterReinforcer(no_layers,5,100,50,64,device).to(device)
+parameterReinforcer = Metamorph_parameterReinforcer(no_layers,10,100,10,64,device).to(device)
 
 t = teacher(models,discriminator,parameterReinforcer, device)
 t.fsim = fl.flame_sim(no_frames=no_frames,frame_skip=frame_skip)

@@ -50,6 +50,12 @@ class Metamorph_parameterReinforcer(nn.Module):
         self.weights_data_2 = nn.Parameter(torch.rand((1,self.modes), dtype=torch.float))
         self.weights_data_fft_2 = nn.Parameter(torch.rand((1,self.modes), dtype=torch.cfloat))
 
+        self.weights_MASK_0 = nn.Parameter(torch.rand((1, self.modes), dtype=torch.float))
+        self.weights_MASK_fft_0 = nn.Parameter(torch.rand((1, self.modes), dtype=torch.cfloat))
+        self.weights_MASK_1 = nn.Parameter(torch.rand((1, self.modes), dtype=torch.float))
+        self.weights_MASK_fft_1 = nn.Parameter(torch.rand((1, self.modes), dtype=torch.cfloat))
+        self.weights_MASK_2 = nn.Parameter(torch.rand((1, self.modes), dtype=torch.float))
+        self.weights_MASK_fft_2 = nn.Parameter(torch.rand((1, self.modes), dtype=torch.cfloat))
         # Definition of output dens layers
         self.lin1 = nn.Linear(self.no_layers*self.modes,self.modes)
         self.lin2 = nn.Linear(self.modes,self.action_per_layer)
@@ -82,11 +88,14 @@ class Metamorph_parameterReinforcer(nn.Module):
         if model_p.shape[1] == self.modes:
             model_p = model_p.unsqueeze(0)
         else:pass
+        masks = torch.stack(list(self.masks))
 
         self.batch_size = model_p.shape[0]
-        x = self.SpaceTimeFFTFeature(model_p,self.weights_data_0,self.weights_data_fft_0)
-        x = self.SpaceTimeFFTFeature(x, self.weights_data_1, self.weights_data_fft_1)
-        x = self.SpaceTimeFFTFeature(x, self.weights_data_2, self.weights_data_fft_2)
+        x,masks = self.MaskedFFTFeature(model_p,masks,self.weights_data_0,self.weights_MASK_0,
+                                        self.weights_data_fft_0,self.weights_MASK_fft_0)
+        x,masks = self.MaskedFFTFeature(x,masks, self.weights_data_1,self.weights_MASK_1
+                                        ,self.weights_MASK_fft_1, self.weights_data_fft_1)
+        x,masks = self.MaskedFFTFeature(x,masks, self.weights_data_2,self.weights_MASK_2,self.weights_MASK_fft_2, self.weights_data_fft_2)
         x = torch.flatten(x,start_dim=1)
 
         x = self.activate(self.lin1(x))
@@ -94,15 +103,20 @@ class Metamorph_parameterReinforcer(nn.Module):
         # x = self.softmax(x)
         return x
 
-    def SpaceTimeFFTFeature(self,data,weights_data,weights_data_fft):
+    def MaskedFFTFeature(self,data,MASK,weights_data,weights_mask,weights_data_fft,weights_mask_fft):
         # Attention :  Below is implemented simplified FNO LAYER
         fft_data = torch.fft.fft(data,norm='forward')
+        fft_mask = torch.fft.fft(MASK, norm='forward')
         FFTwithW = torch.einsum("bfp,an->bfn",fft_data, weights_data_fft)
+        FFTwithWM = torch.einsum("bwch,an->bwcn", fft_mask, weights_mask_fft)
+        FFTwithW = torch.einsum("bwch,pfk->pfh",FFTwithWM,FFTwithW)
         iFFW= torch.fft.ifft(FFTwithW, norm='forward')
+        iFFWM = torch.fft.ifft(FFTwithWM, norm='forward')
         data = self.activate(iFFW.real)
+        mask = self.activate(iFFWM.real)
         # Attention :  Above is implemented simplified FNO LAYER
         # data = torch.tanh(data)
-        return data
+        return data,mask
 
     def save_state(self, model):
         i = 0
@@ -156,6 +170,8 @@ class Metamorph_parameterReinforcer(nn.Module):
          meta_input_h4, meta_input_h5, noise_var_in, meta_output_h1, meta_output_h2,
          meta_output_h3, meta_output_h4, meta_output_h5, noise_var_out) = data_in
         mask =torch.stack([self.masks[i] for i in p_action_idx])
+        rng  = torch.rand(mask.shape).to(self.device).detach()
+        mask = mask.float() * 1 + (1 - mask) * rng
         return data_input * mask, structure_input.repeat(self.batch_size,1,1,1), meta_input_h1.repeat(self.batch_size,1,1), meta_input_h2.repeat(self.batch_size,1,1), meta_input_h3.repeat(self.batch_size,1,1),meta_input_h4.repeat(self.batch_size,1,1), meta_input_h5.repeat(self.batch_size,1), noise_var_in.repeat(self.batch_size,1,1), meta_output_h1.repeat(self.batch_size,1,1), meta_output_h2.repeat(self.batch_size,1,1),meta_output_h3.repeat(self.batch_size,1,1), meta_output_h4.repeat(self.batch_size,1,1), meta_output_h5.repeat(self.batch_size,1), noise_var_out.repeat(self.batch_size,1,1)
 
 
@@ -196,7 +212,7 @@ class Metamorph_parameterReinforcer(nn.Module):
         multipliers = multipliers.view(1, -1)
         #condition_1 = (losses_mean * multipliers > MLosses_mean)
         condition_2 = (MLoss.view(-1, 1) * multipliers.permute(0, 1) < loss_min)
-        self.reward += torch.sum(condition_2.float(),dim=1)*0.01
+        self.reward += torch.sum(condition_2.float(),dim=1)*0.1
         # self.reward -= torch.sum(condition_1.float())*0.01
         self.rewards.append(self.reward.detach())
 
@@ -227,7 +243,7 @@ class Metamorph_parameterReinforcer(nn.Module):
         q_values = torch.gather(self.actions[sa_index], 1, best_action_indices.unsqueeze(-1))
         # q_values = self.actions[sa_index]
         # best_next_q_values = self.next_actions[sa_index]
-        next_rewards = self.next_rewards[sa_index].t()
+        next_rewards = self.next_rewards[sa_index].permute(1, 0)
         td_target = next_rewards + gamma * best_next_q_values
         td_error = td_target - q_values
         q_target = q_values + alpha * td_error
@@ -244,11 +260,7 @@ class Metamorph_parameterReinforcer(nn.Module):
             moh1[:self.batch_size], moh2[:self.batch_size], moh3[:self.batch_size], moh4[:self.batch_size],
             moh5[:self.batch_size], nvo[:self.batch_size])
 
-        # for i in range(self.batch_size):
-        #
-        #     dataset_m = (
-        #     di[i], si[i], mih1[i], mih2[i], mih3[i], mih4[i], mih5[i], nvi[i], moh1[i], moh2[i], moh3[i], moh4[i],
-        #     moh5[i], nvo[i])
+
         mutated_output = model(dataset_m)
         mutation_loss = teacher.loss_calculation(dataset_idx,
                                                      mutated_output,
