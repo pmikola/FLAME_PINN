@@ -172,7 +172,22 @@ class Metamorph_parameterReinforcer(nn.Module):
         mask =torch.stack([self.masks[i] for i in p_action_idx])
         rng  = torch.rand(mask.shape).to(self.device).detach()
         mask = mask.float() * 1 + (1 - mask) * rng
-        return data_input * mask, structure_input.repeat(self.batch_size,1,1,1), meta_input_h1.repeat(self.batch_size,1,1), meta_input_h2.repeat(self.batch_size,1,1), meta_input_h3.repeat(self.batch_size,1,1),meta_input_h4.repeat(self.batch_size,1,1), meta_input_h5.repeat(self.batch_size,1), noise_var_in.repeat(self.batch_size,1,1), meta_output_h1.repeat(self.batch_size,1,1), meta_output_h2.repeat(self.batch_size,1,1),meta_output_h3.repeat(self.batch_size,1,1), meta_output_h4.repeat(self.batch_size,1,1), meta_output_h5.repeat(self.batch_size,1), noise_var_out.repeat(self.batch_size,1,1)
+
+        structure_input = structure_input.unsqueeze(0).expand(self.batch_size, -1, -1, -1)
+        meta_input_h1 = meta_input_h1.unsqueeze(0).expand(self.batch_size, -1,-1)
+        meta_input_h2 = meta_input_h2.unsqueeze(0).expand(self.batch_size, -1,-1)
+        meta_input_h3 = meta_input_h3.unsqueeze(0).expand(self.batch_size, -1,-1)
+        meta_input_h4 = meta_input_h4.unsqueeze(0).expand(self.batch_size, -1,-1)
+        meta_input_h5 = meta_input_h5.unsqueeze(0).expand(self.batch_size,-1)
+        noise_var_in = noise_var_in.unsqueeze(0).expand(self.batch_size, -1,-1)
+        meta_output_h1 = meta_output_h1.unsqueeze(0).expand(self.batch_size, -1,-1)
+        meta_output_h2 = meta_output_h2.unsqueeze(0).expand(self.batch_size, -1,-1)
+        meta_output_h3 = meta_output_h3.unsqueeze(0).expand(self.batch_size, -1,-1)
+        meta_output_h4 = meta_output_h4.unsqueeze(0).expand(self.batch_size, -1,-1)
+        meta_output_h5 = meta_output_h5.unsqueeze(0).expand(self.batch_size,-1)
+        noise_var_out = noise_var_out.unsqueeze(0).expand(self.batch_size, -1,-1)
+
+        return data_input * mask, structure_input, meta_input_h1, meta_input_h2, meta_input_h3,meta_input_h4, meta_input_h5, noise_var_in, meta_output_h1, meta_output_h2,meta_output_h3, meta_output_h4, meta_output_h5, noise_var_out
 
 
     def exploit_explore_action_selector(self,action,p=0.1):

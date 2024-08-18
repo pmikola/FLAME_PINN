@@ -36,7 +36,7 @@ no_layers = 0
 for (name, param) in models[0].named_parameters():
     no_layers +=1
 discriminator = Metamorph_discriminator(no_frame_samples, batch_size, input_window_size, device).to(device)
-parameterReinforcer = Metamorph_parameterReinforcer(no_layers,10,100,10,64,device).to(device)
+parameterReinforcer = Metamorph_parameterReinforcer(no_layers,10,100,20,64,device).to(device)
 
 t = teacher(models,discriminator,parameterReinforcer, device)
 t.fsim = fl.flame_sim(no_frames=no_frames,frame_skip=frame_skip)
@@ -45,7 +45,7 @@ criterion_e0 = nn.MSELoss(reduction='none')
 criterion_e1 = nn.MSELoss(reduction='none')
 criterion_e2 = nn.MSELoss(reduction='none')
 criterion_disc = nn.BCELoss(reduction='mean')
-criterion_RL = nn.MSELoss(reduction='mean')#nn.CrossEntropyLoss(reduction='mean')
+criterion_RL = nn.MSELoss(reduction='mean')
 criterion = criterion_model,criterion_e0,criterion_e1,criterion_e2,criterion_disc,criterion_RL
 optimizer = torch.optim.Adam([
     {'params': t.model.parameters()},

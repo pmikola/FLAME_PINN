@@ -779,7 +779,7 @@ class teacher(object):
                                   self.noise_var_out[e2_idx])
 
                     # UnderConstruction! UnderConstruction! UnderConstruction!
-                    self.model.eval()
+                    #self.model.eval()
                     model_b = copy.deepcopy(self.model)
                     self.parameterReinforcer, RLoss,dataset_mutated = self.parameterReinforcer.experience_replay(teacher, RL_optimizer,
                                                                                                  criterion_RL,
@@ -793,7 +793,7 @@ class teacher(object):
                                                                                                  dataset, m_idx)
                     # self.parameterReinforcer.next_to_current()
                     del model_b
-                    self.model.train()
+                    #self.model.train()
                     # UnderConstruction! UnderConstruction! UnderConstruction!
 
                     t_start = time.perf_counter()
@@ -1030,17 +1030,17 @@ class teacher(object):
 
         if pred_r.shape[0] != self.batch_size:
             n = int(pred_r.shape[0] / self.batch_size)
-            r_in = r_in.repeat(n, 1, 1).detach()
-            g_in = g_in.repeat(n, 1, 1).detach()
-            b_in = b_in.repeat(n, 1, 1).detach()
-            a_in = a_in.repeat(n, 1, 1).detach()
-            s_in = s_in.repeat(n, 1, 1).detach()
+            r_in = r_in.unsqueeze(0).expand(n, -1, -1, -1).reshape(-1, r_in.shape[1], r_in.shape[2]).detach()
+            g_in = g_in.unsqueeze(0).expand(n, -1, -1, -1).reshape(-1, g_in.shape[1], g_in.shape[2]).detach()
+            b_in = b_in.unsqueeze(0).expand(n, -1, -1, -1).reshape(-1, b_in.shape[1], b_in.shape[2]).detach()
+            a_in = a_in.unsqueeze(0).expand(n, -1, -1, -1).reshape(-1, a_in.shape[1], a_in.shape[2]).detach()
+            s_in = s_in.unsqueeze(0).expand(n, -1, -1, -1).reshape(-1, s_in.shape[1], s_in.shape[2]).detach()
 
-            r_out = r_out.repeat(n,1,1).detach()
-            g_out = g_out.repeat(n,1,1).detach()
-            b_out = b_out.repeat(n,1,1).detach()
-            a_out = a_out.repeat(n,1,1).detach()
-            s_out = s_out.repeat(n,1,1).detach()
+            r_out = r_out.unsqueeze(0).expand(n, -1, -1, -1).reshape(-1, r_out.shape[1], r_out.shape[2]).detach()
+            g_out = g_out.unsqueeze(0).expand(n, -1, -1, -1).reshape(-1, g_out.shape[1], g_out.shape[2]).detach()
+            b_out = b_out.unsqueeze(0).expand(n, -1, -1, -1).reshape(-1, b_out.shape[1], b_out.shape[2]).detach()
+            a_out = a_out.unsqueeze(0).expand(n, -1, -1, -1).reshape(-1, a_out.shape[1], a_out.shape[2]).detach()
+            s_out = s_out.unsqueeze(0).expand(n, -1, -1, -1).reshape(-1, s_out.shape[1], s_out.shape[2]).detach()
 
         # Solution for learning of the dynamics in loss calculation
         # NOTE: Firs order difference
