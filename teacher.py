@@ -743,7 +743,8 @@ class teacher(object):
                     self.seed_setter(int(epoch+1))
                     if reiterate_data == 0:
                         self.data_preparation()
-                        print("new sets of data prepared!")
+                        self.parameterReinforcer.create_masks(self.data_input_val)
+                        print("new sets of data and masks prepared!")
                     else:
                         reiterate_counter +=1
 
@@ -819,11 +820,10 @@ class teacher(object):
 
                     pred_r, pred_g, pred_b, pred_a, pred_s = model_output
                     mask = self.parameterReinforcer.create_mask(mask)
-                    data_output = torch.cat([pred_r,pred_g,pred_b,pred_a],dim=1)*(mask)
-                    pred_r = data_output[:, 0:self.model.in_scale, :]
-                    pred_g = data_output[:, self.model.in_scale:self.model.in_scale * 2, :]
-                    pred_b = data_output[:, self.model.in_scale * 2:self.model.in_scale * 3, :]
-                    pred_a = data_output[:, self.model.in_scale * 3:self.model.in_scale * 4, :]
+                    pred_r = pred_r*mask[:, 0:self.model.in_scale, :]
+                    pred_g = pred_g*mask[:, self.model.in_scale:self.model.in_scale * 2, :]
+                    pred_b = pred_b*mask[:, self.model.in_scale * 2:self.model.in_scale * 3, :]
+                    pred_a = pred_a*mask[:, self.model.in_scale * 3:self.model.in_scale * 4, :]
                     model_output = pred_r,pred_g,pred_b,pred_a,pred_s
 
                     loss = self.loss_calculation(m_idx,model_output,self.data_input,self.data_output,self.structure_input,self.structure_output,criterion_model, norm)
@@ -927,7 +927,7 @@ class teacher(object):
                                     best_loss = e2loss.item()
                                     best_losses.append(best_loss)
                                     best_models.append(self.expert_2)
-
+                            with torch.no_grad():
                                 if len(best_models) > 200:
                                     best_losses = torch.tensor(np.array(best_losses))
                                     n = 5
@@ -953,23 +953,23 @@ class teacher(object):
                                             param_sum_damping[name][opposite_sign_mask] += param[opposite_sign_mask] * best_losses_norm[m]
                                             param_sum_enhance[name][same_sign_mask] += param[same_sign_mask] * best_losses_norm[m]
 
-                                    with torch.no_grad():
-                                        for name, param in model_avg_damping.named_parameters():
-                                            param_avg = param_sum_damping[name] / n
-                                            param.copy_(param_avg)
 
-                                        for name, param in model_avg_enhance.named_parameters():
-                                            param_avg = param_sum_enhance[name] / n
-                                            param.copy_(param_avg)
+                                    for name, param in model_avg_damping.named_parameters():
+                                        param_avg = param_sum_damping[name] / n
+                                        param.copy_(param_avg)
 
-                                        for (name, param),(name_enh, param_enh), (name_damp, param_damp) in zip(self.model.named_parameters(),model_avg_enhance.named_parameters(), model_avg_damping.named_parameters()):
-                                            param_selector = random.randint(0,4) # Note : 20% chance to enhance or damp parameter
-                                            if param_selector == 0:
-                                                param.copy_(param_enh)
-                                            elif param_selector == 1:
-                                                param.copy_(param_damp)
-                                            else:
-                                                pass
+                                    for name, param in model_avg_enhance.named_parameters():
+                                        param_avg = param_sum_enhance[name] / n
+                                        param.copy_(param_avg)
+
+                                    for (name, param),(name_enh, param_enh), (name_damp, param_damp) in zip(self.model.named_parameters(),model_avg_enhance.named_parameters(), model_avg_damping.named_parameters()):
+                                        param_selector = random.randint(0,4) # Note : 20% chance to enhance or damp parameter
+                                        if param_selector == 0:
+                                            param.copy_(param_enh)
+                                        elif param_selector == 1:
+                                            param.copy_(param_damp)
+                                        else:
+                                            pass
 
                                     self.discriminator.weight_reset()
                                     self.discriminator.init_weights()

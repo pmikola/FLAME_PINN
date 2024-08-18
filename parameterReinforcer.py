@@ -19,6 +19,7 @@ class Metamorph_parameterReinforcer(nn.Module):
     def __init__(self,no_layers,batch_size,modes,action_per_layer,memory_size,device):
         super(Metamorph_parameterReinforcer, self).__init__()
 
+        self.mask_treshold = None
         self.device = device
         self.no_layers = no_layers
         self.batch_size = batch_size
@@ -39,6 +40,9 @@ class Metamorph_parameterReinforcer(nn.Module):
         self.reward = torch.zeros(self.batch_size).to(self.device)
         self.next_reward = torch.zeros(self.batch_size).to(self.device)
 
+        # Definition mask params
+        #self.mask_treshold = nn.Parameter(torch.rand(1, dtype=torch.float))
+
         # Definition of target policy function
         self.q_target = torch.rand(self.batch_size, self.action_per_layer,requires_grad=True).to(self.device)
 
@@ -58,8 +62,9 @@ class Metamorph_parameterReinforcer(nn.Module):
         self.weights_MASK_fft_2 = nn.Parameter(torch.rand((1, self.modes), dtype=torch.cfloat))
         # Definition of output dens layers
         self.lin1 = nn.Linear(self.no_layers*self.modes,self.modes)
+        self.lin1_mask = nn.Linear(self.no_layers * self.modes,1)
         self.lin2 = nn.Linear(self.modes,self.action_per_layer)
-        self.softmax = nn.Softmax(dim=2)
+        self.softmax = nn.Softmax(dim=1)
         self.init_weights()
 
     def init_weights(self):
@@ -95,12 +100,12 @@ class Metamorph_parameterReinforcer(nn.Module):
                                         self.weights_data_fft_0,self.weights_MASK_fft_0)
         x,masks = self.MaskedFFTFeature(x,masks, self.weights_data_1,self.weights_MASK_1
                                         ,self.weights_MASK_fft_1, self.weights_data_fft_1)
-        x,masks = self.MaskedFFTFeature(x,masks, self.weights_data_2,self.weights_MASK_2,self.weights_MASK_fft_2, self.weights_data_fft_2)
+        x,_ = self.MaskedFFTFeature(x,masks, self.weights_data_2,self.weights_MASK_2,self.weights_MASK_fft_2, self.weights_data_fft_2)
         x = torch.flatten(x,start_dim=1)
-
+        self.mask_treshold = torch.mean(f.hardtanh(self.lin1_mask(x),0,1),dim=0)
         x = self.activate(self.lin1(x))
         x = self.lin2(x).view(self.batch_size,self.action_per_layer)
-        # x = self.softmax(x)
+        x = self.softmax(x)
         return x
 
     def MaskedFFTFeature(self,data,MASK,weights_data,weights_mask,weights_data_fft,weights_mask_fft):
@@ -156,7 +161,8 @@ class Metamorph_parameterReinforcer(nn.Module):
         MASK = torch.rand_like(tensor)
         new_zeros = torch.zeros_like(MASK)
         new_ones = torch.ones_like(MASK)
-        treshold = 0.5
+
+        treshold = self.mask_treshold
         m = MASK.real <= treshold
         MASK[m] = new_zeros[m]
         MASK[~m] = new_ones[~m]
@@ -169,7 +175,7 @@ class Metamorph_parameterReinforcer(nn.Module):
             MASK = torch.rand_like(data)
             new_zeros = torch.zeros_like(MASK)
             new_ones = torch.ones_like(MASK)
-            treshold = 0.5
+            treshold = 0.5#self.mask_treshold
             mask = MASK.real <= treshold
             MASK[mask] = new_zeros[mask]
             MASK[~mask] = new_ones[~mask]
@@ -231,16 +237,16 @@ class Metamorph_parameterReinforcer(nn.Module):
         # else:
         #     pass
         self.save_losses(loss, MLoss)
-        #MLosses_tensor = torch.stack([ml.clone().detach().to(self.device) for ml in self.MLosses])
+        MLosses_tensor = torch.stack([ml.clone().detach().to(self.device) for ml in self.MLosses])
         multipliers = torch.linspace(1, 10, 100).to(self.device)
-        #losses_mean = torch.mean(torch.tensor(self.losses)).to(self.device)
-        #MLosses_mean = torch.mean(MLosses_tensor).to(self.device)
-        loss_min = torch.min(torch.stack(list(self.losses))).to(self.device)
+        losses_mean = torch.mean(torch.tensor(self.losses)).to(self.device)
+        MLosses_mean = torch.mean(MLosses_tensor).to(self.device)
+        #loss_min = torch.min(torch.stack(list(self.losses))).to(self.device)
         multipliers = multipliers.view(1, -1)
-        #condition_1 = (losses_mean * multipliers > MLosses_mean)
-        condition_2 = (MLoss.view(-1, 1) * multipliers.permute(0, 1) < loss_min)
+        condition_1 = ~(losses_mean * multipliers > MLosses_mean)
+        condition_2 = (MLoss.view(-1, 1) * multipliers.permute(0, 1) < losses_mean)
+        self.reward += torch.sum(condition_1.float())*0.1
         self.reward += torch.sum(condition_2.float(),dim=1)*0.1
-        # self.reward -= torch.sum(condition_1.float())*0.01
         self.rewards.append(self.reward.detach())
 
     def calculate_next_reward(self,loss,MLoss,reiterate=1):
@@ -250,17 +256,16 @@ class Metamorph_parameterReinforcer(nn.Module):
         # else:
         #     pass
         self.save_next_losses(loss, MLoss)
-        #MLosses_tensor = torch.stack([ml.clone().detach().to(self.device) for ml in self.MLosses])
+        MLosses_tensor = torch.stack([ml.clone().detach().to(self.device) for ml in self.MLosses])
         multipliers = torch.linspace(1, 10, 100).to(self.device)
-        # losses_mean = torch.mean(torch.tensor(self.losses)).to(self.device)
-        loss_min = torch.min(torch.stack(list(self.losses))).to(self.device)
-        #MLosses_mean = torch.mean(MLosses_tensor).to(self.device)
+        losses_mean = torch.mean(torch.tensor(self.losses)).to(self.device)
+        #loss_min = torch.min(torch.stack(list(self.losses))).to(self.device)
+        MLosses_mean = torch.mean(MLosses_tensor).to(self.device)
         multipliers = multipliers.view(1, -1)
-        #condition_1 = (losses_mean * multipliers > MLosses_mean)
-        condition_2 = (MLoss.view(-1, 1) * multipliers.permute(0, 1) < loss_min)
-
-        self.next_reward += torch.sum(condition_2.float(), dim=1) * 0.01
-        # self.next_reward -= torch.sum(condition_1.float()) * 0.01
+        condition_1 = ~(losses_mean * multipliers > MLosses_mean)
+        condition_2 = (MLoss.view(-1, 1) * multipliers.permute(0, 1) < losses_mean)
+        self.next_reward += torch.sum(condition_1.float()) * 0.1
+        self.next_reward += torch.sum(condition_2.float(), dim=1) * 0.1
         self.next_rewards.append(self.next_reward.detach())
 
     def Q_Value(self,sa_index=-1,alpha=1.,gamma=0.99):
@@ -366,5 +371,5 @@ class Metamorph_parameterReinforcer(nn.Module):
 
 
     def activate(self,x):
-        return torch.tanh(x)#*2#*self.activation_weight
+        return torch.relu(x)#*2#*self.activation_weight
 
