@@ -152,6 +152,18 @@ class Metamorph_parameterReinforcer(nn.Module):
         self.next_states.append(model_parameters.detach())
         return model_parameters
 
+    def create_mask(self, tensor):
+        MASK = torch.rand_like(tensor)
+        new_zeros = torch.zeros_like(MASK)
+        new_ones = torch.ones_like(MASK)
+        treshold = 0.5
+        m = MASK.real <= treshold
+        MASK[m] = new_zeros[m]
+        MASK[~m] = new_ones[~m]
+        rng = torch.rand(MASK.shape).to(self.device).detach()
+        mask = MASK.float() * 1 + (1 - MASK) * rng
+        mask = mask.detach()
+        return mask
     def create_masks(self,data):
         for i in range(self.action_per_layer):
             MASK = torch.rand_like(data)
@@ -172,22 +184,22 @@ class Metamorph_parameterReinforcer(nn.Module):
         mask =torch.stack([self.masks[i] for i in p_action_idx])
         rng  = torch.rand(mask.shape).to(self.device).detach()
         mask = mask.float() * 1 + (1 - mask) * rng
+        mask = mask.detach()
+        structure_input = structure_input.unsqueeze(0).expand(self.batch_size, -1, -1, -1).detach()
+        meta_input_h1 = meta_input_h1.unsqueeze(0).expand(self.batch_size, -1,-1).detach()
+        meta_input_h2 = meta_input_h2.unsqueeze(0).expand(self.batch_size, -1,-1).detach()
+        meta_input_h3 = meta_input_h3.unsqueeze(0).expand(self.batch_size, -1,-1).detach()
+        meta_input_h4 = meta_input_h4.unsqueeze(0).expand(self.batch_size, -1,-1).detach()
+        meta_input_h5 = meta_input_h5.unsqueeze(0).expand(self.batch_size,-1).detach()
+        noise_var_in = noise_var_in.unsqueeze(0).expand(self.batch_size, -1,-1).detach()
+        meta_output_h1 = meta_output_h1.unsqueeze(0).expand(self.batch_size, -1,-1).detach()
+        meta_output_h2 = meta_output_h2.unsqueeze(0).expand(self.batch_size, -1,-1).detach()
+        meta_output_h3 = meta_output_h3.unsqueeze(0).expand(self.batch_size, -1,-1).detach()
+        meta_output_h4 = meta_output_h4.unsqueeze(0).expand(self.batch_size, -1,-1).detach()
+        meta_output_h5 = meta_output_h5.unsqueeze(0).expand(self.batch_size,-1).detach()
+        noise_var_out = noise_var_out.unsqueeze(0).expand(self.batch_size, -1,-1).detach()
 
-        structure_input = structure_input.unsqueeze(0).expand(self.batch_size, -1, -1, -1)
-        meta_input_h1 = meta_input_h1.unsqueeze(0).expand(self.batch_size, -1,-1)
-        meta_input_h2 = meta_input_h2.unsqueeze(0).expand(self.batch_size, -1,-1)
-        meta_input_h3 = meta_input_h3.unsqueeze(0).expand(self.batch_size, -1,-1)
-        meta_input_h4 = meta_input_h4.unsqueeze(0).expand(self.batch_size, -1,-1)
-        meta_input_h5 = meta_input_h5.unsqueeze(0).expand(self.batch_size,-1)
-        noise_var_in = noise_var_in.unsqueeze(0).expand(self.batch_size, -1,-1)
-        meta_output_h1 = meta_output_h1.unsqueeze(0).expand(self.batch_size, -1,-1)
-        meta_output_h2 = meta_output_h2.unsqueeze(0).expand(self.batch_size, -1,-1)
-        meta_output_h3 = meta_output_h3.unsqueeze(0).expand(self.batch_size, -1,-1)
-        meta_output_h4 = meta_output_h4.unsqueeze(0).expand(self.batch_size, -1,-1)
-        meta_output_h5 = meta_output_h5.unsqueeze(0).expand(self.batch_size,-1)
-        noise_var_out = noise_var_out.unsqueeze(0).expand(self.batch_size, -1,-1)
-
-        return data_input * mask, structure_input, meta_input_h1, meta_input_h2, meta_input_h3,meta_input_h4, meta_input_h5, noise_var_in, meta_output_h1, meta_output_h2,meta_output_h3, meta_output_h4, meta_output_h5, noise_var_out
+        return mask,data_input * mask, structure_input, meta_input_h1, meta_input_h2, meta_input_h3,meta_input_h4, meta_input_h5, noise_var_in, meta_output_h1, meta_output_h2,meta_output_h3, meta_output_h4, meta_output_h5, noise_var_out
 
 
     def exploit_explore_action_selector(self,action,p=0.1):
@@ -267,7 +279,7 @@ class Metamorph_parameterReinforcer(nn.Module):
     def mutations_batch(self,teacher,model,dataset,action,loss_calc_data):
         dataset_idx, data_input,data_output,structure_input, structure_output,criterion_model,norm = loss_calc_data
         mutation_losses = []
-        di, si, mih1, mih2, mih3, mih4, mih5, nvi, moh1, moh2, moh3, moh4, moh5, nvo = self.mutate(dataset, action)
+        mask,di, si, mih1, mih2, mih3, mih4, mih5, nvi, moh1, moh2, moh3, moh4, moh5, nvo = self.mutate(dataset, action)
         mutated_dataset = di, si, mih1, mih2, mih3, mih4, mih5, nvi, moh1, moh2, moh3, moh4, moh5, nvo
         dataset_m = (
             di[:self.batch_size], si[:self.batch_size], mih1[:self.batch_size], mih2[:self.batch_size],
@@ -286,7 +298,7 @@ class Metamorph_parameterReinforcer(nn.Module):
                                                      criterion_model,
                                                      norm)
         mutation_losses.append(mutation_loss.detach())
-        return mutation_losses,mutated_dataset
+        return mutation_losses,mutated_dataset,mask
 
     def Q_Value_experience_replay(self,teacher,RL_optimizer,criterion_RL,idx,data_input,data_output,structure_input,structure_output,
                                                  criterion_model,norm,model_b,RLmodel,dataset,dataset_idx,
@@ -302,7 +314,7 @@ class Metamorph_parameterReinforcer(nn.Module):
         action = RLmodel(states)
         action = self.exploit_explore_action_selector(action)
         self.save_action(action)
-        mutation_losses,mutated_dataset = self.mutations_batch(teacher,model,dataset,action,loss_calc_data)
+        mutation_losses,mutated_dataset,mask = self.mutations_batch(teacher,model,dataset,action,loss_calc_data)
             # mutation_loss_idx, mutation_loss = min(enumerate(mutation_losses), key=itemgetter(1))
         self.calculate_reward(loss, mutation_losses)
         _ = self.save_next_state(model)
@@ -311,7 +323,7 @@ class Metamorph_parameterReinforcer(nn.Module):
         next_action = RLmodel(next_states)
         next_action = self.exploit_explore_action_selector(next_action)
         self.save_next_action(next_action)
-        next_mutation_losses,next_mutated_dataset = self.mutations_batch(teacher,model,dataset,next_action,loss_calc_data)
+        next_mutation_losses,next_mutated_dataset,next_mask = self.mutations_batch(teacher,model,dataset,next_action,loss_calc_data)
             # next_mutation_loss_idx, next_mutation_loss = min(enumerate(next_mutation_losses), key=itemgetter(1))
         self.calculate_next_reward(loss, next_mutation_losses)
         Q_target, q_idx = self.Q_Value()
@@ -322,12 +334,13 @@ class Metamorph_parameterReinforcer(nn.Module):
         RL_optimizer.step()
 
         best_idx = torch.argmin(torch.stack(next_mutation_losses))
+        used_mask = next_mask[best_idx]
         di, si, mih1, mih2, mih3, mih4, mih5, nvi, moh1, moh2, moh3, moh4, moh5, nvo = mutated_dataset
         dataset_mutated = (
         di[best_idx], si[best_idx], mih1[best_idx], mih2[best_idx], mih3[best_idx], mih4[best_idx], mih5[best_idx], nvi[best_idx], moh1[best_idx], moh2[best_idx], moh3[best_idx], moh4[best_idx], moh5[best_idx],
         nvo[best_idx])
         del model_b,model
-        return RLmodel,RLoss,dataset_mutated
+        return RLmodel,RLoss,dataset_mutated,used_mask
 
     def experience_replay(self,teacher,RL_optimizer,criterion_RL, data_input,data_output,
                           structure_input,structure_output,
@@ -340,11 +353,11 @@ class Metamorph_parameterReinforcer(nn.Module):
             idx = range(0, len(self.actions), 1)
         no_samples = self.batch_size
         idx = random.choices(idx, k=no_samples)
-        RLmodel,RLoss,dataset_mutated = self.Q_Value_experience_replay(teacher,RL_optimizer,criterion_RL,idx,data_input,
+        RLmodel,RLoss,dataset_mutated,mask = self.Q_Value_experience_replay(teacher,RL_optimizer,criterion_RL,idx,data_input,
                                                        data_output,structure_input,structure_output,
                                                  criterion_model,norm,model_r,RLmodel,dataset,dataset_idx,
                                                  no_samples,alpha=0.1,gamma=0.99)
-        return RLmodel,RLoss,dataset_mutated
+        return RLmodel,RLoss,dataset_mutated,mask
 
     def next_to_current(self):
         self.actions = self.next_actions

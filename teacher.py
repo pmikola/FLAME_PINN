@@ -68,6 +68,7 @@ class teacher(object):
         self.meta_output_h4_val = None
         self.meta_output_h5_val = None
         self.noise_var_out_val = None
+        self.mask = None
         self.epoch = 0
         self.num_of_epochs = 0
         self.train_loss = []
@@ -781,7 +782,7 @@ class teacher(object):
                     # UnderConstruction! UnderConstruction! UnderConstruction!
                     #self.model.eval()
                     model_b = copy.deepcopy(self.model)
-                    self.parameterReinforcer, RLoss,dataset_mutated = self.parameterReinforcer.experience_replay(teacher, RL_optimizer,
+                    self.parameterReinforcer, RLoss,dataset_mutated,mask = self.parameterReinforcer.experience_replay(teacher, RL_optimizer,
                                                                                                  criterion_RL,
                                                                                                  self.data_input,
                                                                                                  self.data_output,
@@ -815,6 +816,15 @@ class teacher(object):
                     disc_optimizer.zero_grad(set_to_none=True)
                     disc_loss.backward()
                     disc_optimizer.step()
+
+                    pred_r, pred_g, pred_b, pred_a, pred_s = model_output
+                    mask = self.parameterReinforcer.create_mask(mask)
+                    data_output = torch.cat([pred_r,pred_g,pred_b,pred_a],dim=1)*(mask)
+                    pred_r = data_output[:, 0:self.model.in_scale, :]
+                    pred_g = data_output[:, self.model.in_scale:self.model.in_scale * 2, :]
+                    pred_b = data_output[:, self.model.in_scale * 2:self.model.in_scale * 3, :]
+                    pred_a = data_output[:, self.model.in_scale * 3:self.model.in_scale * 4, :]
+                    model_output = pred_r,pred_g,pred_b,pred_a,pred_s
 
                     loss = self.loss_calculation(m_idx,model_output,self.data_input,self.data_output,self.structure_input,self.structure_output,criterion_model, norm)
                     e0loss = self.loss_calculation(e0_idx,expert_0_output,self.data_input,self.data_output,self.structure_input,self.structure_output, criterion_e0, norm)
