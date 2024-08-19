@@ -362,21 +362,21 @@ class Metamorph(nn.Module):
     def shapeShift(self,x, h):
         if x.dim() == 3:
             coefficients = h.view(self.batch_size,x.shape[1],x.shape[2],self.shifterCoefficients)
-            x_p = torch.pow(x[0:self.batch_size,:,:].unsqueeze(3), self.exponents.unsqueeze(0).unsqueeze(1))
+            x_p = torch.mul(x[0:self.batch_size,:,:].unsqueeze(3), self.exponents.unsqueeze(0).unsqueeze(1))
             craftedPolynomial = torch.sum(coefficients * x_p, dim=3)
-            craftedPolynomial = self.activate(craftedPolynomial)
+            # craftedPolynomial = self.activate(craftedPolynomial)
             return craftedPolynomial
         elif x.dim() == 2:
             coefficients = h.view(self.batch_size,x.shape[1],self.shifterCoefficients)
-            x_p = torch.pow(x[0:self.batch_size, :].unsqueeze(2), self.exponents.unsqueeze(0).unsqueeze(1))
+            x_p = torch.mul(x[0:self.batch_size, :].unsqueeze(2), self.exponents.unsqueeze(0).unsqueeze(1))
             craftedPolynomial = torch.sum(coefficients * x_p, dim=2)
-            craftedPolynomial = self.activate(craftedPolynomial)
+            # craftedPolynomial = self.activate(craftedPolynomial)
             return craftedPolynomial
         elif x.dim() == 4:
             coefficients = h.view(self.batch_size, x.shape[1], x.shape[2], x.shape[3], self.shifterCoefficients)
-            x_p = torch.pow(x[0:self.batch_size, :, :, :].unsqueeze(4),self.exponents.unsqueeze(0).unsqueeze(1).unsqueeze(2))
+            x_p = torch.mul(x[0:self.batch_size, :, :, :].unsqueeze(4),self.exponents.unsqueeze(0).unsqueeze(1).unsqueeze(2))
             craftedPolynomial = torch.sum(coefficients * x_p, dim=4)
-            craftedPolynomial = self.activate(craftedPolynomial)
+            # craftedPolynomial = self.activate(craftedPolynomial)
             return craftedPolynomial
         else:
             raise ValueError("Unsupported input dimensions")
