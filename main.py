@@ -38,6 +38,14 @@ for (name, param) in models[0].named_parameters():
 discriminator = Metamorph_discriminator(no_frame_samples, batch_size, input_window_size, device).to(device)
 parameterReinforcer = Metamorph_parameterReinforcer(no_layers,10,100,20,64,device).to(device)
 
+model_params = sum(p.numel() for p in models[0].parameters() if p.requires_grad)
+disc_params = sum(p.numel() for p in discriminator.parameters() if p.requires_grad)
+reinforcer_params = sum(p.numel() for p in parameterReinforcer.parameters() if p.requires_grad)
+
+print('Metamorph number of parameters', round(model_params*1e-6,2), 'M')
+print('Discriminator number of parameters', round(disc_params*1e-6,2), 'M')
+print('Reinforcer number of parameters', round(reinforcer_params*1e-6,2), 'M')
+
 t = teacher(models,discriminator,parameterReinforcer, device)
 t.fsim = fl.flame_sim(no_frames=no_frames,frame_skip=frame_skip)
 criterion_model = nn.MSELoss(reduction='none')
@@ -60,7 +68,7 @@ RL_optimizer =  torch.optim.Adam(t.parameterReinforcer.parameters(),lr=5e-3, bet
 # Note: Eon > Era > Period > Epoch
 no_periods = 1
 t.no_of_periods = no_periods
-# model.load_state_dict(torch.load('model.pt'))
+# model.load_state_dict(torch.load('model.pt'Ś))
 for period in range(1,no_periods+1):
     t.period = period
     t.fsim = fl.flame_sim(no_frames=1000,frame_skip=frame_skip)
