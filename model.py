@@ -321,35 +321,35 @@ class Metamorph(nn.Module):
         a = self.activate(self.l5_h0_a(ares))
         s = self.activate(self.l5_h0_s(sres))
 
-        # r = self.activate(self.l6_h0_r(r))
-        # g = self.activate(self.l6_h0_g(g))
-        # b = self.activate(self.l6_h0_b(b))
-        # a = self.activate(self.l6_h0_a(a))
-        # s = self.activate(self.l6_h0_s(s))
-        #
-        # rres = self.activate(self.l7_h0_r(r))+rres
-        # gres = self.activate(self.l7_h0_g(g))+gres
-        # bres = self.activate(self.l7_h0_b(b))+bres
-        # ares = self.activate(self.l7_h0_a(a))+ares
-        # sres = self.activate(self.l7_h0_s(s))+sres
-        #
-        # r = self.activate(self.l8_h0_r(rres))
-        # g = self.activate(self.l8_h0_g(gres))
-        # b = self.activate(self.l8_h0_b(bres))
-        # a = self.activate(self.l8_h0_a(ares))
-        # s = self.activate(self.l8_h0_s(sres))
-        #
-        # r =  self.activate(self.l9_h0_r(r))
-        # g =  self.activate(self.l9_h0_g(g))
-        # b =  self.activate(self.l9_h0_b(b))
-        # a =  self.activate(self.l9_h0_a(a))
-        # s =  self.activate(self.l9_h0_s(s))
-        #
-        # r =  self.activate(self.l10_h0_r(r))+rres
-        # g =  self.activate(self.l10_h0_g(g))+gres
-        # b =  self.activate(self.l10_h0_b(b))+bres
-        # a =  self.activate(self.l10_h0_a(a))+ares
-        # s =  self.activate(self.l10_h0_s(s))+sres
+        r = self.activate(self.l6_h0_r(r))
+        g = self.activate(self.l6_h0_g(g))
+        b = self.activate(self.l6_h0_b(b))
+        a = self.activate(self.l6_h0_a(a))
+        s = self.activate(self.l6_h0_s(s))
+
+        rres = self.activate(self.l7_h0_r(r))+rres
+        gres = self.activate(self.l7_h0_g(g))+gres
+        bres = self.activate(self.l7_h0_b(b))+bres
+        ares = self.activate(self.l7_h0_a(a))+ares
+        sres = self.activate(self.l7_h0_s(s))+sres
+
+        r = self.activate(self.l8_h0_r(rres))
+        g = self.activate(self.l8_h0_g(gres))
+        b = self.activate(self.l8_h0_b(bres))
+        a = self.activate(self.l8_h0_a(ares))
+        s = self.activate(self.l8_h0_s(sres))
+
+        r =  self.activate(self.l9_h0_r(r))
+        g =  self.activate(self.l9_h0_g(g))
+        b =  self.activate(self.l9_h0_b(b))
+        a =  self.activate(self.l9_h0_a(a))
+        s =  self.activate(self.l9_h0_s(s))
+
+        r =  self.activate(self.l10_h0_r(r))+rres
+        g =  self.activate(self.l10_h0_g(g))+gres
+        b =  self.activate(self.l10_h0_b(b))+bres
+        a =  self.activate(self.l10_h0_a(a))+ares
+        s =  self.activate(self.l10_h0_s(s))+sres
 
         r = self.l11_h0_r(r).view(self.batch_size, self.in_scale, self.in_scale)
         g = self.l11_h0_g(g).view(self.batch_size, self.in_scale, self.in_scale)
