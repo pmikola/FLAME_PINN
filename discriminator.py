@@ -9,7 +9,6 @@ import torch.nn.functional as f
 
 
 class Metamorph_discriminator(nn.Module):
-    # Note : Buzzword - Metamorph will be better name here probably :) or HIPNO
     def __init__(self,no_frame_samples,batch_size,input_window_size,device):
         super(Metamorph_discriminator, self).__init__()
         self.device = device
