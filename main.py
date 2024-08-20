@@ -36,7 +36,7 @@ no_layers = 0
 for (name, param) in models[0].named_parameters():
     no_layers +=1
 discriminator = Metamorph_discriminator(no_frame_samples, batch_size, input_window_size, device).to(device)
-parameterReinforcer = Metamorph_parameterReinforcer(no_layers,10,100,20,64,device).to(device)
+parameterReinforcer = Metamorph_parameterReinforcer(no_layers,10,100,50,128,device).to(device)
 
 model_params = sum(p.numel() for p in models[0].parameters() if p.requires_grad)
 disc_params = sum(p.numel() for p in discriminator.parameters() if p.requires_grad)
@@ -77,7 +77,7 @@ for period in range(1,no_periods+1):
     t.fsim.fuel_dens_modifier = 1/t.fsim.dt
     t.fsim.simulate(simulate=0,save_rgb=1,save_alpha=1,save_fuel=1,delete_data=0)
     t.learning_phase(t,no_frame_samples, batch_size, input_window_size, first_frame,
-                     last_frame,frame_skip*2,criterion,optimizer,disc_optimizer,RL_optimizer,device,learning=1,num_epochs=50000)
+                     last_frame,frame_skip*2,criterion,optimizer,disc_optimizer,RL_optimizer,device,learning=1,num_epochs=3000)
     # t.fsim.simulate(simulate=0,delete_data=1)
 
 t.visualize_lerning()
