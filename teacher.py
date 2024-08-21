@@ -1141,7 +1141,9 @@ class teacher(object):
         # U, S, V = torch.linalg.svd(res, full_matrices=False) # Note:  Full matrix svd - slow but better performance (x10 better)
         U, S, V = torch.svd_lowrank(sampled_res, q=k, niter=2, M=None) # Note: Way faster but less efficient, q is overestimation of rank and niter is subspace iteration, M is the broadcast size
         res_low_rank_t = torch.dist(sampled_res, U @ torch.diag(S) @ V.T)
-        rank_loss = (1e4 * (res_low_rank_t / sampled_res.shape[0]))*low_rank_weight
+        #rank_loss = (1-1e4 * (res_low_rank_t / sampled_res.shape[0]))*low_rank_weight # NOTE: for high rank extraction
+        rank_loss = (1e4 * (res_low_rank_t / sampled_res.shape[0]))*low_rank_weight # NOTE: for low rank extraction
+
         # NOTE: Firs order difference
         diff_r_true = r_out - r_in
         diff_r_pred = pred_r - r_in
