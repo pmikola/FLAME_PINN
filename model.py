@@ -27,7 +27,7 @@ class Metamorph(nn.Module):
         self.exponents = torch.arange(1, self.shifterCoefficients + 1, 1,
                                       device=self.device)  # Check : from 0 to n or from 1 to n +1?
 
-        # Definition of intermediate layer/parameters that transforms input into Fourier Feature with positional encoding and TODO: gaussian Gate
+        # Definition of intermediate layer/parameters that transforms input into Fourier Feature with positional encoding and
         self.weights_data_0 = nn.Parameter(torch.rand((self.in_scale, self.in_scale, 5), dtype=torch.float))
         self.weights_data_1 = nn.Parameter(torch.rand((self.in_scale, self.in_scale, 5), dtype=torch.float))
         self.weights_data_2 = nn.Parameter(torch.rand((self.in_scale, self.in_scale, 5), dtype=torch.float))
@@ -36,8 +36,6 @@ class Metamorph(nn.Module):
         self.weights_data_5 = nn.Parameter(torch.rand((self.in_scale, self.in_scale, 5), dtype=torch.float))
         self.weights_data_6 = nn.Parameter(torch.rand((self.in_scale, self.in_scale, 5), dtype=torch.float))
         self.weights_data_7 = nn.Parameter(torch.rand((self.in_scale, self.in_scale, 5), dtype=torch.float))
-        self.weights_data_8 = nn.Parameter(torch.rand((self.in_scale, self.in_scale, 5), dtype=torch.float))
-        self.weights_data_9 = nn.Parameter(torch.rand((self.in_scale, self.in_scale, 5), dtype=torch.float))
 
         self.weights_data_fft_0 = nn.Parameter(torch.rand((self.in_scale, self.in_scale, 5), dtype=torch.cfloat))
         self.weights_data_fft_1 = nn.Parameter(torch.rand((self.in_scale, self.in_scale, 5), dtype=torch.cfloat))
@@ -47,8 +45,6 @@ class Metamorph(nn.Module):
         self.weights_data_fft_5 = nn.Parameter(torch.rand((self.in_scale, self.in_scale, 5), dtype=torch.cfloat))
         self.weights_data_fft_6 = nn.Parameter(torch.rand((self.in_scale, self.in_scale, 5), dtype=torch.cfloat))
         self.weights_data_fft_7 = nn.Parameter(torch.rand((self.in_scale, self.in_scale, 5), dtype=torch.cfloat))
-        self.weights_data_fft_8 = nn.Parameter(torch.rand((self.in_scale, self.in_scale, 5), dtype=torch.cfloat))
-        self.weights_data_fft_9 = nn.Parameter(torch.rand((self.in_scale, self.in_scale, 5), dtype=torch.cfloat))
 
         self.space_time_0 = nn.Parameter(torch.rand((self.in_scale, self.in_scale, 5), dtype=torch.cfloat))
         self.space_time_1 = nn.Parameter(torch.rand((self.in_scale, self.in_scale, 5), dtype=torch.cfloat))
@@ -58,8 +54,6 @@ class Metamorph(nn.Module):
         self.space_time_5 = nn.Parameter(torch.rand((self.in_scale, self.in_scale, 5), dtype=torch.cfloat))
         self.space_time_6 = nn.Parameter(torch.rand((self.in_scale, self.in_scale, 5), dtype=torch.cfloat))
         self.space_time_7 = nn.Parameter(torch.rand((self.in_scale, self.in_scale, 5), dtype=torch.cfloat))
-        self.space_time_8 = nn.Parameter(torch.rand((self.in_scale, self.in_scale, 5), dtype=torch.cfloat))
-        self.space_time_9 = nn.Parameter(torch.rand((self.in_scale, self.in_scale, 5), dtype=torch.cfloat))
 
         # Definition of Walsh-Hadamard rescale layers
         self.Walsh_Hadamard_rescaler_l0wh = nn.Linear(in_features=256, out_features=(self.in_scale ** 2))
@@ -70,7 +64,7 @@ class Metamorph(nn.Module):
         self.no_meta_h3 = 20 * 2
         self.no_meta_h2 = 32 * 2
         self.no_meta_h1 = 224 * 2
-        self.flat_size = 7 * self.in_scale ** 2  # Note: n neurons per every pixel
+        self.flat_size = 5 * self.in_scale ** 2  # Note: n neurons per every pixel
         self.diffiusion_context = 32 * 2
 
         # Definition of layer 0,1,2 for lvl 4 in hierarchy - theta - diffusion noise context
@@ -364,7 +358,10 @@ class Metamorph(nn.Module):
         a = self.l11_h0_a(a).view(self.batch_size, self.in_scale, self.in_scale)
         s = self.l11_h0_s(s).view(self.batch_size, self.in_scale, self.in_scale)
         self.batch_size = old_batch_size
-        return r, g, b, a, s
+        # Attention!:  Deep supervision and extractor rank representation of the layers
+        # Note: Deep supervision:
+        deepS = x, x_mod, rgbas_prod, rres, gres, bres, ares, sres
+        return r, g, b, a, s,deepS
 
     def shapeShift(self, x, h):
         if x.dim() == 3:

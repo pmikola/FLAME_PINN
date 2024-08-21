@@ -50,43 +50,45 @@ class Metamorph_discriminator(nn.Module):
         self.no_meta_h2 = 32 * 2
         self.no_meta_h1 = 224 * 2
         self.dens_width = self.shifterCoefficients
-        self.flat_size = 2 * self.in_scale ** 2  # Note: n neurons per every pixel
+        self.flat_size = 1 * self.in_scale ** 2  # Note: n neurons per every pixel
         self.diffiusion_context = 32 * 2
 
         # Definition of layer 0,1,2 for lvl 4 in hierarchy - theta - diffusion noise context
         self.l0h4 = nn.Linear(in_features=self.diffiusion_context,
-                              out_features=self.dens_width * self.shifterCoefficients ** 2)
-        self.l1h4 = nn.Linear(in_features=self.dens_width * self.shifterCoefficients ** 2,
-                              out_features=self.dens_width * self.shifterCoefficients ** 4)
-        self.l2h4 = nn.Linear(in_features=self.dens_width * self.shifterCoefficients ** 4,
-                              out_features=self.dens_width * self.shifterCoefficients ** 4)
+                              out_features=self.shifterCoefficients * self.shifterCoefficients ** 2)
+        self.l1h4 = nn.Linear(in_features=self.shifterCoefficients * self.shifterCoefficients ** 2,
+                              out_features=self.shifterCoefficients * self.shifterCoefficients ** 3)
+        self.l2h4 = nn.Linear(in_features=self.shifterCoefficients * self.shifterCoefficients ** 3,
+                              out_features=self.shifterCoefficients * self.shifterCoefficients ** 3)
 
         # Definition of layer 0,1,2 for lvl 3 in hierarchy - gamma
-        self.l0h3 = nn.Linear(in_features=self.no_meta_h3, out_features=self.dens_width * self.shifterCoefficients)
-        self.l1h3 = nn.Linear(in_features=self.dens_width * self.shifterCoefficients,
-                              out_features=self.dens_width * self.shifterCoefficients ** 3)
-        self.l2h3 = nn.Linear(in_features=self.dens_width * self.shifterCoefficients ** 3,
-                              out_features=self.dens_width * self.shifterCoefficients ** 3)
+        self.l0h3 = nn.Linear(in_features=self.no_meta_h3,
+                              out_features=self.shifterCoefficients * self.shifterCoefficients)
+        self.l1h3 = nn.Linear(in_features=self.shifterCoefficients * self.shifterCoefficients,
+                              out_features=self.shifterCoefficients * self.shifterCoefficients ** 2)
+        self.l2h3 = nn.Linear(in_features=self.shifterCoefficients * self.shifterCoefficients ** 2,
+                              out_features=self.shifterCoefficients * self.shifterCoefficients ** 2)
 
         # Definition of layer 0,1,2 for lvl 2 in hierarchy - beta
-        self.l0h2 = nn.Linear(in_features=self.no_meta_h2, out_features=self.dens_width * self.shifterCoefficients)
-        self.l1h2 = nn.Linear(in_features=self.dens_width * self.shifterCoefficients,
-                              out_features=self.dens_width * self.shifterCoefficients ** 2)
-        self.l2h2 = nn.Linear(in_features=self.dens_width * self.shifterCoefficients ** 2,
-                              out_features=self.dens_width * self.shifterCoefficients ** 2)
+        self.l0h2 = nn.Linear(in_features=self.no_meta_h2,
+                              out_features=self.shifterCoefficients * self.shifterCoefficients)
+        self.l1h2 = nn.Linear(in_features=self.shifterCoefficients * self.shifterCoefficients,
+                              out_features=self.shifterCoefficients * self.shifterCoefficients ** 1)
+        self.l2h2 = nn.Linear(in_features=self.shifterCoefficients * self.shifterCoefficients ** 1,
+                              out_features=self.shifterCoefficients * self.shifterCoefficients ** 1)
 
         # Definition of layer 0,1,2 for lvl 1 in hierarchy - alpha
         self.l0h1 = nn.Linear(in_features=self.no_meta_h1,
-                              out_features=int((self.dens_width * self.shifterCoefficients)))
-        self.l1h1 = nn.Linear(in_features=int((self.dens_width * self.shifterCoefficients)),
-                              out_features=int(self.dens_width * self.shifterCoefficients ** 1))
-        self.l2h1 = nn.Linear(in_features=int(self.dens_width * self.shifterCoefficients ** 1),
-                              out_features=int(self.dens_width * self.shifterCoefficients ** 1))
+                              out_features=int((self.shifterCoefficients * self.shifterCoefficients) ** (1 / 2)))
+        self.l1h1 = nn.Linear(in_features=int((self.shifterCoefficients * self.shifterCoefficients) ** (1 / 2)),
+                              out_features=int((self.shifterCoefficients * self.shifterCoefficients) ** (1 / 2)))
+        self.l2h1 = nn.Linear(in_features=int((self.shifterCoefficients * self.shifterCoefficients) ** (1 / 2)),
+                              out_features=int((self.shifterCoefficients * self.shifterCoefficients) ** (1 / 2)))
 
         # Definition of intermediate layer between lvl 0 and 1 for dimension matching
-        self.l1h01 = nn.Linear(in_features=int(self.dens_width * self.shifterCoefficients ** 1),
+        self.l1h01 = nn.Linear(in_features=int((self.shifterCoefficients * self.shifterCoefficients) ** (1 / 2)),
                                out_features=(self.in_scale ** 2) * self.shifterCoefficients * 5)
-        self.l2h01 = nn.Linear(in_features=int(self.dens_width * self.shifterCoefficients ** 1),
+        self.l2h01 = nn.Linear(in_features=int((self.shifterCoefficients * self.shifterCoefficients) ** (1 / 2)),
                                out_features=(self.in_scale ** 2) * self.shifterCoefficients * 5)
 
         # Definition of input layer 0 for lvl 0 in hierarchy
@@ -119,48 +121,6 @@ class Metamorph_discriminator(nn.Module):
         self.l4_h0_b = nn.Linear(in_features=int(self.in_scale ** 2) * 5, out_features=int(self.in_scale ** 2))
         self.l4_h0_a = nn.Linear(in_features=int(self.in_scale ** 2) * 5, out_features=int(self.in_scale ** 2))
         self.l4_h0_s = nn.Linear(in_features=int(self.in_scale ** 2) * 5, out_features=int(self.in_scale ** 2))
-
-        self.l5_h0_r = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l5_h0_g = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l5_h0_b = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l5_h0_a = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l5_h0_s = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-
-        self.l6_h0_r = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l6_h0_g = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l6_h0_b = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l6_h0_a = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l6_h0_s = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-
-        self.l7_h0_r = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l7_h0_g = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l7_h0_b = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l7_h0_a = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l7_h0_s = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-
-        self.l8_h0_r = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l8_h0_g = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l8_h0_b = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l8_h0_a = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l8_h0_s = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-
-        self.l9_h0_r = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l9_h0_g = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l9_h0_b = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l9_h0_a = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l9_h0_s = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-
-        self.l10_h0_r = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.in_scale ** 2))
-        self.l10_h0_g = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.in_scale ** 2))
-        self.l10_h0_b = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.in_scale ** 2))
-        self.l10_h0_a = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.in_scale ** 2))
-        self.l10_h0_s = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.in_scale ** 2))
-
-        self.l11_h0_r = nn.Linear(in_features=int(self.in_scale ** 2), out_features=int(self.in_scale ** 2), bias=True)
-        self.l11_h0_g = nn.Linear(in_features=int(self.in_scale ** 2), out_features=int(self.in_scale ** 2), bias=True)
-        self.l11_h0_b = nn.Linear(in_features=int(self.in_scale ** 2), out_features=int(self.in_scale ** 2), bias=True)
-        self.l11_h0_a = nn.Linear(in_features=int(self.in_scale ** 2), out_features=int(self.in_scale ** 2), bias=True)
-        self.l11_h0_s = nn.Linear(in_features=int(self.in_scale ** 2), out_features=int(self.in_scale ** 2), bias=True)
 
         self.l12_disc_output = nn.Linear(in_features=int(self.in_scale ** 2) * 5, out_features=1, bias=True)
         self.init_weights()
