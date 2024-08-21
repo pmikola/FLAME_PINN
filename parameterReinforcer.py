@@ -49,12 +49,14 @@ class Metamorph_parameterReinforcer(nn.Module):
         # Definition of target policy function
         self.q_target = torch.rand(self.batch_size, self.action_per_layer, requires_grad=True).to(self.device)
 
+        #Definition FFT Weights
+        self.weights_data_fft = nn.Parameter(torch.rand((1, self.modes), dtype=torch.float))
+
         # Definition of output dens layers
         self.lin1 = nn.Linear(self.no_layers * self.modes, self.modes)
         self.lin2 = nn.Linear(self.modes, self.action_per_layer)
-
-        self.lin1_mask = nn.Linear(288000, 5)
-        self.lin2_mask = nn.Linear(5, self.no_layers * self.modes)
+        self.lin1_mask = nn.Linear(self.modes, self.modes)
+        self.lin2_mask = nn.Linear(self.modes, self.no_layers * self.modes)
         self.softmax = nn.Softmax(dim=1)
         self.init_weights()
 
@@ -87,15 +89,18 @@ class Metamorph_parameterReinforcer(nn.Module):
         masks = torch.stack(list(self.masks))
         x1 = torch.flatten(model_p, start_dim=1)
         x2 = torch.flatten(masks, start_dim=1)
-        x2 = self.lin1_mask(x2)
+        mask_fft = torch.fft.fft(x2, dim=1, norm='forward')
+        mask_fft = mask_fft[:, :self.modes]
+        mask_fft_weight = torch.einsum('bf,wm->bm', mask_fft, self.weights_data_fft)
+        x2 = torch.fft.ifft(mask_fft_weight, norm='forward').real
+        x2 = self.activate(self.lin1_mask(x2))
         x2 = f.sigmoid(x2)
         self.mask_treshold = torch.mean(x2, dim=0)
-        x2 = self.lin2_mask(x2)
-        x = self.activate(self.lin1(x1+x2))
+        x2 = self.activate(self.lin2_mask(x2))
+        x = self.activate(self.lin1(x1 * x2))
         x = self.lin2(x).view(self.batch_size, self.action_per_layer)
         x = self.softmax(x)
         return x
-
 
     def save_state(self, model):
         i = 0

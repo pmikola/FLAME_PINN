@@ -239,8 +239,8 @@ class teacher(object):
             slice_y_in = slice(window_y_in[0], window_y_in[-1] + 1)
 
             idx_output = random.choice(range(0, fuel_slices.shape[0]))
-            offset_x = random.randint(int(-self.input_window_size / 2), int(self.input_window_size / 2))
-            offset_y = random.randint(int(-self.input_window_size / 2), int(self.input_window_size / 2))
+            offset_x = random.randint(int(-self.input_window_size), int(self.input_window_size))
+            offset_y = random.randint(int(-self.input_window_size), int(self.input_window_size))
             central_point_x_out = central_point_x_in + offset_x
             central_point_y_out = central_point_y_in + offset_y
 
@@ -1115,7 +1115,7 @@ class teacher(object):
 
         # Note: Deep Supervision Loss
         x, x_mod, rgbas_prod, rres, gres, bres, ares, sres = deepS
-        dpSWeight = 0.3
+        dpSWeight = 0.25
         x_target = torch.randn_like(x) * dpSWeight
         x_mod_target = torch.randn_like(x_mod) * dpSWeight
         rgbas_prod_target = torch.randn_like(rgbas_prod) * dpSWeight
@@ -1131,7 +1131,7 @@ class teacher(object):
         deepSLoss = torch.mean(loss_x) + torch.mean(loss_x_mod) + torch.mean(loss_rgbas_prod) + torch.mean(
             loss_rres) + torch.mean(loss_gres) + torch.mean(loss_bres) + torch.mean(loss_ares) + torch.mean(loss_sres)
 
-        # Note: Rank Representation Loss - Singular Value decomposition (SVD) # Question: How it will behave in the RL reward learning loop?
+        # # Note: Rank Representation Loss - Singular Value decomposition (SVD) # Question: How it will behave in the RL reward learning loop?
         res = torch.cat([rres, gres, bres, ares, sres], dim=1)
         k = 32
         low_rank_weight = 0.25
@@ -1141,7 +1141,7 @@ class teacher(object):
         # U, S, V = torch.linalg.svd(res, full_matrices=False) # Note:  Full matrix svd - slow but better performance (x10 better)
         U, S, V = torch.svd_lowrank(sampled_res, q=k, niter=2, M=None) # Note: Way faster but less efficient, q is overestimation of rank and niter is subspace iteration, M is the broadcast size
         res_low_rank_t = torch.dist(sampled_res, U @ torch.diag(S) @ V.T)
-        rank_loss = (1. - 1e4 * (res_low_rank_t / sampled_res.shape[0]))*low_rank_weight
+        rank_loss = (1e4 * (res_low_rank_t / sampled_res.shape[0]))*low_rank_weight
         # NOTE: Firs order difference
         diff_r_true = r_out - r_in
         diff_r_pred = pred_r - r_in
