@@ -303,7 +303,7 @@ class Metamorph(nn.Module):
         x0 = self.SpaceTimeFFTFeature(x0, self.weights_data_6, self.weights_data_fft_6, self.space_time_6, space_time)
         x1 = self.SpaceTimeFFTFeature(x1, self.weights_data_7, self.weights_data_fft_7, self.space_time_7, space_time)
 
-        x = x0 * x1
+        x = x0 + x1
         x = torch.flatten(x, start_dim=1)
         rgbas_prod = torch.flatten(rgbas_prod, start_dim=1)
         x_mod = self.shapeShift(self.l1h0(rgbas_prod), x_alpha_l1)

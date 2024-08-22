@@ -734,7 +734,7 @@ class teacher(object):
 
             ims.append([rgb_pred_anim, rgb_true_anim, rms_anim, title_pred, title_true, title_rms])
         ani = animation.ArtistAnimation(fig, ims, interval=1, blit=True, repeat_delay=100)
-        ani.save("flame_animation_RL_basic.gif")
+        ani.save("flame_animation.gif")
         fig.colorbar(rms_anim, ax=ax3)
         plt.show()
 
@@ -1268,17 +1268,25 @@ class teacher(object):
 
         # # Note: Rank Representation Loss - Singular Value decomposition (SVD) # Question: How it will behave in the RL reward learning loop?
         res = torch.cat([rres, gres, bres, ares, sres], dim=1)
-        k = 32
-        low_rank_weight = 1.
+        preds = torch.cat([pred_r, pred_g, pred_b, pred_a, pred_s], dim=1)
+        k = 64
+        rank_weight = 0.5
         indices = torch.randperm(res.size(0))
-        selected_indices = indices[:k]
-        sampled_res = res[selected_indices]
+        selected_res_indices = indices[:k]
+        sampled_res = res[selected_res_indices]
+        indices = torch.randperm(preds.size(0))
+        selected_preds_indices = indices[:k]
+        sampled_preds = preds[selected_preds_indices]
         # U, S, V = torch.linalg.svd(res, full_matrices=False) # Note:  Full matrix svd - slow but better performance (x10 better)
-        U, S, V = torch.svd_lowrank(sampled_res, q=k, niter=2,
+        Ures, Sres, Vres = torch.svd_lowrank(sampled_res, q=k, niter=2,
                                     M=None)  # Note: Way faster but less efficient, q is overestimation of rank and niter is subspace iteration, M is the broadcast size
-        res_low_rank_t = torch.dist(sampled_res, U @ torch.diag(S) @ V.T)
-        rank_loss = (1 - 3e4 * (
-                res_low_rank_t / sampled_res.shape[0])) * low_rank_weight  # NOTE: for high rank extraction
+        Upreds, Spreds, Vpreds = torch.svd_lowrank(sampled_preds, q=k, niter=2,
+                                             M=None)
+        res_rank_t = torch.dist(sampled_res, Ures @ torch.diag(Sres) @ Vres.T)
+        preds_rank_t = torch.dist(sampled_preds, Upreds @ torch.diag(Spreds) @ Vpreds.T)
+
+        rank_loss = (1 - 3e4 * (res_rank_t / sampled_res.shape[0])) * rank_weight  # NOTE: for high rank extraction
+        rank_loss += (1 - 3e4 * (preds_rank_t / sampled_preds.shape[0])) * rank_weight
         #rank_loss = (3e4 * (res_low_rank_t / sampled_res.shape[0]))*low_rank_weight # NOTE: for low rank extraction
 
 
@@ -1319,7 +1327,6 @@ class teacher(object):
             if pred_r.shape[0] != self.batch_size:
                 n = int(pred_r.shape[0] / self.batch_size)
                 losses = torch.chunk(losses, n, dim=0)
-
                 final_loss += torch.stack([loss_weights[i] * split.mean(dim=0) for split in losses])
             else:
                 final_loss += loss_weights[i] * torch.mean(losses)
