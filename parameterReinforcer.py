@@ -3,7 +3,6 @@ import random
 import time
 from operator import itemgetter
 from statistics import mean
-
 import numpy as np
 import torch
 import torch.nn as nn
@@ -93,8 +92,7 @@ class Metamorph_parameterReinforcer(nn.Module):
         mask_fft = mask_fft[:, :self.modes]
         mask_fft_weight = torch.einsum('bf,wm->bm', mask_fft, self.weights_data_fft)
         x2 = torch.fft.ifft(mask_fft_weight, norm='forward').real
-        x2 = self.activate(self.lin1_mask(x2))
-        x2 = f.sigmoid(x2)
+        x2 = f.sigmoid((self.lin1_mask(x2)))
         self.mask_treshold = torch.mean(x2, dim=0)
         x2 = self.activate(self.lin2_mask(x2))
         x = self.activate(self.lin1(x1 * x2))

@@ -5,7 +5,8 @@ import random
 import struct
 import time
 from statistics import mean
-
+import pytorch_ssim
+import ssim
 import kornia
 import numpy as np
 import torch
@@ -35,9 +36,9 @@ class teacher(object):
         self.meta_binary = None
         self.field_names = None
         self.no_frame_samples, self.first_frame, self.last_frame, self.frame_skip = None, None, None, None
+        self.ssim_loss = ssim.MS_SSIM(data_range=1., channel=5, use_padding=True, window_size=1).to(self.device)
 
-        self.data_input = torch.zeros((self.model.batch_size, self.model.in_scale * 4, self.model.in_scale),
-                                      requires_grad=True).to(device)
+        self.data_input = None
         self.structure_input = None  #torch.zeros((self.model.batch_size,self.model.in_scale,self.model.in_scale),requires_grad=True)
         self.meta_input_h1 = None
         self.meta_input_h2 = None
@@ -45,8 +46,7 @@ class teacher(object):
         self.meta_input_h4 = None
         self.meta_input_h5 = None
         self.noise_var_in = None
-        self.data_output = torch.zeros((self.model.batch_size, self.model.in_scale * 4, self.model.in_scale),
-                                       requires_grad=True).to(device)
+        self.data_output = None
         self.structure_output = None  #torch.zeros((self.model.batch_size,self.model.in_scale,self.model.in_scale),requires_grad=True)
         self.meta_output_h1 = None
         self.meta_output_h2 = None
@@ -926,7 +926,7 @@ class teacher(object):
                     val_loss_recent_history = np.array(self.val_loss)[-10:-1]
                     mean_hist_losses = np.mean(loss_recent_history)
                     if loss_recent_history[-1] > loss_recent_history[-2] or loss_recent_history[-1] < \
-                            loss_recent_history[-2] * 0.9 or loss_recent_history[-1] > 0.3:
+                            loss_recent_history[-2] * 0.9 or loss_recent_history[-1] > 5e-2:
                         reiterate_data = 1
                     else:
                         reiterate_counter = 0
@@ -945,9 +945,9 @@ class teacher(object):
                     # NOTE: lowering lr for  better performance and reset lr within conditions
                     if grad_counter == 3 or reiterate_data == 0:
                         for param_group in optimizer.param_groups:
-                            param_group['lr'] = param_group['lr'] * 0.95
+                            param_group['lr'] = param_group['lr'] * 0.98
                             if param_group['lr'] < 1e-5 or reiterate_data == 0:
-                                param_group['lr'] = 1e-3
+                                param_group['lr'] = 5e-4
                                 reiterate_counter = 0
                                 reiterate_data = 0
                                 print('optimizer -> lr back to starting point')
@@ -1113,37 +1113,6 @@ class teacher(object):
 
         # Solution for learning of the dynamics in loss calculation
 
-        # Note: Deep Supervision Loss
-        x, x_mod, rgbas_prod, rres, gres, bres, ares, sres = deepS
-        dpSWeight = 0.25
-        x_target = torch.randn_like(x) * dpSWeight
-        x_mod_target = torch.randn_like(x_mod) * dpSWeight
-        rgbas_prod_target = torch.randn_like(rgbas_prod) * dpSWeight
-        rres_target = torch.randn_like(rres) * dpSWeight
-        gres_target = torch.randn_like(gres) * dpSWeight
-        bres_target = torch.randn_like(bres) * dpSWeight
-        ares_target = torch.randn_like(ares) * dpSWeight
-        sres_target = torch.randn_like(sres) * dpSWeight
-        loss_x, loss_x_mod, loss_rgbas_prod, loss_rres, loss_gres, loss_bres, loss_ares, loss_sres = (
-            criterion(x, x_target), criterion(x_mod, x_mod_target), criterion(rgbas_prod, rgbas_prod_target),
-            criterion(rres, rres_target), criterion(gres, gres_target), criterion(bres, bres_target),
-            criterion(ares, ares_target), criterion(sres, sres_target))
-        deepSLoss = torch.mean(loss_x) + torch.mean(loss_x_mod) + torch.mean(loss_rgbas_prod) + torch.mean(
-            loss_rres) + torch.mean(loss_gres) + torch.mean(loss_bres) + torch.mean(loss_ares) + torch.mean(loss_sres)
-
-        # # Note: Rank Representation Loss - Singular Value decomposition (SVD) # Question: How it will behave in the RL reward learning loop?
-        res = torch.cat([rres, gres, bres, ares, sres], dim=1)
-        k = 32
-        low_rank_weight = 0.25
-        indices = torch.randperm(res.size(0))
-        selected_indices = indices[:k]
-        sampled_res = res[selected_indices]
-        # U, S, V = torch.linalg.svd(res, full_matrices=False) # Note:  Full matrix svd - slow but better performance (x10 better)
-        U, S, V = torch.svd_lowrank(sampled_res, q=k, niter=2, M=None) # Note: Way faster but less efficient, q is overestimation of rank and niter is subspace iteration, M is the broadcast size
-        res_low_rank_t = torch.dist(sampled_res, U @ torch.diag(S) @ V.T)
-        #rank_loss = (1-1e4 * (res_low_rank_t / sampled_res.shape[0]))*low_rank_weight # NOTE: for high rank extraction
-        rank_loss = (1e4 * (res_low_rank_t / sampled_res.shape[0]))*low_rank_weight # NOTE: for low rank extraction
-
         # NOTE: Firs order difference
         diff_r_true = r_out - r_in
         diff_r_pred = pred_r - r_in
@@ -1276,16 +1245,86 @@ class teacher(object):
         s_pred_hist = kornia.enhance.histogram(pred_s, bins=bins_pred, bandwidth=bandwidth)
         s_hist_loss = criterion(s_pred_hist, s_true_hist)
         hist_loss = torch.mean(r_hist_loss + b_hist_loss + g_hist_loss + a_hist_loss + s_hist_loss, dim=1)
-        hist_loss = hist_loss * 10
+        hist_loss = hist_loss
 
-        LOSS = value_loss + diff_loss + grad_loss + fft_loss + diff_fft_loss + hist_loss + deepSLoss + rank_loss  # Attention: Aggregate all losses here
-        if pred_r.shape[0] != self.batch_size:
-            n = int(pred_r.shape[0] / self.batch_size)
-            LOSS = torch.chunk(LOSS, n, dim=0)
-            LOSS = torch.stack([split.mean(dim=0) for split in LOSS])
-        else:
-            LOSS = torch.mean(LOSS)
-        return LOSS
+
+        # Note: Deep Supervision Loss
+        x, x_mod, rgbas_prod, rres, gres, bres, ares, sres = deepS
+        dpSWeight = 0.3
+        x_target = torch.randn_like(x) * dpSWeight
+        x_mod_target = torch.randn_like(x_mod) * dpSWeight
+        rgbas_prod_target = torch.randn_like(rgbas_prod) * dpSWeight
+        rres_target = torch.randn_like(rres) * dpSWeight
+        gres_target = torch.randn_like(gres) * dpSWeight
+        bres_target = torch.randn_like(bres) * dpSWeight
+        ares_target = torch.randn_like(ares) * dpSWeight
+        sres_target = torch.randn_like(sres) * dpSWeight
+        loss_x, loss_x_mod, loss_rgbas_prod, loss_rres, loss_gres, loss_bres, loss_ares, loss_sres = (
+            criterion(x, x_target), criterion(x_mod, x_mod_target), criterion(rgbas_prod, rgbas_prod_target),
+            criterion(rres, rres_target), criterion(gres, gres_target), criterion(bres, bres_target),
+            criterion(ares, ares_target), criterion(sres, sres_target))
+        deepSLoss = torch.mean(loss_x) + torch.mean(loss_x_mod) + torch.mean(loss_rgbas_prod) + torch.mean(
+            loss_rres) + torch.mean(loss_gres) + torch.mean(loss_bres) + torch.mean(loss_ares) + torch.mean(loss_sres)
+
+        # # Note: Rank Representation Loss - Singular Value decomposition (SVD) # Question: How it will behave in the RL reward learning loop?
+        res = torch.cat([rres, gres, bres, ares, sres], dim=1)
+        k = 32
+        low_rank_weight = 1.
+        indices = torch.randperm(res.size(0))
+        selected_indices = indices[:k]
+        sampled_res = res[selected_indices]
+        # U, S, V = torch.linalg.svd(res, full_matrices=False) # Note:  Full matrix svd - slow but better performance (x10 better)
+        U, S, V = torch.svd_lowrank(sampled_res, q=k, niter=2,
+                                    M=None)  # Note: Way faster but less efficient, q is overestimation of rank and niter is subspace iteration, M is the broadcast size
+        res_low_rank_t = torch.dist(sampled_res, U @ torch.diag(S) @ V.T)
+        rank_loss = (1 - 3e4 * (
+                res_low_rank_t / sampled_res.shape[0])) * low_rank_weight  # NOTE: for high rank extraction
+        #rank_loss = (3e4 * (res_low_rank_t / sampled_res.shape[0]))*low_rank_weight # NOTE: for low rank extraction
+
+
+        # Note: SSIM Loss
+        l = self.batch_size
+        indices = torch.randperm(r_out.size(0))
+        selected_indices = indices[:l]
+        r_out_img = r_out[selected_indices].view(self.batch_size, self.model.in_scale, self.model.in_scale)
+        g_out_img = g_out[selected_indices].view(self.batch_size, self.model.in_scale, self.model.in_scale)
+        b_out_img = b_out[selected_indices].view(self.batch_size, self.model.in_scale, self.model.in_scale)
+        a_out_img = a_out[selected_indices].view(self.batch_size, self.model.in_scale, self.model.in_scale)
+        s_out_img = s_out[selected_indices].view(self.batch_size, self.model.in_scale, self.model.in_scale)
+        r_pred_img = pred_r[selected_indices].view(self.batch_size, self.model.in_scale, self.model.in_scale)
+        g_pred_img = pred_g[selected_indices].view(self.batch_size, self.model.in_scale, self.model.in_scale)
+        b_pred_img = pred_b[selected_indices].view(self.batch_size, self.model.in_scale, self.model.in_scale)
+        a_pred_img = pred_a[selected_indices].view(self.batch_size, self.model.in_scale, self.model.in_scale)
+        s_pred_img = pred_s[selected_indices].view(self.batch_size, self.model.in_scale, self.model.in_scale)
+        rgbas_out = torch.stack([r_out_img, g_out_img, b_out_img, a_out_img, s_out_img], dim=-1)
+        rgbas_pred = torch.stack([r_pred_img, g_pred_img, b_pred_img, a_pred_img, s_pred_img], dim=-1)
+        rgbas_out = torch.permute(rgbas_out, (0, 3, 1, 2))
+        rgbas_pred = torch.permute(rgbas_pred, (0, 3, 1, 2))
+        ssim_val = 1 - self.ssim_loss(rgbas_out, rgbas_pred).mean()
+
+        A, B, C, D, E, F, G, H, I = 1., 1., 1e1, 1e2, 1e2, 1e3, 1., 1., 2.  # Note: loss weights
+        loss_weights = (A, B, C, D, E, F, G, H, I)
+        LOSS = (value_loss, diff_loss, grad_loss, fft_loss, diff_fft_loss, hist_loss, deepSLoss, rank_loss,
+                ssim_val)  # Attention: Aggregate all losses here
+
+        # print(A * value_loss.mean().item(), "<-value_loss:", B * diff_loss.mean().item(),
+        #       "<-diff_loss:", C * grad_loss.mean().item(), "<-grad_loss:", D * fft_loss.mean().item(), "<-fft_loss:",
+        #       E * diff_fft_loss.mean().item(), "<-diff_fft_loss:", F * hist_loss.mean().item(), "<-hist_loss:",
+        #       G * deepSLoss.mean().item(), "<-deepSLoss:", H * rank_loss.mean().item(), "<-rank_loss:",
+        #       I * ssim_val.mean().item(),
+        #       "<-ssim_val:")
+
+        final_loss, i = 0., 0
+        for losses in LOSS:
+            if pred_r.shape[0] != self.batch_size:
+                n = int(pred_r.shape[0] / self.batch_size)
+                losses = torch.chunk(losses, n, dim=0)
+
+                final_loss += torch.stack([loss_weights[i] * split.mean(dim=0) for split in losses])
+            else:
+                final_loss += loss_weights[i] * torch.mean(losses)
+            i += 1
+            return final_loss
 
     def discriminator_loss(self, idx, model_output, data_output, structure_output, criterion):
 
@@ -1305,8 +1344,8 @@ class teacher(object):
         pred = torch.cat([pred_r.detach(), pred_g.detach(), pred_b.detach(), pred_a.detach(), pred_s.detach()], dim=1)
         true = torch.cat([r_out, g_out, b_out, a_out, s_out], dim=1)
         # Note : Fill value for label smoothing
-        fake_labels = torch.full((pred.shape[0], 1), 0.1).to(self.device)
-        true_labels = torch.full((true.shape[0], 1), 0.9).to(self.device)
+        fake_labels = torch.full((pred.shape[0], 1), 0.05).to(self.device)
+        true_labels = torch.full((true.shape[0], 1), 0.95).to(self.device)
         combined_data = torch.cat([pred, true], dim=0)
         combined_labels = torch.cat([fake_labels, true_labels], dim=0)
         shuffle_idx = torch.randint(0, combined_data.shape[0], (int(combined_data.shape[0] / 2),)).to(self.device)

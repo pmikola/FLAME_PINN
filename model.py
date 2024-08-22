@@ -20,7 +20,7 @@ class Metamorph(nn.Module):
         self.no_subslice_in_tensors = 4
         self.in_data = 20
         self.activation_weight = nn.Parameter(torch.rand(1, dtype=torch.float))
-
+        # self.weight_ssim_loss = nn.Parameter(torch.rand(5))
         # Definition of non-linear shifting activation function with parameters
         # NOTE: Only Even Numbers in shifterCoefficients for now (because sqrt is in the layer def)
         self.shifterCoefficients = 3  # No. of polynomial coefficients
