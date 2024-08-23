@@ -47,10 +47,10 @@ print('Reinforcer number of parameters', round(reinforcer_params * 1e-6, 2), 'M'
 
 t = teacher(models, discriminator, parameterReinforcer, device)
 t.fsim = fl.flame_sim(no_frames=no_frames, frame_skip=frame_skip)
-criterion_model = nn.L1Loss(reduction='none')
-criterion_e0 = nn.L1Loss(reduction='none')
-criterion_e1 = nn.L1Loss(reduction='none')
-criterion_e2 =nn.L1Loss(reduction='none')
+criterion_model =nn.MSELoss(reduction='none')
+criterion_e0 = nn.MSELoss(reduction='none')
+criterion_e1 = nn.MSELoss(reduction='none')
+criterion_e2 =nn.MSELoss(reduction='none')
 criterion_disc = nn.BCELoss(reduction='mean')
 criterion_RL = nn.MSELoss(reduction='mean')
 criterion = criterion_model, criterion_e0, criterion_e1, criterion_e2, criterion_disc, criterion_RL
