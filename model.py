@@ -87,9 +87,9 @@ class Metamorph(nn.Module):
         self.l0h2 = nn.Linear(in_features=self.no_meta_h2,
                               out_features=self.shifterCoefficients * self.shifterCoefficients)
         self.l1h2 = nn.Linear(in_features=self.shifterCoefficients * self.shifterCoefficients,
-                              out_features=self.shifterCoefficients * self.shifterCoefficients ** 1)
-        self.l2h2 = nn.Linear(in_features=self.shifterCoefficients * self.shifterCoefficients ** 1,
-                              out_features=self.shifterCoefficients * self.shifterCoefficients ** 1)
+                              out_features=self.shifterCoefficients * self.shifterCoefficients )
+        self.l2h2 = nn.Linear(in_features=self.shifterCoefficients * self.shifterCoefficients ,
+                              out_features=self.shifterCoefficients * self.shifterCoefficients)
 
         # Definition of layer 0,1,2 for lvl 1 in hierarchy - alpha
         self.l0h1 = nn.Linear(in_features=self.no_meta_h1,
