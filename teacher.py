@@ -15,6 +15,7 @@ from torch.autograd import grad
 import torch.nn.utils as nn_utils
 import torch.nn.functional as f
 
+
 class teacher(object):
     def __init__(self, models, discriminator, parameterReinforcer, device):
         super(teacher, self).__init__()
@@ -1121,8 +1122,8 @@ class teacher(object):
         s_out = structure_output[idx]  #.view(self.batch_size, -1)
         t = 1 - self.fmot_in[idx]
         t_1 = self.fmot_in[idx]
-        t = t.unsqueeze(1)
-        t_1 = t_1.unsqueeze(1)
+        t = tt = t.unsqueeze(1)
+        t_1 = tt_1 = t_1.unsqueeze(1)
         if pred_r.shape[0] != self.batch_size:
             n = int(pred_r.shape[0] / self.batch_size)
             r_in = r_in.unsqueeze(0).expand(n, -1, -1, -1).reshape(-1, r_in.shape[1], r_in.shape[2]).detach()
@@ -1294,9 +1295,13 @@ class teacher(object):
         ares_target = torch.randn_like(ares) * dpSWeight
         sres_target = torch.randn_like(sres) * dpSWeight
         loss_x, loss_x_mod, loss_rgbas_prod, loss_rres, loss_gres, loss_bres, loss_ares, loss_sres = (
-            f.mse_loss(x, x_target), f.mse_loss(x_mod, x_mod_target), f.mse_loss(rgbas_prod, rgbas_prod_target),
-            f.mse_loss(rres, rres_target), f.mse_loss(gres, gres_target), f.mse_loss(bres, bres_target),
-            f.mse_loss(ares, ares_target), f.mse_loss(sres, sres_target))
+            f.mse_loss(t * x + t_1 * x_target, x_target), f.mse_loss(t * x_mod + t_1 * x_mod_target, x_mod_target),
+            f.mse_loss(t * rgbas_prod + t_1 * rgbas_prod_target, rgbas_prod_target),
+            f.mse_loss(t * rres + t_1 * rres_target, rres_target),
+            f.mse_loss(t * gres + t_1 * gres_target, gres_target),
+            f.mse_loss(t * bres + t_1 * bres_target, bres_target),
+            f.mse_loss(t * ares + t_1 * ares_target, ares_target),
+            f.mse_loss(t * sres + t_1 * sres_target, sres_target))
         deepSLoss = torch.mean(loss_x) + torch.mean(loss_x_mod) + torch.mean(loss_rgbas_prod) + torch.mean(
             loss_rres) + torch.mean(loss_gres) + torch.mean(loss_bres) + torch.mean(loss_ares) + torch.mean(loss_sres)
         # deepSLoss = loss_x + loss_x_mod + loss_rgbas_prod + loss_rres + loss_gres + loss_bres + loss_ares + loss_sres
@@ -1342,7 +1347,7 @@ class teacher(object):
         rgbas_pred = torch.stack([r_pred_img, g_pred_img, b_pred_img, a_pred_img, s_pred_img], dim=-1)
         rgbas_out = torch.permute(rgbas_out, (0, 3, 1, 2))
         rgbas_pred = torch.permute(rgbas_pred, (0, 3, 1, 2))
-        ssim_val = 1 - self.ssim_loss(rgbas_out, rgbas_pred).mean()
+        ssim_val = 1 - self.ssim_loss(tt.unsqueeze(2) * rgbas_out + tt_1.unsqueeze(2) * rgbas_pred, rgbas_pred).mean()
 
         A, B, C, D, E, F, G, H, I = 1., 1., 1e1, 1e2, 1e2, 1e3, 1., 1., 2.  # Note: loss weights
         loss_weights = (A, B, C, D, E, F, G, H, I)
