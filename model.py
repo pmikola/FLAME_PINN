@@ -67,43 +67,27 @@ class Metamorph(nn.Module):
         self.flat_size = 5 * self.in_scale ** 2  # Note: n neurons per every pixel
         self.diffiusion_context = 32 * 2
         self.flow_matching_context = 32
-        # Definition of layer 0,1,2 for lvl 4 in hierarchy - theta - diffusion noise context
+        # Definition of layer 0 for lvl 4 in hierarchy - theta - diffusion noise context
         self.l0h4 = nn.Linear(in_features=self.diffiusion_context + self.flow_matching_context,
                               out_features=self.shifterCoefficients * self.shifterCoefficients ** 2)
-        self.l1h4 = nn.Linear(in_features=self.shifterCoefficients * self.shifterCoefficients ** 2,
-                              out_features=self.shifterCoefficients * self.shifterCoefficients ** 3)
-        self.l2h4 = nn.Linear(in_features=self.shifterCoefficients * self.shifterCoefficients ** 3,
-                              out_features=self.shifterCoefficients * self.shifterCoefficients ** 3)
 
-        # Definition of layer 0,1,2 for lvl 3 in hierarchy - gamma
+        # Definition of layer 0 for lvl 3 in hierarchy - gamma
         self.l0h3 = nn.Linear(in_features=self.no_meta_h3,
-                              out_features=self.shifterCoefficients * self.shifterCoefficients)
-        self.l1h3 = nn.Linear(in_features=self.shifterCoefficients * self.shifterCoefficients,
-                              out_features=self.shifterCoefficients * self.shifterCoefficients ** 2)
-        self.l2h3 = nn.Linear(in_features=self.shifterCoefficients * self.shifterCoefficients ** 2,
                               out_features=self.shifterCoefficients * self.shifterCoefficients ** 2)
 
-        # Definition of layer 0,1,2 for lvl 2 in hierarchy - beta
+        # Definition of layer 0 for lvl 2 in hierarchy - beta
         self.l0h2 = nn.Linear(in_features=self.no_meta_h2,
-                              out_features=self.shifterCoefficients * self.shifterCoefficients)
-        self.l1h2 = nn.Linear(in_features=self.shifterCoefficients * self.shifterCoefficients,
-                              out_features=self.shifterCoefficients * self.shifterCoefficients )
-        self.l2h2 = nn.Linear(in_features=self.shifterCoefficients * self.shifterCoefficients ,
-                              out_features=self.shifterCoefficients * self.shifterCoefficients)
+                              out_features=self.shifterCoefficients * self.shifterCoefficients ** 2)
 
-        # Definition of layer 0,1,2 for lvl 1 in hierarchy - alpha
+        # Definition of layer 0 for lvl 1 in hierarchy - alpha
         self.l0h1 = nn.Linear(in_features=self.no_meta_h1,
-                              out_features=int((self.shifterCoefficients * self.shifterCoefficients) ** (1 / 2)))
-        self.l1h1 = nn.Linear(in_features=int((self.shifterCoefficients * self.shifterCoefficients) ** (1 / 2)),
-                              out_features=int((self.shifterCoefficients * self.shifterCoefficients) ** (1 / 2)))
-        self.l2h1 = nn.Linear(in_features=int((self.shifterCoefficients * self.shifterCoefficients) ** (1 / 2)),
-                              out_features=int((self.shifterCoefficients * self.shifterCoefficients) ** (1 / 2)))
+                              out_features=self.shifterCoefficients * self.shifterCoefficients ** 2)
 
         # Definition of intermediate layer between lvl 0 and 1 for dimension matching
-        self.l1h01 = nn.Linear(in_features=int((self.shifterCoefficients * self.shifterCoefficients) ** (1 / 2)),
-                               out_features=(self.in_scale ** 2) * self.shifterCoefficients * 5)
-        self.l2h01 = nn.Linear(in_features=int((self.shifterCoefficients * self.shifterCoefficients) ** (1 / 2)),
-                               out_features=(self.in_scale ** 2) * self.shifterCoefficients * 5)
+        self.l1h01 = nn.Linear(in_features=self.shifterCoefficients * self.shifterCoefficients ** 2,
+                               out_features=(self.in_scale ** 2) * self.shifterCoefficients)
+        self.l2h01 = nn.Linear(in_features=(self.in_scale ** 2) * self.shifterCoefficients,
+                               out_features=(self.in_scale ** 2) * self.shifterCoefficients)
 
         # Definition of input layer 0 for lvl 0 in hierarchy
         # rmv of 3 paralleled layers for conv 1d k=1,2,3
@@ -123,18 +107,22 @@ class Metamorph(nn.Module):
         self.l0h0sy = nn.Linear(in_features=int(self.in_scale ** 2), out_features=int(self.in_scale ** 2))
 
         # Definition of input layer 1,2,3 for lvl 0 in hierarchy
-        self.l1h0 = nn.Linear(in_features=int(self.in_scale ** 2) * 5,
-                              out_features=int(self.in_scale ** 2) * 5)
-        self.l2h0 = nn.Linear(in_features=int(self.in_scale ** 2) * 5,
-                              out_features=int(self.in_scale ** 2) * 5)
-        self.l3h0 = nn.Linear(in_features=int(self.in_scale ** 2) * 5, out_features=int(self.in_scale ** 2) * 5)
+        self.l0h00 = nn.Linear(in_features=int(self.in_scale ** 2) * 5,
+                              out_features=int(self.in_scale ** 2))
+        self.l0h01 = nn.Linear(in_features=int(self.in_scale ** 2) * 5,
+                              out_features=int(self.in_scale ** 2))
+        self.l1h0 = nn.Linear(in_features=int(self.in_scale ** 2),
+                              out_features=int(self.in_scale ** 2))
+        self.l2h0 = nn.Linear(in_features=int(self.in_scale ** 2),
+                              out_features=int(self.in_scale ** 2))
+        self.l3h0 = nn.Linear(in_features=int(self.in_scale ** 2), out_features=int(self.in_scale ** 2))
 
         # Definition of Heads for red, green, blue, alpha and structure output channels
-        self.l4_h0_r = nn.Linear(in_features=int(self.in_scale ** 2) * 5, out_features=int(self.flat_size / 2))
-        self.l4_h0_g = nn.Linear(in_features=int(self.in_scale ** 2) * 5, out_features=int(self.flat_size / 2))
-        self.l4_h0_b = nn.Linear(in_features=int(self.in_scale ** 2) * 5, out_features=int(self.flat_size / 2))
-        self.l4_h0_a = nn.Linear(in_features=int(self.in_scale ** 2) * 5, out_features=int(self.flat_size / 2))
-        self.l4_h0_s = nn.Linear(in_features=int(self.in_scale ** 2) * 5, out_features=int(self.flat_size / 2))
+        self.l4_h0_r = nn.Linear(in_features=int(self.in_scale ** 2), out_features=int(self.flat_size / 2))
+        self.l4_h0_g = nn.Linear(in_features=int(self.in_scale ** 2), out_features=int(self.flat_size / 2))
+        self.l4_h0_b = nn.Linear(in_features=int(self.in_scale ** 2), out_features=int(self.flat_size / 2))
+        self.l4_h0_a = nn.Linear(in_features=int(self.in_scale ** 2), out_features=int(self.flat_size / 2))
+        self.l4_h0_s = nn.Linear(in_features=int(self.in_scale ** 2), out_features=int(self.flat_size / 2))
 
         self.l5_h0_r = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
         self.l5_h0_g = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
@@ -227,24 +215,14 @@ class Metamorph(nn.Module):
         meta_central_points = torch.cat([meta_input_h3.float(), meta_output_h3.float()], dim=1)
         meta_step = torch.cat([meta_input_h2.float(), meta_output_h2.float()], dim=1)
         meta_h1 = torch.cat([meta_input_h1.float(), meta_output_h1.float()], dim=1)
+
         theta = self.activate(self.l0h4(noise_var))
-        theta_l1 = self.activate(self.l1h4(theta))
-        theta_l2 = self.activate(self.l2h4(theta_l1))
-
         gamma = self.activate(self.l0h3(meta_central_points))
-        gamma_l1 = self.shapeShift(self.l1h3(gamma), theta_l1)
-        gamma_l2 = self.shapeShift(self.l2h3(gamma_l1), theta_l2)
-        #
         beta = self.activate(self.l0h2(meta_step))
-        beta_l1 = self.shapeShift(self.l1h2(beta), gamma_l1)
-        beta_l2 = self.shapeShift(self.l2h2(beta_l1), gamma_l2)
-
         alpha = self.activate(self.l0h1(meta_h1))
-        alpha_l1 = self.shapeShift(self.l1h1(alpha), beta_l1)
-        alpha_l2 = self.shapeShift(self.l2h1(alpha_l1), beta_l2)
 
-        x_alpha_l1 = self.activate(self.l1h01(alpha_l1))
-        x_alpha_l2 = self.activate(self.l2h01(alpha_l2))
+        x_l1 = self.activate(self.l1h01(theta+gamma+beta+alpha))
+        x_l2 = self.activate(self.l2h01(x_l1))
 
         # Note: Factorisation for dense layers
 
@@ -305,8 +283,10 @@ class Metamorph(nn.Module):
         x = x0 + x1
         x = torch.flatten(x, start_dim=1)
         rgbas_prod = torch.flatten(rgbas_prod, start_dim=1)
-        x_mod = self.shapeShift(self.l1h0(rgbas_prod), x_alpha_l1)
-        x_mod = self.shapeShift(self.l2h0(x_mod), x_alpha_l2)
+        x = self.activate(self.l0h00(x))
+        rgbas_prod = self.activate(self.l0h01(rgbas_prod))
+        x_mod = self.shapeShift(self.l1h0(rgbas_prod), x_l1)
+        x_mod = self.shapeShift(self.l2h0(x_mod), x_l2)
 
         x = self.activate(self.l3h0(x_mod)) + x + rgbas_prod
         rres = self.activate(self.l4_h0_r(x))
