@@ -1295,13 +1295,13 @@ class teacher(object):
         ares_target = torch.randn_like(ares) * dpSWeight
         sres_target = torch.randn_like(sres) * dpSWeight
         loss_x, loss_x_mod, loss_rgbas_prod, loss_rres, loss_gres, loss_bres, loss_ares, loss_sres = (
-            f.mse_loss(t * x + t_1 * x_target, x_target), f.mse_loss(t * x_mod + t_1 * x_mod_target, x_mod_target),
-            f.mse_loss(t * rgbas_prod + t_1 * rgbas_prod_target, rgbas_prod_target),
-            f.mse_loss(t * rres + t_1 * rres_target, rres_target),
-            f.mse_loss(t * gres + t_1 * gres_target, gres_target),
-            f.mse_loss(t * bres + t_1 * bres_target, bres_target),
-            f.mse_loss(t * ares + t_1 * ares_target, ares_target),
-            f.mse_loss(t * sres + t_1 * sres_target, sres_target))
+            f.mse_loss(x, x_target), f.mse_loss(x_mod, x_mod_target),
+            f.mse_loss(rgbas_prod, rgbas_prod_target),
+            f.mse_loss(rres, rres_target),
+            f.mse_loss(gres, gres_target),
+            f.mse_loss(bres, bres_target),
+            f.mse_loss(ares, ares_target),
+            f.mse_loss(sres, sres_target))
         deepSLoss = torch.mean(loss_x) + torch.mean(loss_x_mod) + torch.mean(loss_rgbas_prod) + torch.mean(
             loss_rres) + torch.mean(loss_gres) + torch.mean(loss_bres) + torch.mean(loss_ares) + torch.mean(loss_sres)
         # deepSLoss = loss_x + loss_x_mod + loss_rgbas_prod + loss_rres + loss_gres + loss_bres + loss_ares + loss_sres
