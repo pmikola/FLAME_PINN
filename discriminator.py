@@ -52,9 +52,10 @@ class Metamorph_discriminator(nn.Module):
         self.dens_width = self.shifterCoefficients
         self.flat_size = 1 * self.in_scale ** 2  # Note: n neurons per every pixel
         self.diffiusion_context = 32 * 2
+        self.flow_matching_context = 32
 
         # Definition of layer 0,1,2 for lvl 4 in hierarchy - theta - diffusion noise context
-        self.l0h4 = nn.Linear(in_features=self.diffiusion_context,
+        self.l0h4 = nn.Linear(in_features=self.diffiusion_context+self.flow_matching_context,
                               out_features=self.shifterCoefficients * self.shifterCoefficients ** 2)
         self.l1h4 = nn.Linear(in_features=self.shifterCoefficients * self.shifterCoefficients ** 2,
                               out_features=self.shifterCoefficients * self.shifterCoefficients ** 3)
@@ -148,7 +149,7 @@ class Metamorph_discriminator(nn.Module):
 
     def forward(self, disc_data, g_model_data, shuffle_idx):
         (_, _, meta_input_h1, meta_input_h2, meta_input_h3,
-         _, _, noise_var_in, meta_output_h1, meta_output_h2,
+         _, _, noise_var_in,fmot_in, meta_output_h1, meta_output_h2,
          meta_output_h3, _, _, noise_var_out) = g_model_data
         # print(data_input.shape,meta_input_h1.shape,meta_input_h2.shape,meta_input_h3.shape,
         #  meta_input_h4.shape,meta_input_h5.shape,meta_output_h1.shape,meta_output_h2.shape,
@@ -157,7 +158,7 @@ class Metamorph_discriminator(nn.Module):
         #  or just be top layer without any additional coefss (regarding polyNonlinear)
         meta_input_h2 = torch.cat([meta_input_h2, meta_input_h2], dim=0)[shuffle_idx]
         meta_input_h3 = torch.cat([meta_input_h3, meta_input_h3], dim=0)[shuffle_idx]
-        noise_var_in = torch.cat([noise_var_in, noise_var_in], dim=0)[shuffle_idx]
+        noise_var_in = torch.cat([noise_var_in,fmot_in, noise_var_in], dim=0)[shuffle_idx]
         meta_output_h2 = torch.cat([meta_output_h2, meta_output_h2], dim=0)[shuffle_idx]
         meta_output_h3 = torch.cat([meta_output_h3, meta_output_h3], dim=0)[shuffle_idx]
         noise_var_out = torch.cat([noise_var_out, noise_var_out], dim=0)[shuffle_idx]

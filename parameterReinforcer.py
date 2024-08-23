@@ -168,7 +168,7 @@ class Metamorph_parameterReinforcer(nn.Module):
     def mutate(self, data_in, action):
         p_action_idx = torch.argmax(action, dim=1)
         (data_input, structure_input, meta_input_h1, meta_input_h2, meta_input_h3,
-         meta_input_h4, meta_input_h5, noise_var_in, meta_output_h1, meta_output_h2,
+         meta_input_h4, meta_input_h5, noise_var_in, fmot_in_binary, meta_output_h1, meta_output_h2,
          meta_output_h3, meta_output_h4, meta_output_h5, noise_var_out) = data_in
         mask = torch.stack([self.masks[i] for i in p_action_idx])
         rng = torch.rand(mask.shape).to(self.device).detach()
@@ -181,6 +181,7 @@ class Metamorph_parameterReinforcer(nn.Module):
         meta_input_h4 = meta_input_h4.unsqueeze(0).expand(self.batch_size, -1, -1).detach()
         meta_input_h5 = meta_input_h5.unsqueeze(0).expand(self.batch_size, -1).detach()
         noise_var_in = noise_var_in.unsqueeze(0).expand(self.batch_size, -1, -1).detach()
+        fmot_in_binary = fmot_in_binary.unsqueeze(0).expand(self.batch_size, -1, -1).detach()
         meta_output_h1 = meta_output_h1.unsqueeze(0).expand(self.batch_size, -1, -1).detach()
         meta_output_h2 = meta_output_h2.unsqueeze(0).expand(self.batch_size, -1, -1).detach()
         meta_output_h3 = meta_output_h3.unsqueeze(0).expand(self.batch_size, -1, -1).detach()
@@ -189,7 +190,7 @@ class Metamorph_parameterReinforcer(nn.Module):
         noise_var_out = noise_var_out.unsqueeze(0).expand(self.batch_size, -1, -1).detach()
         return mask, data_input * mask[:, :, :self.in_scale * 4, :], structure_input * mask[:, :,
                                                                                        self.in_scale * 4:,
-                                                                                       :], meta_input_h1, meta_input_h2, meta_input_h3, meta_input_h4, meta_input_h5, noise_var_in, meta_output_h1, meta_output_h2, meta_output_h3, meta_output_h4, meta_output_h5, noise_var_out
+                                                                                       :], meta_input_h1, meta_input_h2, meta_input_h3, meta_input_h4, meta_input_h5, noise_var_in, fmot_in_binary, meta_output_h1, meta_output_h2, meta_output_h3, meta_output_h4, meta_output_h5, noise_var_out
 
     def exploit_explore_action_selector(self, action, p=0.1):
         selector = torch.randint(1, 10, (1,))
@@ -291,12 +292,14 @@ class Metamorph_parameterReinforcer(nn.Module):
     def mutations_batch(self, teacher, model, dataset, action, loss_calc_data):
         dataset_idx, data_input, data_output, structure_input, structure_output, criterion_model, norm = loss_calc_data
         mutation_losses = []
-        mask, di, si, mih1, mih2, mih3, mih4, mih5, nvi, moh1, moh2, moh3, moh4, moh5, nvo = self.mutate(dataset,
-                                                                                                         action)
-        mutated_dataset = di, si, mih1, mih2, mih3, mih4, mih5, nvi, moh1, moh2, moh3, moh4, moh5, nvo
+        mask, di, si, mih1, mih2, mih3, mih4, mih5, nvi, fmot_in, moh1, moh2, moh3, moh4, moh5, nvo = self.mutate(
+            dataset,
+            action)
+        mutated_dataset = di, si, mih1, mih2, mih3, mih4, mih5, nvi, fmot_in, moh1, moh2, moh3, moh4, moh5, nvo
         dataset_m = (
             di[:self.batch_size], si[:self.batch_size], mih1[:self.batch_size], mih2[:self.batch_size],
             mih3[:self.batch_size], mih4[:self.batch_size], mih5[:self.batch_size], nvi[:self.batch_size],
+            fmot_in[:self.batch_size],
             moh1[:self.batch_size], moh2[:self.batch_size], moh3[:self.batch_size], moh4[:self.batch_size],
             moh5[:self.batch_size], nvo[:self.batch_size])
 
@@ -349,10 +352,10 @@ class Metamorph_parameterReinforcer(nn.Module):
 
         best_idx = torch.argmin(torch.stack(next_mutation_losses))
         used_mask = next_mask[best_idx]
-        di, si, mih1, mih2, mih3, mih4, mih5, nvi, moh1, moh2, moh3, moh4, moh5, nvo = mutated_dataset
+        di, si, mih1, mih2, mih3, mih4, mih5, nvi, fmot_in, moh1, moh2, moh3, moh4, moh5, nvo = mutated_dataset
         dataset_mutated = (
             di[best_idx], si[best_idx], mih1[best_idx], mih2[best_idx], mih3[best_idx], mih4[best_idx], mih5[best_idx],
-            nvi[best_idx], moh1[best_idx], moh2[best_idx], moh3[best_idx], moh4[best_idx], moh5[best_idx],
+            nvi[best_idx],fmot_in[best_idx], moh1[best_idx], moh2[best_idx], moh3[best_idx], moh4[best_idx], moh5[best_idx],
             nvo[best_idx])
         del model_b, model
         return RLmodel, RLoss, dataset_mutated, used_mask
