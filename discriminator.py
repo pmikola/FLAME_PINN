@@ -55,7 +55,7 @@ class Metamorph_discriminator(nn.Module):
         self.flow_matching_context = 32
 
         # Definition of layer 0,1,2 for lvl 4 in hierarchy - theta - diffusion noise context
-        self.l0h4 = nn.Linear(in_features=self.diffiusion_context+self.flow_matching_context,
+        self.l0h4 = nn.Linear(in_features=self.diffiusion_context + self.flow_matching_context,
                               out_features=self.shifterCoefficients * self.shifterCoefficients ** 2)
         self.l1h4 = nn.Linear(in_features=self.shifterCoefficients * self.shifterCoefficients ** 2,
                               out_features=self.shifterCoefficients * self.shifterCoefficients ** 3)
@@ -149,16 +149,12 @@ class Metamorph_discriminator(nn.Module):
 
     def forward(self, disc_data, g_model_data, shuffle_idx):
         (_, _, meta_input_h1, meta_input_h2, meta_input_h3,
-         _, _, noise_var_in,fmot_in, meta_output_h1, meta_output_h2,
+         _, _, noise_var_in, fmot_in, meta_output_h1, meta_output_h2,
          meta_output_h3, _, _, noise_var_out) = g_model_data
-        # print(data_input.shape,meta_input_h1.shape,meta_input_h2.shape,meta_input_h3.shape,
-        #  meta_input_h4.shape,meta_input_h5.shape,meta_output_h1.shape,meta_output_h2.shape,
-        #  meta_output_h3.shape,meta_output_h4.shape,meta_output_h5.shape,meta_central_points.shape)
-        # Question : Do highest hierarchy should have parameters that are learning
-        #  or just be top layer without any additional coefss (regarding polyNonlinear)
+
         meta_input_h2 = torch.cat([meta_input_h2, meta_input_h2], dim=0)[shuffle_idx]
         meta_input_h3 = torch.cat([meta_input_h3, meta_input_h3], dim=0)[shuffle_idx]
-        noise_var_in = torch.cat([noise_var_in,fmot_in, noise_var_in], dim=0)[shuffle_idx]
+        noise_var_in = torch.cat([noise_var_in, fmot_in, noise_var_in], dim=0)[shuffle_idx]
         meta_output_h2 = torch.cat([meta_output_h2, meta_output_h2], dim=0)[shuffle_idx]
         meta_output_h3 = torch.cat([meta_output_h3, meta_output_h3], dim=0)[shuffle_idx]
         noise_var_out = torch.cat([noise_var_out, noise_var_out], dim=0)[shuffle_idx]
@@ -166,9 +162,9 @@ class Metamorph_discriminator(nn.Module):
         meta_central_points = torch.cat([meta_input_h3.float(), meta_output_h3.float()], dim=1)
         noise_var = torch.cat([noise_var_in, noise_var_out], dim=1)
         meta_step = torch.cat([meta_input_h2.float(), meta_output_h2.float()], dim=1)
-        noise_variance = 0.25
-        disc_data = disc_data[shuffle_idx] + torch.nan_to_num(noise_variance * torch.rand_like(disc_data[shuffle_idx]),
-                                                              nan=0.0)
+        #noise_variance = 0.25
+        disc_data = disc_data[
+            shuffle_idx]  # + torch.nan_to_num(noise_variance * torch.rand_like(disc_data[shuffle_idx]),nan=0.0)
         space_time = self.WalshHadamardSpaceTimeFeature(meta_central_points, meta_step, noise_var)
         stff_in = torch.flatten(disc_data, start_dim=1)
         x = self.SpaceTimeFFTFeature(stff_in, self.weights_data_0, self.weights_data_fft_0, space_time)
