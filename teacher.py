@@ -13,6 +13,7 @@ import torch
 from matplotlib import pyplot as plt, animation
 from torch.autograd import grad
 import torch.nn.utils as nn_utils
+import torch.nn.functional as f
 
 
 class teacher(object):
@@ -45,7 +46,9 @@ class teacher(object):
         self.meta_input_h3 = None
         self.meta_input_h4 = None
         self.meta_input_h5 = None
-        self.noise_var_in = None
+        self.noise_diff_in = None
+        self.fmot_in = None
+        self.fmot_in_binary = None
         self.data_output = None
         self.structure_output = None  #torch.zeros((self.model.batch_size,self.model.in_scale,self.model.in_scale),requires_grad=True)
         self.meta_output_h1 = None
@@ -53,7 +56,7 @@ class teacher(object):
         self.meta_output_h3 = None
         self.meta_output_h4 = None
         self.meta_output_h5 = None
-        self.noise_var_out = None
+        self.noise_diff_out = None
 
         self.data_input_val = None
         self.data_output_val = None
@@ -65,6 +68,8 @@ class teacher(object):
         self.meta_input_h4_val = None
         self.meta_input_h5_val = None
         self.noise_var_in_val = None
+        self.fmot_in_val = None
+        self.fmot_in_binary_val = None
         self.meta_output_h1_val = None
         self.meta_output_h2_val = None
         self.meta_output_h3_val = None
@@ -134,7 +139,7 @@ class teacher(object):
         frame_samples = random.sample(list(set(fdens_idx)), k=self.no_frame_samples)
         f_dens_pos = len(fdens_idx)
         fdens_idx = frame_samples
-        # TODO : RGB is not 000000,111111,222222 but 012,012,012,012...
+        # Attention! : RGB is not 000000,111111,222222 but 012,012,012,012...
         rgb_idx = np.array([i for i, x in enumerate(self.field_names) if x == "rgb"])
         r_idx = rgb_idx[::3][frame_samples]
         g_idx = (rgb_idx[::3] + 1)[frame_samples]
@@ -169,6 +174,8 @@ class teacher(object):
         meta_input_h4 = []
         meta_input_h5 = []
         noise_var_in = []
+        fmot_in = []
+        fmot_in_binary = []
         data_output = []
         structure_output = []
         meta_output_h1 = []
@@ -182,10 +189,7 @@ class teacher(object):
         while not frame >= self.batch_size * 2:
             choose_diffrent_frame = 0
             noise_flag = torch.randint(low=0, high=10, size=(1,))
-            # noise_variance_in = torch.tensor(0.).to(self.device)
-            # noise_variance_out = torch.tensor(0.).to(self.device)
-            # noise_variance_in_binary = torch.zeros(32).to(self.device)
-            # noise_variance_out_binary = torch.zeros(32).to(self.device)
+            # Note: Below is the pseudo diffusion process
             noise_mod = 1.
             if noise_flag < 3:
                 noise_variance_in = torch.tensor(0.).to(self.device)
@@ -193,7 +197,7 @@ class teacher(object):
                 noise_variance_in_binary = torch.zeros(32).to(self.device)
                 noise_variance_out_binary = torch.zeros(32).to(self.device)
             elif 3 < noise_flag < 8:
-                noise_variance_in = torch.randn(size=(1,)) * noise_mod
+                noise_variance_in = torch.rand(size=(1,)) * noise_mod
                 noise_variance_in_binary = ''.join(f'{c:08b}' for c in np.float32(noise_variance_in).tobytes())
                 noise_variance_in = noise_variance_in.to(self.device)
                 noise_variance_in_binary = [int(noise_variance_in_binary[i], 2) for i in
@@ -202,7 +206,7 @@ class teacher(object):
                 noise_variance_out = torch.tensor(0.).to(self.device)
                 noise_variance_out_binary = torch.zeros(32).to(self.device)
             elif 8 < noise_flag < 10:
-                noise_variance_out = torch.randn(size=(1,)) * noise_mod
+                noise_variance_out = torch.rand(size=(1,)) * noise_mod
                 noise_variance_out_binary = ''.join(f'{c:08b}' for c in np.float32(noise_variance_out).tobytes())
                 noise_variance_out = noise_variance_out.to(self.device)
                 noise_variance_out_binary = [int(noise_variance_out_binary[i], 2) for i in
@@ -211,18 +215,24 @@ class teacher(object):
                 noise_variance_in = torch.tensor(0.).to(self.device)
                 noise_variance_in_binary = torch.zeros(32).to(self.device)
             else:
-                noise_variance_in = torch.randn(size=(1,)) * noise_mod
+                noise_variance_in = torch.rand(size=(1,)) * noise_mod
                 noise_variance_in_binary = ''.join(f'{c:08b}' for c in np.float32(noise_variance_in).tobytes())
                 noise_variance_in = noise_variance_in.to(self.device)
                 noise_variance_in_binary = [int(noise_variance_in_binary[i], 2) for i in
                                             range(0, len(noise_variance_in_binary), 1)]
                 noise_variance_in_binary = torch.tensor(np.array(noise_variance_in_binary)).to(self.device)
-                noise_variance_out = torch.randn(size=(1,)) * noise_mod
+                noise_variance_out = torch.rand(size=(1,)) * noise_mod
                 noise_variance_out_binary = ''.join(f'{c:08b}' for c in np.float32(noise_variance_out).tobytes())
                 noise_variance_out = noise_variance_out.to(self.device)
                 noise_variance_out_binary = [int(noise_variance_out_binary[i], 2) for i in
                                              range(0, len(noise_variance_out_binary), 1)]
                 noise_variance_out_binary = torch.tensor(np.array(noise_variance_out_binary)).to(self.device)
+
+            # Note: Flow Matching OT Noise gen
+            fmot_coef = torch.rand(size=(1,))
+            fmot_coef_binary = ''.join(f'{c:08b}' for c in np.float32(fmot_coef).tobytes())
+            fmot_coef_binary = [int(fmot_coef_binary[i], 2) for i in range(0, len(fmot_coef_binary), 1)]
+            fmot_coef_binary = torch.tensor(np.array(fmot_coef_binary)).to(self.device)
 
             idx_input = random.choice(range(0, fuel_slices.shape[0]))
             central_point_x_in = random.sample(x_range, 1)[0]
@@ -390,6 +400,8 @@ class teacher(object):
                 meta_input_h4.append(torch.cat([torch.tensor(window_x_in), torch.tensor(window_y_in)]))
                 meta_input_h5.append(meta_step_in_numeric)
                 noise_var_in.append(noise_variance_in_binary.to(torch.float))
+                fmot_in.append(fmot_coef)
+                fmot_in_binary.append(fmot_coef_binary.to(torch.float))
                 data_output.append(data_output_subslice)
                 structure_output.append(fuel_subslice_out)
                 meta_output_h1.append(meta_output_subslice)
@@ -408,7 +420,8 @@ class teacher(object):
             self.meta_input_h4_val = torch.stack(meta_input_h4, dim=0)[0:self.batch_size].to(self.device)
             self.meta_input_h5_val = torch.stack(meta_input_h5, dim=0)[0:self.batch_size].to(self.device)
             self.noise_var_in_val = torch.stack(noise_var_in, dim=0)[0:self.batch_size].to(self.device)
-
+            self.fmot_in_val = torch.stack(fmot_in, dim=0)[0:self.batch_size].to(self.device)
+            self.fmot_in_binary_val = torch.stack(fmot_in_binary, dim=0)[0:self.batch_size].to(self.device)
             self.data_output_val = torch.stack(data_output, dim=0)[0:self.batch_size].to(self.device)
             self.structure_output_val = torch.stack(structure_output, dim=0)[0:self.batch_size].to(self.device)
             self.meta_output_h1_val = torch.stack(meta_output_h1, dim=0)[0:self.batch_size].to(self.device)
@@ -425,7 +438,9 @@ class teacher(object):
             self.meta_input_h3 = torch.stack(meta_input_h3, dim=0).to(self.device)
             self.meta_input_h4 = torch.stack(meta_input_h4, dim=0).to(self.device)
             self.meta_input_h5 = torch.stack(meta_input_h5, dim=0).to(self.device)
-            self.noise_var_in = torch.stack(noise_var_in, dim=0).to(self.device)
+            self.noise_diff_in = torch.stack(noise_var_in, dim=0).to(self.device)
+            self.fmot_in = torch.stack(fmot_in, dim=0).to(self.device)
+            self.fmot_in_binary = torch.stack(fmot_in_binary, dim=0).to(self.device)
 
             self.data_output = torch.stack(data_output, dim=0).to(self.device)
             self.structure_output = torch.stack(structure_output, dim=0).to(self.device)
@@ -434,7 +449,7 @@ class teacher(object):
             self.meta_output_h3 = torch.stack(meta_output_h3, dim=0).to(self.device)
             self.meta_output_h4 = torch.stack(meta_output_h4, dim=0).to(self.device)
             self.meta_output_h5 = torch.stack(meta_output_h5, dim=0).to(self.device)
-            self.noise_var_out = torch.stack(noise_var_out, dim=0).to(self.device)
+            self.noise_diff_out = torch.stack(noise_var_out, dim=0).to(self.device)
 
     def examine(self, criterion, device, plot=0):
         self.model.load_state_dict(torch.load('model.pt'))
@@ -636,7 +651,7 @@ class teacher(object):
             meta_input_h3 = torch.tensor(np.array(central_points_xy_binary))
             meta_input_h4 = torch.cat([x_idx[:, 0:-1], y_idx[:, 0:-1]], dim=1)
             noise_var_in = torch.zeros((data_input.shape[0], 32))
-
+            fmot_in_binary = torch.zeros((data_input.shape[0], 32))
             meta_input_h5 = meta_step_in_numeric.repeat(data_input.shape[0], 1).squeeze(1)
             data_output = data_output_subslice
             meta_output_h1 = meta_output_subslice.unsqueeze(0).repeat(data_input.shape[0], 1)
@@ -649,7 +664,7 @@ class teacher(object):
             self.model.eval()
 
             (data_input, structure_input, meta_input_h1, meta_input_h2,
-             meta_input_h3, meta_input_h4, meta_input_h5, noise_var_in, meta_output_h1,
+             meta_input_h3, meta_input_h4, meta_input_h5, noise_var_in, fmot_in_binary, meta_output_h1,
              meta_output_h2, meta_output_h3, meta_output_h4, meta_output_h5, noise_var_out) = \
                 (data_input.to(device),
                  structure_input.to(device),
@@ -659,6 +674,7 @@ class teacher(object):
                  meta_input_h4.to(device),
                  meta_input_h5.to(device),
                  noise_var_in.to(device),
+                 fmot_in_binary.to(device),
                  meta_output_h1.to(device),
                  meta_output_h2.to(device),
                  meta_output_h3.to(device),
@@ -668,7 +684,7 @@ class teacher(object):
 
             # data_output = data_output.to(device)
             dataset = (data_input, structure_input, meta_input_h1, meta_input_h2,
-                       meta_input_h3, meta_input_h4, meta_input_h5, noise_var_in, meta_output_h1,
+                       meta_input_h3, meta_input_h4, meta_input_h5, noise_var_in, fmot_in_binary, meta_output_h1,
                        meta_output_h2, meta_output_h3, meta_output_h4, meta_output_h5, noise_var_out)
 
             t_start = time.perf_counter()
@@ -767,6 +783,7 @@ class teacher(object):
             self.validation_dataset = (
                 self.data_input_val, self.structure_input_val, self.meta_input_h1_val, self.meta_input_h2_val,
                 self.meta_input_h3_val, self.meta_input_h4_val, self.meta_input_h5_val, self.noise_var_in_val,
+                self.fmot_in_binary_val,
                 self.meta_output_h1_val, self.meta_output_h2_val, self.meta_output_h3_val, self.meta_output_h4_val,
                 self.meta_output_h5_val, self.noise_var_out_val)
             self.parameterReinforcer.create_masks(self.data_input_val, self.structure_input_val)
@@ -789,36 +806,36 @@ class teacher(object):
                 dataset = (self.data_input[m_idx], self.structure_input[m_idx], self.meta_input_h1[m_idx],
                            self.meta_input_h2[m_idx],
                            self.meta_input_h3[m_idx], self.meta_input_h4[m_idx], self.meta_input_h5[m_idx],
-                           self.noise_var_in[m_idx], self.meta_output_h1[m_idx],
+                           self.noise_diff_in[m_idx], self.fmot_in_binary[m_idx], self.meta_output_h1[m_idx],
                            self.meta_output_h2[m_idx], self.meta_output_h3[m_idx], self.meta_output_h4[m_idx],
-                           self.meta_output_h5[m_idx], self.noise_var_out[m_idx])
+                           self.meta_output_h5[m_idx], self.noise_diff_out[m_idx])
 
                 dataset_e0 = (self.data_input[e0_idx], self.structure_input[e0_idx], self.meta_input_h1[e0_idx],
                               self.meta_input_h2[e0_idx],
                               self.meta_input_h3[e0_idx], self.meta_input_h4[e0_idx], self.meta_input_h5[e0_idx],
-                              self.noise_var_in[e0_idx],
+                              self.noise_diff_in[e0_idx], self.fmot_in_binary[e0_idx],
                               self.meta_output_h1[e0_idx],
                               self.meta_output_h2[e0_idx], self.meta_output_h3[e0_idx], self.meta_output_h4[e0_idx],
                               self.meta_output_h5[e0_idx],
-                              self.noise_var_out[e0_idx])
+                              self.noise_diff_out[e0_idx])
 
                 dataset_e1 = (self.data_input[e1_idx], self.structure_input[e1_idx], self.meta_input_h1[e1_idx],
                               self.meta_input_h2[e1_idx],
                               self.meta_input_h3[e1_idx], self.meta_input_h4[e1_idx], self.meta_input_h5[e1_idx],
-                              self.noise_var_in[e1_idx],
+                              self.noise_diff_in[e1_idx], self.fmot_in_binary[e1_idx],
                               self.meta_output_h1[e1_idx],
                               self.meta_output_h2[e1_idx], self.meta_output_h3[e1_idx], self.meta_output_h4[e1_idx],
                               self.meta_output_h5[e1_idx],
-                              self.noise_var_out[e1_idx])
+                              self.noise_diff_out[e1_idx])
 
                 dataset_e2 = (self.data_input[e2_idx], self.structure_input[e2_idx], self.meta_input_h1[e2_idx],
                               self.meta_input_h2[e2_idx],
                               self.meta_input_h3[e2_idx], self.meta_input_h4[e2_idx], self.meta_input_h5[e2_idx],
-                              self.noise_var_in[e2_idx],
+                              self.noise_diff_in[e2_idx], self.fmot_in_binary[e2_idx],
                               self.meta_output_h1[e2_idx],
                               self.meta_output_h2[e2_idx], self.meta_output_h3[e2_idx], self.meta_output_h4[e2_idx],
                               self.meta_output_h5[e2_idx],
-                              self.noise_var_out[e2_idx])
+                              self.noise_diff_out[e2_idx])
 
                 # UnderConstruction! UnderConstruction! UnderConstruction!
                 #self.model.eval()
@@ -926,7 +943,7 @@ class teacher(object):
                     val_loss_recent_history = np.array(self.val_loss)[-10:-1]
                     mean_hist_losses = np.mean(loss_recent_history)
                     if loss_recent_history[-1] > loss_recent_history[-2] or loss_recent_history[-1] < \
-                            loss_recent_history[-2] * 0.9 or loss_recent_history[-1] > 5e-2:
+                            loss_recent_history[-2] * 0.9 or loss_recent_history[-1] > 1e-2:
                         reiterate_data = 1
                     else:
                         reiterate_counter = 0
@@ -1051,9 +1068,9 @@ class teacher(object):
                         f'R: {torch.mean(self.parameterReinforcer.next_rewards[-1]):.2f}, '
                         f'RLoss {RLoss.item():.5f} '
                         f'dL: {disc_loss.item():.3f}, '
-                        f'e0L: {e0loss.item():.2f}, '
-                        f'e1L: {e1loss.item():.2f}, '
-                        f'e2L: {e2loss.item():.2f}, '
+                        f'e0L: {e0loss.item():.3f}, '
+                        f'e1L: {e1loss.item():.3f}, '
+                        f'e2L: {e2loss.item():.3f}, '
                         f'tpf: {((self.fsim.grid_size_x * self.fsim.grid_size_y) / (self.model.in_scale ** 2)) * (t * 1e3 / print_every_nth_frame / self.batch_size):.2f} [ms]')
                     t = 0.
                     t_epoch = 0.
@@ -1073,8 +1090,12 @@ class teacher(object):
         plt.plot(self.val_loss)
         avg_train_loss = sum(self.train_loss) / len(self.train_loss)
         avg_val_loss = sum(self.val_loss) / len(self.val_loss)
-        plt.axhline(y=avg_train_loss, color='blue', linestyle='--', label=f'Train Avg: {avg_train_loss:.2f}')
-        plt.axhline(y=avg_val_loss, color='orange', linestyle='--', label=f'Val Avg: {avg_val_loss:.2f}')
+        poly_degree = 3
+        epochs = np.arange(len(self.train_loss))
+        train_poly_fit = np.poly1d(np.polyfit(epochs, self.train_loss, poly_degree))
+        val_poly_fit = np.poly1d(np.polyfit(epochs, self.val_loss, poly_degree))
+        plt.plot(epochs, train_poly_fit(epochs), color='blue', linestyle='--', label=f'Train: deg: {poly_degree} | Avg: {avg_train_loss:.3f}')
+        plt.plot(epochs, val_poly_fit(epochs), color='orange', linestyle='--', label=f'Val: deg: {poly_degree} | Avg: {avg_val_loss:.3f}')
 
         plt.xlabel('Epoch')
         plt.ylabel('Loss')
@@ -1085,6 +1106,7 @@ class teacher(object):
     def loss_calculation(self, idx, model_output, data_input, data_output, structure_input, structure_output, criterion,
                          norm='forward'):
         pred_r, pred_g, pred_b, pred_a, pred_s, deepS = model_output
+
         r_in = data_input[:, 0:self.model.in_scale, :][idx]
         g_in = data_input[:, self.model.in_scale:self.model.in_scale * 2, :][idx]
         b_in = data_input[:, self.model.in_scale * 2:self.model.in_scale * 3, :][idx]
@@ -1092,11 +1114,14 @@ class teacher(object):
         s_in = structure_input[idx]
 
         r_out = data_output[:, 0:self.model.in_scale, :][idx]
-        g_out = data_output[:, self.model.in_scale:self.model.in_scale * 2, :][idx]
-        b_out = data_output[:, self.model.in_scale * 2:self.model.in_scale * 3, :][idx]
-        a_out = data_output[:, self.model.in_scale * 3:self.model.in_scale * 4, :][idx]
-        s_out = structure_output[idx]
-
+        g_out = data_output[:, self.model.in_scale:self.model.in_scale * 2, :][idx]  #.view(self.batch_size, -1)
+        b_out = data_output[:, self.model.in_scale * 2:self.model.in_scale * 3, :][idx]  #.view(self.batch_size, -1)
+        a_out = data_output[:, self.model.in_scale * 3:self.model.in_scale * 4, :][idx]  #.view(self.batch_size, -1)
+        s_out = structure_output[idx]  #.view(self.batch_size, -1)
+        t = 1 - self.fmot_in[idx]
+        t_1 = self.fmot_in[idx]
+        t = tt = t.unsqueeze(1)
+        t_1 = tt_1 = t_1.unsqueeze(1)
         if pred_r.shape[0] != self.batch_size:
             n = int(pred_r.shape[0] / self.batch_size)
             r_in = r_in.unsqueeze(0).expand(n, -1, -1, -1).reshape(-1, r_in.shape[1], r_in.shape[2]).detach()
@@ -1110,45 +1135,49 @@ class teacher(object):
             b_out = b_out.unsqueeze(0).expand(n, -1, -1, -1).reshape(-1, b_out.shape[1], b_out.shape[2]).detach()
             a_out = a_out.unsqueeze(0).expand(n, -1, -1, -1).reshape(-1, a_out.shape[1], a_out.shape[2]).detach()
             s_out = s_out.unsqueeze(0).expand(n, -1, -1, -1).reshape(-1, s_out.shape[1], s_out.shape[2]).detach()
-
+            t = t.unsqueeze(0).expand(n, -1, -1, -1).reshape(-1, t.shape[1], t.shape[1]).detach()
+            t_1 = t_1.unsqueeze(0).expand(n, -1, -1, -1).reshape(-1, t_1.shape[1], t_1.shape[1]).detach()
         # Solution for learning of the dynamics in loss calculation
 
         # NOTE: Firs order difference
         diff_r_true = r_out - r_in
         diff_r_pred = pred_r - r_in
-        loss_diff_r = criterion(diff_r_pred, diff_r_true)
+        loss_diff_r = criterion(t * diff_r_pred + t_1 * diff_r_true, diff_r_true)
+
         diff_g_true = g_out - g_in
         diff_g_pred = pred_g - g_in
-        loss_diff_g = criterion(diff_g_pred, diff_g_true)
+        loss_diff_g = criterion(t * diff_g_pred + t_1 * diff_g_true, diff_g_true)
         diff_b_true = b_out - b_in
         diff_b_pred = pred_b - b_in
-        loss_diff_b = criterion(diff_b_pred, diff_b_true)
+        loss_diff_b = criterion(t * diff_b_pred + t_1 * diff_b_true, diff_b_true)
         diff_a_true = a_out - a_in
         diff_a_pred = pred_a - a_in
-        loss_diff_a = criterion(diff_a_pred, diff_a_true)
+        loss_diff_a = criterion(t * diff_a_pred + t_1 * diff_a_true, diff_a_true)
         diff_s_true = s_out - s_in
         diff_s_pred = pred_s - s_in
-        loss_diff_s = criterion(diff_s_pred, diff_s_true)
+        loss_diff_s = criterion(t * diff_s_pred + t_1 * diff_s_true, diff_s_true)
         diff_loss = torch.mean(loss_diff_r + loss_diff_g + loss_diff_b + loss_diff_a + loss_diff_s, dim=[1, 2])
+        # diff_loss = loss_diff_r + loss_diff_g + loss_diff_b + loss_diff_a + loss_diff_s
 
         # Note: Gradient loss
-        grad_r_true = torch.gradient(r_out, dim=[1, 2])[0]
+        grad_r_true = torch.gradient(r_out, dim=[1])[0]
         grad_r_pred = torch.gradient(pred_r)[0]
-        grad_r = criterion(grad_r_pred, grad_r_true)
-        grad_g_true = torch.gradient(g_out, dim=[1, 2])[0]
+        grad_r = criterion(t * grad_r_pred + t_1 * grad_r_true, grad_r_true)
+        grad_g_true = torch.gradient(g_out, dim=[1])[0]
         grad_g_pred = torch.gradient(pred_g)[0]
-        grad_g = criterion(grad_g_pred, grad_g_true)
-        grad_b_true = torch.gradient(b_out, dim=[1, 2])[0]
+        grad_g = criterion(t * grad_g_pred + t_1 * grad_g_true, grad_g_true)
+        grad_b_true = torch.gradient(b_out, dim=[1])[0]
         grad_b_pred = torch.gradient(pred_b)[0]
-        grad_b = criterion(grad_b_pred, grad_b_true)
-        grad_a_true = torch.gradient(a_out, dim=[1, 2])[0]
+        grad_b = criterion(t * grad_b_pred + t_1 * grad_b_true, grad_b_true)
+        grad_a_true = torch.gradient(a_out, dim=[1])[0]
         grad_a_pred = torch.gradient(pred_a)[0]
-        grad_a = criterion(grad_a_pred, grad_a_true)
-        grad_s_true = torch.gradient(s_out, dim=[1, 2])[0]
+        grad_a = criterion(t * grad_a_pred + t_1 * grad_a_true, grad_a_true)
+        grad_s_true = torch.gradient(s_out, dim=[1])[0]
         grad_s_pred = torch.gradient(pred_s)[0]
-        grad_s = criterion(grad_s_pred, grad_s_true)
+        grad_s = criterion(t * grad_s_pred + t_1 * grad_s_true, grad_s_true)
 
         grad_loss = torch.mean(grad_r + grad_g + grad_b + grad_a + grad_s, dim=[1, 2])
+        # grad_loss = grad_r + grad_g + grad_b + grad_a + grad_s
 
         # Note: Fourier loss
         fft_out_pred_r = torch.real(torch.fft.rfft2(pred_r, norm=norm))
@@ -1168,40 +1197,45 @@ class teacher(object):
         fft_in_true_a = torch.real(torch.fft.rfft2(a_in, norm=norm))
         fft_in_true_s = torch.real(torch.fft.rfft2(s_in, norm=norm))
 
-        fft_loss_r = criterion(fft_out_pred_r, fft_out_true_r)
-        fft_loss_g = criterion(fft_out_pred_g, fft_out_true_g)
-        fft_loss_b = criterion(fft_out_pred_b, fft_out_true_b)
-        fft_loss_a = criterion(fft_out_pred_a, fft_out_true_a)
-        fft_loss_s = criterion(fft_out_pred_s, fft_out_true_s)
+        fft_loss_r = criterion(t * fft_out_pred_r + t_1 * fft_out_true_r, fft_out_true_r)
+        fft_loss_g = criterion(t * fft_out_pred_g + t_1 * fft_out_true_r, fft_out_true_g)
+        fft_loss_b = criterion(t * fft_out_pred_b + t_1 * fft_out_true_r, fft_out_true_b)
+        fft_loss_a = criterion(t * fft_out_pred_a + t_1 * fft_out_true_r, fft_out_true_a)
+        fft_loss_s = criterion(t * fft_out_pred_s + t_1 * fft_out_true_r, fft_out_true_s)
         fft_loss = torch.mean(fft_loss_r + fft_loss_g + fft_loss_b + fft_loss_a + fft_loss_s, dim=[1, 2])
+        # fft_loss = fft_loss_r + fft_loss_g + fft_loss_b + fft_loss_a + fft_loss_s
 
         # Note: Fourier Gradient Loss
         diff_fft_true_r = fft_out_true_r - fft_in_true_r
         diff_fft_pred_r = fft_out_pred_r - fft_in_true_r
-        diff_fft_loss_r = criterion(diff_fft_pred_r, diff_fft_true_r)
+        diff_fft_loss_r = criterion(t * diff_fft_pred_r + t_1 * diff_fft_true_r, diff_fft_true_r)
         diff_fft_true_g = fft_out_true_g - fft_in_true_g
         diff_fft_pred_g = fft_out_pred_g - fft_in_true_g
-        diff_fft_loss_g = criterion(diff_fft_pred_g, diff_fft_true_g)
+        diff_fft_loss_g = criterion(t * diff_fft_pred_g + t_1 * diff_fft_true_r, diff_fft_true_g)
         diff_fft_true_b = fft_out_true_b - fft_in_true_b
         diff_fft_pred_b = fft_out_pred_b - fft_in_true_b
-        diff_fft_loss_b = criterion(diff_fft_pred_b, diff_fft_true_b)
+        diff_fft_loss_b = criterion(t * diff_fft_pred_b + t_1 * diff_fft_true_r, diff_fft_true_b)
         diff_fft_true_a = fft_out_true_a - fft_in_true_a
         diff_fft_pred_a = fft_out_pred_a - fft_in_true_a
-        diff_fft_loss_a = criterion(diff_fft_pred_a, diff_fft_true_a)
+        diff_fft_loss_a = criterion(t * diff_fft_pred_a + t_1 * diff_fft_true_r, diff_fft_true_a)
         diff_fft_true_s = fft_out_true_s - fft_in_true_s
         diff_fft_pred_s = fft_out_pred_s - fft_in_true_s
-        diff_fft_loss_s = criterion(diff_fft_pred_s, diff_fft_true_s)
+        diff_fft_loss_s = criterion(t * diff_fft_pred_s + t_1 * diff_fft_true_r, diff_fft_true_s)
         diff_fft_loss = torch.mean(
             diff_fft_loss_r + diff_fft_loss_g + diff_fft_loss_b + diff_fft_loss_a + diff_fft_loss_s, dim=[1, 2])
+        # diff_fft_loss = diff_fft_loss_r + diff_fft_loss_g + diff_fft_loss_b + diff_fft_loss_a + diff_fft_loss_s
 
         # Note : Exact value loss
-        loss_r = criterion(pred_r, r_out)
-        loss_g = criterion(pred_g, g_out)
-        loss_b = criterion(pred_b, b_out)
-        loss_alpha = criterion(pred_a, a_out)
-        loss_s = criterion(pred_s, s_out)
+        loss_r = criterion(t * pred_r + t_1 * r_out, r_out)
+        loss_g = criterion(t * pred_g + t_1 * g_out, g_out)
+        loss_b = criterion(t * pred_b + t_1 * b_out, b_out)
+        loss_alpha = criterion(t * pred_a + t_1 * a_out, a_out)
+        loss_s = criterion(t * pred_s + t_1 * s_out, s_out)
         value_loss = torch.mean(loss_r + loss_g + loss_b + loss_alpha + loss_s, dim=[1, 2])
+        # value_loss = loss_r + loss_g + loss_b + loss_alpha + loss_s
 
+        t = t.squeeze(1)
+        t_1 = t_1.squeeze(1)
         # Solution for learning and maintaining of the proper color and other element space
         bandwidth = torch.tensor(0.1).to(self.device)  # Note: Higher value less noise (gaussian smoothing)
         bins = 255
@@ -1211,7 +1245,7 @@ class teacher(object):
         bins_pred = torch.linspace(pred_r.min().tolist(), pred_r.max().tolist(), bins).to(self.device)
         r_true_hist = kornia.enhance.histogram(r_out, bins=bins_true, bandwidth=bandwidth)
         r_pred_hist = kornia.enhance.histogram(pred_r, bins=bins_pred, bandwidth=bandwidth)
-        r_hist_loss = criterion(r_pred_hist, r_true_hist)
+        r_hist_loss = criterion(t * r_pred_hist + t_1 * r_true_hist, r_true_hist)
 
         g_out = torch.flatten(g_out, start_dim=1)
         pred_g = torch.flatten(pred_g, start_dim=1)
@@ -1219,7 +1253,7 @@ class teacher(object):
         bins_pred = torch.linspace(pred_g.min().tolist(), pred_g.max().tolist(), bins).to(self.device)
         g_true_hist = kornia.enhance.histogram(g_out, bins=bins_true, bandwidth=bandwidth)
         g_pred_hist = kornia.enhance.histogram(pred_g, bins=bins_pred, bandwidth=bandwidth)
-        g_hist_loss = criterion(g_pred_hist, g_true_hist)
+        g_hist_loss = criterion(t * g_pred_hist + t_1 * g_true_hist, g_true_hist)
 
         b_out = torch.flatten(b_out, start_dim=1)
         pred_b = torch.flatten(pred_b, start_dim=1)
@@ -1227,7 +1261,7 @@ class teacher(object):
         bins_pred = torch.linspace(pred_b.min().tolist(), pred_b.max().tolist(), bins).to(self.device)
         b_true_hist = kornia.enhance.histogram(b_out, bins=bins_true, bandwidth=bandwidth)
         b_pred_hist = kornia.enhance.histogram(pred_b, bins=bins_pred, bandwidth=bandwidth)
-        b_hist_loss = criterion(b_pred_hist, b_true_hist)
+        b_hist_loss = criterion(t * b_pred_hist + t_1 * b_true_hist, b_true_hist)
 
         a_out = torch.flatten(a_out, start_dim=1)
         pred_a = torch.flatten(pred_a, start_dim=1)
@@ -1235,7 +1269,7 @@ class teacher(object):
         bins_pred = torch.linspace(pred_a.min().tolist(), pred_a.max().tolist(), bins).to(self.device)
         a_true_hist = kornia.enhance.histogram(a_out, bins=bins_true, bandwidth=bandwidth)
         a_pred_hist = kornia.enhance.histogram(pred_a, bins=bins_pred, bandwidth=bandwidth)
-        a_hist_loss = criterion(a_pred_hist, a_true_hist)
+        a_hist_loss = criterion(t * a_pred_hist + t_1 * a_true_hist, a_true_hist)
 
         s_out = torch.flatten(s_out, start_dim=1)
         pred_s = torch.flatten(pred_s, start_dim=1)
@@ -1243,10 +1277,9 @@ class teacher(object):
         bins_pred = torch.linspace(pred_s.min().tolist(), pred_s.max().tolist(), bins).to(self.device)
         s_true_hist = kornia.enhance.histogram(s_out, bins=bins_true, bandwidth=bandwidth)
         s_pred_hist = kornia.enhance.histogram(pred_s, bins=bins_pred, bandwidth=bandwidth)
-        s_hist_loss = criterion(s_pred_hist, s_true_hist)
+        s_hist_loss = criterion(t * s_pred_hist + t_1 * s_true_hist, s_true_hist)
         hist_loss = torch.mean(r_hist_loss + b_hist_loss + g_hist_loss + a_hist_loss + s_hist_loss, dim=1)
-        hist_loss = hist_loss
-
+        # hist_loss = r_hist_loss + b_hist_loss + g_hist_loss + a_hist_loss + s_hist_loss
 
         # Note: Deep Supervision Loss
         x, x_mod, rgbas_prod, rres, gres, bres, ares, sres = deepS
@@ -1260,11 +1293,16 @@ class teacher(object):
         ares_target = torch.randn_like(ares) * dpSWeight
         sres_target = torch.randn_like(sres) * dpSWeight
         loss_x, loss_x_mod, loss_rgbas_prod, loss_rres, loss_gres, loss_bres, loss_ares, loss_sres = (
-            criterion(x, x_target), criterion(x_mod, x_mod_target), criterion(rgbas_prod, rgbas_prod_target),
-            criterion(rres, rres_target), criterion(gres, gres_target), criterion(bres, bres_target),
-            criterion(ares, ares_target), criterion(sres, sres_target))
+            f.mse_loss(x, x_target), f.mse_loss(x_mod, x_mod_target),
+            f.mse_loss(rgbas_prod, rgbas_prod_target),
+            f.mse_loss(rres, rres_target),
+            f.mse_loss(gres, gres_target),
+            f.mse_loss(bres, bres_target),
+            f.mse_loss(ares, ares_target),
+            f.mse_loss(sres, sres_target))
         deepSLoss = torch.mean(loss_x) + torch.mean(loss_x_mod) + torch.mean(loss_rgbas_prod) + torch.mean(
             loss_rres) + torch.mean(loss_gres) + torch.mean(loss_bres) + torch.mean(loss_ares) + torch.mean(loss_sres)
+        # deepSLoss = loss_x + loss_x_mod + loss_rgbas_prod + loss_rres + loss_gres + loss_bres + loss_ares + loss_sres
 
         # # Note: Rank Representation Loss - Singular Value decomposition (SVD) # Question: How it will behave in the RL reward learning loop?
         res = torch.cat([rres, gres, bres, ares, sres], dim=1)
@@ -1278,17 +1316,14 @@ class teacher(object):
         selected_preds_indices = indices[:k]
         sampled_preds = preds[selected_preds_indices]
         # U, S, V = torch.linalg.svd(res, full_matrices=False) # Note:  Full matrix svd - slow but better performance (x10 better)
-        Ures, Sres, Vres = torch.svd_lowrank(sampled_res, q=k, niter=2,
-                                    M=None)  # Note: Way faster but less efficient, q is overestimation of rank and niter is subspace iteration, M is the broadcast size
-        Upreds, Spreds, Vpreds = torch.svd_lowrank(sampled_preds, q=k, niter=2,
-                                             M=None)
+        Ures, Sres, Vres = torch.svd_lowrank(sampled_res, q=k, niter=2,M=None)  # Note: Way faster but less efficient, q is overestimation of rank and niter is subspace iteration, M is the broadcast size
+        Upreds, Spreds, Vpreds = torch.svd_lowrank(sampled_preds, q=k, niter=2,M=None)
         res_rank_t = torch.dist(sampled_res, Ures @ torch.diag(Sres) @ Vres.T)
         preds_rank_t = torch.dist(sampled_preds, Upreds @ torch.diag(Spreds) @ Vpreds.T)
 
         rank_loss = (1 - 3e4 * (res_rank_t / sampled_res.shape[0])) * rank_weight  # NOTE: for high rank extraction
         rank_loss += (1 - 3e4 * (preds_rank_t / sampled_preds.shape[0])) * rank_weight
         #rank_loss = (3e4 * (res_low_rank_t / sampled_res.shape[0]))*low_rank_weight # NOTE: for low rank extraction
-
 
         # Note: SSIM Loss
         l = self.batch_size
@@ -1308,7 +1343,7 @@ class teacher(object):
         rgbas_pred = torch.stack([r_pred_img, g_pred_img, b_pred_img, a_pred_img, s_pred_img], dim=-1)
         rgbas_out = torch.permute(rgbas_out, (0, 3, 1, 2))
         rgbas_pred = torch.permute(rgbas_pred, (0, 3, 1, 2))
-        ssim_val = 1 - self.ssim_loss(rgbas_out, rgbas_pred).mean()
+        ssim_val = 1 - self.ssim_loss(tt.unsqueeze(2) * rgbas_out + tt_1.unsqueeze(2) * rgbas_pred, rgbas_pred).mean()
 
         A, B, C, D, E, F, G, H, I = 1., 1., 1e1, 1e2, 1e2, 1e3, 1., 1., 2.  # Note: loss weights
         loss_weights = (A, B, C, D, E, F, G, H, I)
@@ -1337,10 +1372,11 @@ class teacher(object):
 
         dataset = (
             self.data_input[idx], self.structure_input[idx], self.meta_input_h1[idx], self.meta_input_h2[idx],
-            self.meta_input_h3[idx], self.meta_input_h4[idx], self.meta_input_h5[idx], self.noise_var_in[idx],
+            self.meta_input_h3[idx], self.meta_input_h4[idx], self.meta_input_h5[idx], self.noise_diff_in[idx],
+            self.fmot_in_binary[idx],
             self.meta_output_h1[idx],
             self.meta_output_h2[idx], self.meta_output_h3[idx], self.meta_output_h4[idx], self.meta_output_h5[idx],
-            self.noise_var_out[idx])
+            self.noise_diff_out[idx])
 
         pred_r, pred_g, pred_b, pred_a, pred_s, deepS = model_output
         r_out = data_output[:, 0:self.model.in_scale, :][idx]
