@@ -913,10 +913,10 @@ class teacher(object):
                     e1loss.backward()
                     e2loss.backward()
                     max_norm = 1.
-                    nn_utils.clip_grad_norm_(self.model.parameters(), max_norm)
-                    nn_utils.clip_grad_norm_(self.expert_0.parameters(), max_norm)
-                    nn_utils.clip_grad_norm_(self.expert_1.parameters(), max_norm)
-                    nn_utils.clip_grad_norm_(self.expert_2.parameters(), max_norm)
+                    # nn_utils.clip_grad_norm_(self.model.parameters(), max_norm)
+                    # nn_utils.clip_grad_norm_(self.expert_0.parameters(), max_norm)
+                    # nn_utils.clip_grad_norm_(self.expert_1.parameters(), max_norm)
+                    # nn_utils.clip_grad_norm_(self.expert_2.parameters(), max_norm)
                     optimizer.step()
                 # if (epoch + 1) % 5 == 0:
 
@@ -963,7 +963,7 @@ class teacher(object):
                     # NOTE: lowering lr for  better performance and reset lr within conditions
                     if grad_counter == 3 or reiterate_data == 0:
                         for param_group in optimizer.param_groups:
-                            param_group['lr'] = param_group['lr'] * 0.8
+                            param_group['lr'] = param_group['lr'] * 0.95
                             if param_group['lr'] < 1e-5 or reiterate_data == 0:
                                 param_group['lr'] = 1e-3
                                 reiterate_counter = 0
@@ -974,10 +974,6 @@ class teacher(object):
                         disc_optimizer = torch.optim.Adam(self.discriminator.parameters(), lr=5e-4, betas=(0.9, 0.999),
                                                           eps=1e-08, weight_decay=1e-6, amsgrad=False)
 
-                        # noise_amplitude = noise_amplitude*0.5
-                        # if noise_amplitude < 1e-3:
-                        #     # print('noise amplitude')
-                        #     noise_amplitude = 0.
                         grad_counter = 0
                     # NOTE: Averaging models with best loss results within all models
 
