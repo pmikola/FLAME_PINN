@@ -745,6 +745,7 @@ class teacher(object):
 
             rgb_pred_anim = ax1.imshow(prediction.astype(np.uint8) * 255, alpha=a_v_pred)
             rgb_true_anim = ax2.imshow(ground_truth.astype(np.uint8) * 255, alpha=a_v_true)
+
             rms = np.mean(np.sqrt(abs(prediction ** 2 - ground_truth ** 2)), axis=2)
             rms_anim = ax3.imshow(rms, cmap='RdBu', vmin=0, vmax=1)
 
@@ -962,16 +963,16 @@ class teacher(object):
                     # NOTE: lowering lr for  better performance and reset lr within conditions
                     if grad_counter == 3 or reiterate_data == 0:
                         for param_group in optimizer.param_groups:
-                            param_group['lr'] = param_group['lr'] * 0.98
+                            param_group['lr'] = param_group['lr'] * 0.8
                             if param_group['lr'] < 1e-5 or reiterate_data == 0:
-                                param_group['lr'] = 5e-4
+                                param_group['lr'] = 1e-3
                                 reiterate_counter = 0
                                 reiterate_data = 0
                                 print('optimizer -> lr back to starting point')
                         self.discriminator.weight_reset()
                         self.discriminator.init_weights()
                         disc_optimizer = torch.optim.Adam(self.discriminator.parameters(), lr=5e-4, betas=(0.9, 0.999),
-                                                          eps=1e-08, weight_decay=1e-6, amsgrad=True)
+                                                          eps=1e-08, weight_decay=1e-6, amsgrad=False)
 
                         # noise_amplitude = noise_amplitude*0.5
                         # if noise_amplitude < 1e-3:
@@ -1050,7 +1051,7 @@ class teacher(object):
                                 self.discriminator.init_weights()
                                 disc_optimizer = torch.optim.Adam(self.discriminator.parameters(), lr=5e-4,
                                                                   betas=(0.9, 0.999), eps=1e-08,
-                                                                  weight_decay=1e-6, amsgrad=True)
+                                                                  weight_decay=1e-6, amsgrad=False)
                                 print('model_avg -> weighted average -> main')
                                 best_models = []
                                 best_losses = []
@@ -1085,17 +1086,18 @@ class teacher(object):
     def dreaming_phase(self):
         pass
 
-    def visualize_lerning(self):
+    def visualize_lerning(self, poly_degree=5):
         plt.plot(self.train_loss)
         plt.plot(self.val_loss)
         avg_train_loss = sum(self.train_loss) / len(self.train_loss)
         avg_val_loss = sum(self.val_loss) / len(self.val_loss)
-        poly_degree = 3
         epochs = np.arange(len(self.train_loss))
         train_poly_fit = np.poly1d(np.polyfit(epochs, self.train_loss, poly_degree))
         val_poly_fit = np.poly1d(np.polyfit(epochs, self.val_loss, poly_degree))
-        plt.plot(epochs, train_poly_fit(epochs), color='blue', linestyle='--', label=f'Train: deg: {poly_degree} | Avg: {avg_train_loss:.3f}')
-        plt.plot(epochs, val_poly_fit(epochs), color='orange', linestyle='--', label=f'Val: deg: {poly_degree} | Avg: {avg_val_loss:.3f}')
+        plt.plot(epochs, train_poly_fit(epochs), color='blue', linestyle='--',
+                 label=f'Train: deg: {poly_degree} | Avg: {avg_train_loss:.3f}')
+        plt.plot(epochs, val_poly_fit(epochs), color='orange', linestyle='--',
+                 label=f'Val: deg: {poly_degree} | Avg: {avg_val_loss:.3f}')
 
         plt.xlabel('Epoch')
         plt.ylabel('Loss')
@@ -1156,8 +1158,8 @@ class teacher(object):
         diff_s_true = s_out - s_in
         diff_s_pred = pred_s - s_in
         loss_diff_s = criterion(t * diff_s_pred + t_1 * diff_s_true, diff_s_true)
-        diff_loss = torch.mean(loss_diff_r + loss_diff_g + loss_diff_b + loss_diff_a + loss_diff_s, dim=[1, 2])
-        # diff_loss = loss_diff_r + loss_diff_g + loss_diff_b + loss_diff_a + loss_diff_s
+        # diff_loss = torch.mean(loss_diff_r + loss_diff_g + loss_diff_b + loss_diff_a + loss_diff_s, dim=[1, 2])
+        diff_loss = loss_diff_r + loss_diff_g + loss_diff_b + loss_diff_a + loss_diff_s
 
         # Note: Gradient loss
         grad_r_true = torch.gradient(r_out, dim=[1])[0]
@@ -1176,8 +1178,8 @@ class teacher(object):
         grad_s_pred = torch.gradient(pred_s)[0]
         grad_s = criterion(t * grad_s_pred + t_1 * grad_s_true, grad_s_true)
 
-        grad_loss = torch.mean(grad_r + grad_g + grad_b + grad_a + grad_s, dim=[1, 2])
-        # grad_loss = grad_r + grad_g + grad_b + grad_a + grad_s
+        # grad_loss = torch.mean(grad_r + grad_g + grad_b + grad_a + grad_s, dim=[1, 2])
+        grad_loss = grad_r + grad_g + grad_b + grad_a + grad_s
 
         # Note: Fourier loss
         fft_out_pred_r = torch.real(torch.fft.rfft2(pred_r, norm=norm))
@@ -1202,8 +1204,8 @@ class teacher(object):
         fft_loss_b = criterion(t * fft_out_pred_b + t_1 * fft_out_true_r, fft_out_true_b)
         fft_loss_a = criterion(t * fft_out_pred_a + t_1 * fft_out_true_r, fft_out_true_a)
         fft_loss_s = criterion(t * fft_out_pred_s + t_1 * fft_out_true_r, fft_out_true_s)
-        fft_loss = torch.mean(fft_loss_r + fft_loss_g + fft_loss_b + fft_loss_a + fft_loss_s, dim=[1, 2])
-        # fft_loss = fft_loss_r + fft_loss_g + fft_loss_b + fft_loss_a + fft_loss_s
+        # fft_loss = torch.mean(fft_loss_r + fft_loss_g + fft_loss_b + fft_loss_a + fft_loss_s, dim=[1, 2])
+        fft_loss = fft_loss_r + fft_loss_g + fft_loss_b + fft_loss_a + fft_loss_s
 
         # Note: Fourier Gradient Loss
         diff_fft_true_r = fft_out_true_r - fft_in_true_r
@@ -1221,9 +1223,9 @@ class teacher(object):
         diff_fft_true_s = fft_out_true_s - fft_in_true_s
         diff_fft_pred_s = fft_out_pred_s - fft_in_true_s
         diff_fft_loss_s = criterion(t * diff_fft_pred_s + t_1 * diff_fft_true_r, diff_fft_true_s)
-        diff_fft_loss = torch.mean(
-            diff_fft_loss_r + diff_fft_loss_g + diff_fft_loss_b + diff_fft_loss_a + diff_fft_loss_s, dim=[1, 2])
-        # diff_fft_loss = diff_fft_loss_r + diff_fft_loss_g + diff_fft_loss_b + diff_fft_loss_a + diff_fft_loss_s
+        # diff_fft_loss = torch.mean(
+        #     diff_fft_loss_r + diff_fft_loss_g + diff_fft_loss_b + diff_fft_loss_a + diff_fft_loss_s, dim=[1, 2])
+        diff_fft_loss = diff_fft_loss_r + diff_fft_loss_g + diff_fft_loss_b + diff_fft_loss_a + diff_fft_loss_s
 
         # Note : Exact value loss
         loss_r = criterion(t * pred_r + t_1 * r_out, r_out)
@@ -1231,8 +1233,8 @@ class teacher(object):
         loss_b = criterion(t * pred_b + t_1 * b_out, b_out)
         loss_alpha = criterion(t * pred_a + t_1 * a_out, a_out)
         loss_s = criterion(t * pred_s + t_1 * s_out, s_out)
-        value_loss = torch.mean(loss_r + loss_g + loss_b + loss_alpha + loss_s, dim=[1, 2])
-        # value_loss = loss_r + loss_g + loss_b + loss_alpha + loss_s
+        # value_loss = torch.mean(loss_r + loss_g + loss_b + loss_alpha + loss_s, dim=[1, 2])
+        value_loss = loss_r + loss_g + loss_b + loss_alpha + loss_s
 
         t = t.squeeze(1)
         t_1 = t_1.squeeze(1)
@@ -1278,8 +1280,8 @@ class teacher(object):
         s_true_hist = kornia.enhance.histogram(s_out, bins=bins_true, bandwidth=bandwidth)
         s_pred_hist = kornia.enhance.histogram(pred_s, bins=bins_pred, bandwidth=bandwidth)
         s_hist_loss = criterion(t * s_pred_hist + t_1 * s_true_hist, s_true_hist)
-        hist_loss = torch.mean(r_hist_loss + b_hist_loss + g_hist_loss + a_hist_loss + s_hist_loss, dim=1)
-        # hist_loss = r_hist_loss + b_hist_loss + g_hist_loss + a_hist_loss + s_hist_loss
+        # hist_loss = torch.mean(r_hist_loss + b_hist_loss + g_hist_loss + a_hist_loss + s_hist_loss, dim=1)
+        hist_loss = r_hist_loss + b_hist_loss + g_hist_loss + a_hist_loss + s_hist_loss
 
         # Note: Deep Supervision Loss
         x, x_mod, rgbas_prod, rres, gres, bres, ares, sres = deepS
@@ -1316,13 +1318,14 @@ class teacher(object):
         selected_preds_indices = indices[:k]
         sampled_preds = preds[selected_preds_indices]
         # U, S, V = torch.linalg.svd(res, full_matrices=False) # Note:  Full matrix svd - slow but better performance (x10 better)
-        Ures, Sres, Vres = torch.svd_lowrank(sampled_res, q=k, niter=2,M=None)  # Note: Way faster but less efficient, q is overestimation of rank and niter is subspace iteration, M is the broadcast size
-        Upreds, Spreds, Vpreds = torch.svd_lowrank(sampled_preds, q=k, niter=2,M=None)
+        Ures, Sres, Vres = torch.svd_lowrank(sampled_res, q=k, niter=2,
+                                             M=None)  # Note: Way faster but less efficient, q is overestimation of rank and niter is subspace iteration, M is the broadcast size
+        Upreds, Spreds, Vpreds = torch.svd_lowrank(sampled_preds, q=k, niter=2, M=None)
         res_rank_t = torch.dist(sampled_res, Ures @ torch.diag(Sres) @ Vres.T)
         preds_rank_t = torch.dist(sampled_preds, Upreds @ torch.diag(Spreds) @ Vpreds.T)
 
-        rank_loss = (1 - 3e4 * (res_rank_t / sampled_res.shape[0])) * rank_weight  # NOTE: for high rank extraction
-        rank_loss += (1 - 3e4 * (preds_rank_t / sampled_preds.shape[0])) * rank_weight
+        rank_loss = (2 - 3e4 * (res_rank_t / sampled_res.shape[0])) * rank_weight  # NOTE: for high rank extraction
+        rank_loss += (2 - 3e4 * (preds_rank_t / sampled_preds.shape[0])) * rank_weight
         #rank_loss = (3e4 * (res_low_rank_t / sampled_res.shape[0]))*low_rank_weight # NOTE: for low rank extraction
 
         # Note: SSIM Loss
@@ -1345,17 +1348,34 @@ class teacher(object):
         rgbas_pred = torch.permute(rgbas_pred, (0, 3, 1, 2))
         ssim_val = 1 - self.ssim_loss(tt.unsqueeze(2) * rgbas_out + tt_1.unsqueeze(2) * rgbas_pred, rgbas_pred).mean()
 
-        A, B, C, D, E, F, G, H, I = 1., 1., 1e1, 1e2, 1e2, 1e3, 1., 1., 2.  # Note: loss weights
+        #A, B, C, D, E, F, G, H, I = 1., 1., 1e1, 1e2, 1e2, 1e3, 0.15, 1., 2.  # Note: loss weights for MSE
+        A, B, C, D, E, F, G, H, I = 0.2, 0.2, 5e-1, 2e2, 2e2, 5e1, 1e-20, 1., 5.  # Note: loss weights for Sinkhorn
+
         loss_weights = (A, B, C, D, E, F, G, H, I)
+        J = 1/len(loss_weights)
         LOSS = (value_loss, diff_loss, grad_loss, fft_loss, diff_fft_loss, hist_loss, deepSLoss, rank_loss,
                 ssim_val)  # Attention: Aggregate all losses here
 
-        # print(A * value_loss.mean().item(), "<-value_loss:", B * diff_loss.mean().item(),
-        #       "<-diff_loss:", C * grad_loss.mean().item(), "<-grad_loss:", D * fft_loss.mean().item(), "<-fft_loss:",
-        #       E * diff_fft_loss.mean().item(), "<-diff_fft_loss:", F * hist_loss.mean().item(), "<-hist_loss:",
-        #       G * deepSLoss.mean().item(), "<-deepSLoss:", H * rank_loss.mean().item(), "<-rank_loss:",
+        weighted_losses = [loss * weight for loss, weight in zip(LOSS, loss_weights)]
+        num_losses = len(weighted_losses)
+        mse_matrix = torch.zeros((value_loss.shape[0], num_losses, num_losses)).to(self.device)
+        for i in range(num_losses):
+            for j in range(num_losses):
+                mse = (weighted_losses[i] - weighted_losses[j]) ** 2
+                mse_matrix[:, i, j] = mse
+
+        std_between_losses = mse_matrix.std(dim=(1, 2))
+        mean_between_losses = mse_matrix.mean(dim=(1, 2))
+        dispersion_loss = std_between_losses / mean_between_losses
+        LOSS = (value_loss, diff_loss, grad_loss, fft_loss, diff_fft_loss, hist_loss, deepSLoss, rank_loss,
+                ssim_val, dispersion_loss)
+        loss_weights = (A, B, C, D, E, F, G, H, I, J)
+        # print(A * value_loss.mean().item(), "<-value_loss: A", B * diff_loss.mean().item(),
+        #       "<-diff_loss: B", C * grad_loss.mean().item(), "<-grad_loss: C", D * fft_loss.mean().item(), "<-fft_loss: D",
+        #       E * diff_fft_loss.mean().item(), "<-diff_fft_loss: E", F * hist_loss.mean().item(), "<-hist_loss: F",
+        #       G * deepSLoss.mean().item(), "<-deepSLoss: G", H * rank_loss.mean().item(), "<-rank_loss: H",
         #       I * ssim_val.mean().item(),
-        #       "<-ssim_val:")
+        #       "<-ssim_val: I",dispersion_loss.mean().item() * J ,"<-dispersion_loss: J")
 
         final_loss, i = 0., 0
         for losses in LOSS:

@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch.optim as optim
 from matplotlib import pyplot as plt
 import torch.nn.functional as f
-
+from AdaNorm import AdaNorm
 
 class Metamorph(nn.Module):
     # Note : Buzzword - Metamorph will be better name here probably :) or HIPNO
@@ -68,7 +68,7 @@ class Metamorph(nn.Module):
         self.diffiusion_context = 32 * 2
         self.flow_matching_context = 32
         # Definition of layer 0,1,2 for lvl 4 in hierarchy - theta - diffusion noise context
-        self.l0h4 = nn.Linear(in_features=self.diffiusion_context+self.flow_matching_context,
+        self.l0h4 = nn.Linear(in_features=self.diffiusion_context + self.flow_matching_context,
                               out_features=self.shifterCoefficients * self.shifterCoefficients ** 2)
         self.l1h4 = nn.Linear(in_features=self.shifterCoefficients * self.shifterCoefficients ** 2,
                               out_features=self.shifterCoefficients * self.shifterCoefficients ** 3)
@@ -122,6 +122,11 @@ class Metamorph(nn.Module):
         self.l0h0sx = nn.Linear(in_features=int(self.in_scale ** 2), out_features=int(self.in_scale ** 2))
         self.l0h0sy = nn.Linear(in_features=int(self.in_scale ** 2), out_features=int(self.in_scale ** 2))
 
+        # Definition AdaLayers
+        self.AdaNorm_x = AdaNorm(dim=int(self.in_scale ** 2) * 5)
+        self.AdaNorm_rgbas_prod = AdaNorm(dim=int(self.in_scale ** 2) * 5)
+        self.AdaNorm_x_mod = AdaNorm(dim=int(self.in_scale ** 2) * 5)
+
         # Definition of input layer 1,2,3 for lvl 0 in hierarchy
         self.l1h0 = nn.Linear(in_features=int(self.in_scale ** 2) * 5,
                               out_features=int(self.in_scale ** 2) * 5)
@@ -136,41 +141,41 @@ class Metamorph(nn.Module):
         self.l4_h0_a = nn.Linear(in_features=int(self.in_scale ** 2) * 5, out_features=int(self.flat_size / 2))
         self.l4_h0_s = nn.Linear(in_features=int(self.in_scale ** 2) * 5, out_features=int(self.flat_size / 2))
 
-        self.l5_h0_r = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l5_h0_g = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l5_h0_b = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l5_h0_a = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l5_h0_s = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
+        self.l5_h0_r = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 3))
+        self.l5_h0_g = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 3))
+        self.l5_h0_b = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 3))
+        self.l5_h0_a = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 3))
+        self.l5_h0_s = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 3))
 
-        self.l6_h0_r = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l6_h0_g = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l6_h0_b = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l6_h0_a = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l6_h0_s = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
+        self.l6_h0_r = nn.Linear(in_features=int(self.flat_size / 3), out_features=int(self.flat_size / 3))
+        self.l6_h0_g = nn.Linear(in_features=int(self.flat_size / 3), out_features=int(self.flat_size / 3))
+        self.l6_h0_b = nn.Linear(in_features=int(self.flat_size / 3), out_features=int(self.flat_size / 3))
+        self.l6_h0_a = nn.Linear(in_features=int(self.flat_size / 3), out_features=int(self.flat_size / 3))
+        self.l6_h0_s = nn.Linear(in_features=int(self.flat_size / 3), out_features=int(self.flat_size / 3))
 
-        self.l7_h0_r = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l7_h0_g = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l7_h0_b = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l7_h0_a = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l7_h0_s = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
+        self.l7_h0_r = nn.Linear(in_features=int(self.flat_size / 3), out_features=int(self.flat_size / 2))
+        self.l7_h0_g = nn.Linear(in_features=int(self.flat_size / 3), out_features=int(self.flat_size / 2))
+        self.l7_h0_b = nn.Linear(in_features=int(self.flat_size / 3), out_features=int(self.flat_size / 2))
+        self.l7_h0_a = nn.Linear(in_features=int(self.flat_size / 3), out_features=int(self.flat_size / 2))
+        self.l7_h0_s = nn.Linear(in_features=int(self.flat_size / 3), out_features=int(self.flat_size / 2))
 
-        self.l8_h0_r = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l8_h0_g = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l8_h0_b = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l8_h0_a = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l8_h0_s = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
+        self.l8_h0_r = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 4))
+        self.l8_h0_g = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 4))
+        self.l8_h0_b = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 4))
+        self.l8_h0_a = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 4))
+        self.l8_h0_s = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 4))
 
-        self.l9_h0_r = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l9_h0_g = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l9_h0_b = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l9_h0_a = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l9_h0_s = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
+        self.l9_h0_r = nn.Linear(in_features=int(self.flat_size / 4), out_features=int(self.flat_size / 3))
+        self.l9_h0_g = nn.Linear(in_features=int(self.flat_size / 4), out_features=int(self.flat_size / 3))
+        self.l9_h0_b = nn.Linear(in_features=int(self.flat_size / 4), out_features=int(self.flat_size / 3))
+        self.l9_h0_a = nn.Linear(in_features=int(self.flat_size / 4), out_features=int(self.flat_size / 3))
+        self.l9_h0_s = nn.Linear(in_features=int(self.flat_size / 4), out_features=int(self.flat_size / 3))
 
-        self.l10_h0_r = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l10_h0_g = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l10_h0_b = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l10_h0_a = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
-        self.l10_h0_s = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.flat_size / 2))
+        self.l10_h0_r = nn.Linear(in_features=int(self.flat_size / 3), out_features=int(self.flat_size / 2))
+        self.l10_h0_g = nn.Linear(in_features=int(self.flat_size / 3), out_features=int(self.flat_size / 2))
+        self.l10_h0_b = nn.Linear(in_features=int(self.flat_size / 3), out_features=int(self.flat_size / 2))
+        self.l10_h0_a = nn.Linear(in_features=int(self.flat_size / 3), out_features=int(self.flat_size / 2))
+        self.l10_h0_s = nn.Linear(in_features=int(self.flat_size / 3), out_features=int(self.flat_size / 2))
 
         self.l11_h0_r = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.in_scale ** 2), bias=True)
         self.l11_h0_g = nn.Linear(in_features=int(self.flat_size / 2), out_features=int(self.in_scale ** 2), bias=True)
@@ -248,7 +253,6 @@ class Metamorph(nn.Module):
         x_alpha_l2 = self.activate(self.l2h01(alpha_l2))
 
         # Note: Factorisation for dense layers
-
         rr = data_input[:, 0:self.in_scale, :]
         gg = data_input[:, self.in_scale:self.in_scale * 2, :]
         bb = data_input[:, self.in_scale * 2:self.in_scale * 3, :]
@@ -291,36 +295,62 @@ class Metamorph(nn.Module):
         ss = s_along_x * s_along_y
         rgbas_prod = torch.cat(
             [rr.unsqueeze(-1), gg.unsqueeze(-1), bb.unsqueeze(-1), aa.unsqueeze(-1), ss.unsqueeze(-1)], dim=3)
-        space_time = self.WalshHadamardSpaceTimeFeature(meta_central_points, meta_step, noise_var)
-        x0 = self.SpaceTimeFFTFeature(stff_in, self.weights_data_0, self.weights_data_fft_0, self.space_time_0,
-                                      space_time)
-        x1 = self.SpaceTimeFFTFeature(rgbas_prod, self.weights_data_1, self.weights_data_fft_1, self.space_time_1,
-                                      space_time)
-        x0 = self.SpaceTimeFFTFeature(x0, self.weights_data_2, self.weights_data_fft_2, self.space_time_2, space_time)
-        x1 = self.SpaceTimeFFTFeature(x1, self.weights_data_3, self.weights_data_fft_3, self.space_time_3, space_time)
-        x0 = self.SpaceTimeFFTFeature(x0, self.weights_data_4, self.weights_data_fft_4, self.space_time_4, space_time)
-        x1 = self.SpaceTimeFFTFeature(x1, self.weights_data_5, self.weights_data_fft_5, self.space_time_5, space_time)
-        x0 = self.SpaceTimeFFTFeature(x0, self.weights_data_6, self.weights_data_fft_6, self.space_time_6, space_time)
-        x1 = self.SpaceTimeFFTFeature(x1, self.weights_data_7, self.weights_data_fft_7, self.space_time_7, space_time)
+        space_time_noise = self.WalshHadamardSpaceTimeFeature(meta_central_points, meta_step, noise_var)
+        x0, _ = self.SpaceTimeFFTFeature(stff_in, space_time_noise, self.weights_data_0,
+                                         self.weights_data_fft_0, self.space_time_0)
+        x1, _ = self.SpaceTimeFFTFeature(rgbas_prod, space_time_noise, self.weights_data_1,
+                                         self.weights_data_fft_1, self.space_time_1)
+        x0, _ = self.SpaceTimeFFTFeature(x0, space_time_noise, self.weights_data_2,
+                                         self.weights_data_fft_2, self.space_time_2)
+        x1, _ = self.SpaceTimeFFTFeature(x1, space_time_noise, self.weights_data_3,
+                                         self.weights_data_fft_3, self.space_time_3)
+        x0, _ = self.SpaceTimeFFTFeature(x0, space_time_noise, self.weights_data_4,
+                                         self.weights_data_fft_4, self.space_time_4)
+        x1, _ = self.SpaceTimeFFTFeature(x1, space_time_noise, self.weights_data_5,
+                                         self.weights_data_fft_5, self.space_time_5)
+        x0, _ = self.SpaceTimeFFTFeature(x0, space_time_noise, self.weights_data_6, self.weights_data_fft_6,
+                                         self.space_time_6)
+        x1, _ = self.SpaceTimeFFTFeature(x1, space_time_noise, self.weights_data_7, self.weights_data_fft_7,
+                                         self.space_time_7)
 
         x = x0 + x1
         x = torch.flatten(x, start_dim=1)
         rgbas_prod = torch.flatten(rgbas_prod, start_dim=1)
         x_mod = self.shapeShift(self.l1h0(rgbas_prod), x_alpha_l1)
         x_mod = self.shapeShift(self.l2h0(x_mod), x_alpha_l2)
-
         x = self.activate(self.l3h0(x_mod)) + x + rgbas_prod
+
+        # x = self.AdaNorm_x(x)
+        # rgbas_prod = torch.flatten(rgbas_prod, start_dim=1)
+        # rgbas_prod =  self.AdaNorm_rgbas_prod(rgbas_prod)
+        # x_mod = self.shapeShift(self.l1h0(rgbas_prod), x_alpha_l1)
+        # x_mod = self.shapeShift(self.l2h0(x_mod), x_alpha_l2)
+        # x_mod = self.AdaNorm_x_mod(self.l3h0(x_mod))
+        # x = self.activate(x_mod) + x + rgbas_prod
+
         rres = self.activate(self.l4_h0_r(x))
         gres = self.activate(self.l4_h0_g(x))
         bres = self.activate(self.l4_h0_b(x))
         ares = self.activate(self.l4_h0_a(x))
         sres = self.activate(self.l4_h0_s(x))
 
+        # rres = f.layer_norm(rres, normalized_shape=[rres.shape[1]])
+        # gres = f.layer_norm(gres, normalized_shape=[gres.shape[1]])
+        # bres = f.layer_norm(bres, normalized_shape=[bres.shape[1]])
+        # ares = f.layer_norm(ares, normalized_shape=[ares.shape[1]])
+        # sres = f.layer_norm(sres, normalized_shape=[sres.shape[1]])
+
         r = self.activate(self.l5_h0_r(rres))
         g = self.activate(self.l5_h0_g(gres))
         b = self.activate(self.l5_h0_b(bres))
         a = self.activate(self.l5_h0_a(ares))
         s = self.activate(self.l5_h0_s(sres))
+
+        # r = f.layer_norm(r, normalized_shape=[r.shape[1]])
+        # g = f.layer_norm(g, normalized_shape=[g.shape[1]])
+        # b = f.layer_norm(b, normalized_shape=[b.shape[1]])
+        # a = f.layer_norm(a, normalized_shape=[a.shape[1]])
+        # s = f.layer_norm(s, normalized_shape=[s.shape[1]])
 
         r = self.activate(self.l6_h0_r(r))
         g = self.activate(self.l6_h0_g(g))
@@ -334,11 +364,23 @@ class Metamorph(nn.Module):
         ares = self.activate(self.l7_h0_a(a)) + ares
         sres = self.activate(self.l7_h0_s(s)) + sres
 
+        # rres = f.layer_norm(rres, normalized_shape=[rres.shape[1]])
+        # gres = f.layer_norm(gres, normalized_shape=[gres.shape[1]])
+        # bres = f.layer_norm(bres, normalized_shape=[bres.shape[1]])
+        # ares = f.layer_norm(ares, normalized_shape=[ares.shape[1]])
+        # sres = f.layer_norm(sres, normalized_shape=[sres.shape[1]])
+
         r = self.activate(self.l8_h0_r(rres))
         g = self.activate(self.l8_h0_g(gres))
         b = self.activate(self.l8_h0_b(bres))
         a = self.activate(self.l8_h0_a(ares))
         s = self.activate(self.l8_h0_s(sres))
+
+        # r = f.layer_norm(r, normalized_shape=[r.shape[1]])
+        # g = f.layer_norm(g, normalized_shape=[g.shape[1]])
+        # b = f.layer_norm(b, normalized_shape=[b.shape[1]])
+        # a = f.layer_norm(a, normalized_shape=[a.shape[1]])
+        # s = f.layer_norm(s, normalized_shape=[s.shape[1]])
 
         r = self.activate(self.l9_h0_r(r))
         g = self.activate(self.l9_h0_g(g))
@@ -346,11 +388,23 @@ class Metamorph(nn.Module):
         a = self.activate(self.l9_h0_a(a))
         s = self.activate(self.l9_h0_s(s))
 
+        # r = f.layer_norm(r, normalized_shape=[r.shape[1]])
+        # g = f.layer_norm(g, normalized_shape=[g.shape[1]])
+        # b = f.layer_norm(b, normalized_shape=[b.shape[1]])
+        # a = f.layer_norm(a, normalized_shape=[a.shape[1]])
+        # s = f.layer_norm(s, normalized_shape=[s.shape[1]])
+
         r = self.activate(self.l10_h0_r(r)) + rres
         g = self.activate(self.l10_h0_g(g)) + gres
         b = self.activate(self.l10_h0_b(b)) + bres
         a = self.activate(self.l10_h0_a(a)) + ares
         s = self.activate(self.l10_h0_s(s)) + sres
+
+        # r = f.layer_norm(r, normalized_shape=[r.shape[1]])
+        # g = f.layer_norm(g, normalized_shape=[g.shape[1]])
+        # b = f.layer_norm(b, normalized_shape=[b.shape[1]])
+        # a = f.layer_norm(a, normalized_shape=[a.shape[1]])
+        # s = f.layer_norm(s, normalized_shape=[s.shape[1]])
 
         r = self.l11_h0_r(r).view(self.batch_size, self.in_scale, self.in_scale)
         g = self.l11_h0_g(g).view(self.batch_size, self.in_scale, self.in_scale)
@@ -386,24 +440,25 @@ class Metamorph(nn.Module):
         else:
             raise ValueError("Unsupported input dimensions")
 
-    def SpaceTimeFFTFeature(self, data, weights_data, weights_data_fft, weights_space_time_noise, space_time_noise):
+    def SpaceTimeFFTFeature(self, data, space_time_noise, weights_data, weights_data_fft, weights_space_time_noise):
         # Attention :  Below is implemented simplified FNO LAYER
         fft_data = torch.fft.fftn(data * weights_data, dim=(1, 2, 3), norm='forward')
         FFTwithW = torch.einsum("bijk,nmo->bimo", fft_data, weights_data_fft)
         FFTWeightSpaceTimeNoise = torch.einsum("bimo,prs->birs", space_time_noise, weights_space_time_noise)
+
         iFFW = torch.fft.ifftn(FFTwithW, dim=(1, 2, 3), norm='forward')
         iFFTWeightSpaceTimeNoise = torch.fft.ifftn(FFTWeightSpaceTimeNoise, dim=(1, 2, 3), norm='forward')
-
-        data = self.activate(iFFW) * self.activate(iFFTWeightSpaceTimeNoise)  #+self.activate(weights_data*data)
-        # Attention :  Above is implemented simplified FNO LAYER
+        space_time_noise = self.activate(iFFTWeightSpaceTimeNoise)
+        data = self.activate(iFFW)
+        data = data * iFFTWeightSpaceTimeNoise  #+self.activate(weights_data*data)
+        # Attention :  Above is implemented  FNO LAYER with space_time_noise_coding
         dimag = data.imag
         dreal = data.real
         data = dimag * dreal
-        # data = torch.tanh(data)
-        return data
+        return data, space_time_noise
 
     def WalshHadamardSpaceTimeFeature(self, meta_central_points, meta_step, noise_var):
-        # NOTE: Walsh-Hadamard transform for space and time coding
+        # NOTE: Walsh-Hadamard transform for space - time - noise coding to laplace domain
         space_time = torch.cat([meta_central_points, meta_step, noise_var], dim=1)
         bit_padding = torch.zeros((self.batch_size, 256 - space_time.shape[1])).to(self.device)
         space_time = torch.cat([space_time, bit_padding], dim=1)
@@ -426,6 +481,7 @@ class Metamorph(nn.Module):
         space_time /= len_tens  # normalize
         space_time = self.activate(self.Walsh_Hadamard_rescaler_l0wh(space_time))
         space_time = self.activate(self.Walsh_Hadamard_rescaler_l1wh(space_time))
+        space_time = torch.fft.ifftn(space_time, norm='forward')
         return space_time.view(self.batch_size, self.in_scale, self.in_scale).unsqueeze(-1).real
 
     def activate(self, x):
