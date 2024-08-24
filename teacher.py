@@ -1090,8 +1090,12 @@ class teacher(object):
         plt.plot(self.val_loss)
         avg_train_loss = sum(self.train_loss) / len(self.train_loss)
         avg_val_loss = sum(self.val_loss) / len(self.val_loss)
-        plt.axhline(y=avg_train_loss, color='blue', linestyle='--', label=f'Train Avg: {avg_train_loss:.2f}')
-        plt.axhline(y=avg_val_loss, color='orange', linestyle='--', label=f'Val Avg: {avg_val_loss:.2f}')
+        poly_degree = 3
+        epochs = np.arange(len(self.train_loss))
+        train_poly_fit = np.poly1d(np.polyfit(epochs, self.train_loss, poly_degree))
+        val_poly_fit = np.poly1d(np.polyfit(epochs, self.val_loss, poly_degree))
+        plt.plot(epochs, train_poly_fit(epochs), color='blue', linestyle='--', label=f'Train: deg: {poly_degree} | Avg: {avg_train_loss:.3f}')
+        plt.plot(epochs, val_poly_fit(epochs), color='orange', linestyle='--', label=f'Val: deg: {poly_degree} | Avg: {avg_val_loss:.3f}')
 
         plt.xlabel('Epoch')
         plt.ylabel('Loss')
@@ -1102,20 +1106,14 @@ class teacher(object):
     def loss_calculation(self, idx, model_output, data_input, data_output, structure_input, structure_output, criterion,
                          norm='forward'):
         pred_r, pred_g, pred_b, pred_a, pred_s, deepS = model_output
-        # pred_r, pred_g, pred_b, pred_a, pred_s = (
-        #     pred_r.view(pred_r.shape[0], -1),
-        #     pred_g.view(pred_g.shape[0], -1),
-        #     pred_b.view(pred_b.shape[0], -1),
-        #     pred_a.view(pred_a.shape[0], -1),
-        #     pred_s.view(pred_s.shape[0], -1))
 
-        r_in = data_input[:, 0:self.model.in_scale, :][idx]  #.view(self.batch_size, -1)
-        g_in = data_input[:, self.model.in_scale:self.model.in_scale * 2, :][idx]  #.view(self.batch_size, -1)
-        b_in = data_input[:, self.model.in_scale * 2:self.model.in_scale * 3, :][idx]  #.view(self.batch_size, -1)
-        a_in = data_input[:, self.model.in_scale * 3:self.model.in_scale * 4, :][idx]  #.view(self.batch_size, -1)
-        s_in = structure_input[idx]  #.view(self.batch_size, -1)
+        r_in = data_input[:, 0:self.model.in_scale, :][idx]
+        g_in = data_input[:, self.model.in_scale:self.model.in_scale * 2, :][idx]
+        b_in = data_input[:, self.model.in_scale * 2:self.model.in_scale * 3, :][idx]
+        a_in = data_input[:, self.model.in_scale * 3:self.model.in_scale * 4, :][idx]
+        s_in = structure_input[idx]
 
-        r_out = data_output[:, 0:self.model.in_scale, :][idx]  #.view(self.batch_size, -1)
+        r_out = data_output[:, 0:self.model.in_scale, :][idx]
         g_out = data_output[:, self.model.in_scale:self.model.in_scale * 2, :][idx]  #.view(self.batch_size, -1)
         b_out = data_output[:, self.model.in_scale * 2:self.model.in_scale * 3, :][idx]  #.view(self.batch_size, -1)
         a_out = data_output[:, self.model.in_scale * 3:self.model.in_scale * 4, :][idx]  #.view(self.batch_size, -1)
@@ -1318,10 +1316,8 @@ class teacher(object):
         selected_preds_indices = indices[:k]
         sampled_preds = preds[selected_preds_indices]
         # U, S, V = torch.linalg.svd(res, full_matrices=False) # Note:  Full matrix svd - slow but better performance (x10 better)
-        Ures, Sres, Vres = torch.svd_lowrank(sampled_res, q=k, niter=2,
-                                             M=None)  # Note: Way faster but less efficient, q is overestimation of rank and niter is subspace iteration, M is the broadcast size
-        Upreds, Spreds, Vpreds = torch.svd_lowrank(sampled_preds, q=k, niter=2,
-                                                   M=None)
+        Ures, Sres, Vres = torch.svd_lowrank(sampled_res, q=k, niter=2,M=None)  # Note: Way faster but less efficient, q is overestimation of rank and niter is subspace iteration, M is the broadcast size
+        Upreds, Spreds, Vpreds = torch.svd_lowrank(sampled_preds, q=k, niter=2,M=None)
         res_rank_t = torch.dist(sampled_res, Ures @ torch.diag(Sres) @ Vres.T)
         preds_rank_t = torch.dist(sampled_preds, Upreds @ torch.diag(Spreds) @ Vpreds.T)
 

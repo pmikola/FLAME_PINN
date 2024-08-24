@@ -163,7 +163,6 @@ class Metamorph_parameterReinforcer(nn.Module):
             MASK[mask] = new_zeros[mask]
             MASK[~mask] = new_ones[~mask]
             self.masks.append(MASK)
-            # self.masks.append(torch.nn.parameter.Parameter(data=MASK,requires_grad=True))
 
     def mutate(self, data_in, action):
         p_action_idx = torch.argmax(action, dim=1)
@@ -188,8 +187,7 @@ class Metamorph_parameterReinforcer(nn.Module):
         meta_output_h4 = meta_output_h4.unsqueeze(0).expand(self.batch_size, -1, -1).detach()
         meta_output_h5 = meta_output_h5.unsqueeze(0).expand(self.batch_size, -1).detach()
         noise_var_out = noise_var_out.unsqueeze(0).expand(self.batch_size, -1, -1).detach()
-        return mask, data_input * mask[:, :, :self.in_scale * 4, :], structure_input * mask[:, :,
-                                                                                       self.in_scale * 4:,
+        return mask, data_input * mask[:, :, :self.in_scale * 4, :], structure_input * mask[:, :, self.in_scale * 4:,
                                                                                        :], meta_input_h1, meta_input_h2, meta_input_h3, meta_input_h4, meta_input_h5, noise_var_in, fmot_in_binary, meta_output_h1, meta_output_h2, meta_output_h3, meta_output_h4, meta_output_h5, noise_var_out
 
     def exploit_explore_action_selector(self, action, p=0.1):
@@ -355,7 +353,8 @@ class Metamorph_parameterReinforcer(nn.Module):
         di, si, mih1, mih2, mih3, mih4, mih5, nvi, fmot_in, moh1, moh2, moh3, moh4, moh5, nvo = mutated_dataset
         dataset_mutated = (
             di[best_idx], si[best_idx], mih1[best_idx], mih2[best_idx], mih3[best_idx], mih4[best_idx], mih5[best_idx],
-            nvi[best_idx],fmot_in[best_idx], moh1[best_idx], moh2[best_idx], moh3[best_idx], moh4[best_idx], moh5[best_idx],
+            nvi[best_idx], fmot_in[best_idx], moh1[best_idx], moh2[best_idx], moh3[best_idx], moh4[best_idx],
+            moh5[best_idx],
             nvo[best_idx])
         del model_b, model
         return RLmodel, RLoss, dataset_mutated, used_mask
