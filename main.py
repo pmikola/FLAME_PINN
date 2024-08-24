@@ -47,10 +47,10 @@ print('Reinforcer number of parameters', round(reinforcer_params * 1e-6, 2), 'M'
 
 t = teacher(models, discriminator, parameterReinforcer, device)
 t.fsim = fl.flame_sim(no_frames=no_frames, frame_skip=frame_skip)
-criterion_model =SamplesLoss(loss="sinkhorn", p=2, blur=.05)#nn.MSELoss(reduction='none')#SamplesLoss(loss="sinkhorn", p=2, blur=.05)
-criterion_e0 = SamplesLoss(loss="sinkhorn", p=2, blur=.05)#nn.MSELoss(reduction='none')
-criterion_e1 = SamplesLoss(loss="sinkhorn", p=2, blur=.05)#nn.MSELoss(reduction='none')
-criterion_e2 =SamplesLoss(loss="sinkhorn", p=2, blur=.05)#nn.MSELoss(reduction='none')
+criterion_model =nn.MSELoss(reduction='none')#SamplesLoss(loss="sinkhorn", p=2, blur=.05)
+criterion_e0 = nn.MSELoss(reduction='none')
+criterion_e1 = nn.MSELoss(reduction='none')
+criterion_e2 =nn.MSELoss(reduction='none')
 criterion_disc = nn.BCELoss(reduction='mean')
 criterion_RL = nn.MSELoss(reduction='mean')
 criterion = criterion_model, criterion_e0, criterion_e1, criterion_e2, criterion_disc, criterion_RL
@@ -79,7 +79,7 @@ for period in range(1, no_periods + 1):
     t.fsim.simulate(simulate=0, save_rgb=1, save_alpha=1, save_fuel=1, delete_data=0)
     t.learning_phase(t, no_frame_samples, batch_size, input_window_size, first_frame,
                      last_frame, frame_skip * 2, criterion, optimizer, disc_optimizer, RL_optimizer, device, learning=1,
-                     num_epochs=2000)
+                     num_epochs=1000)
     # t.fsim.simulate(simulate=0,delete_data=1)
 
 t.visualize_lerning()

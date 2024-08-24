@@ -205,11 +205,11 @@ class Metamorph_discriminator(nn.Module):
     def SpaceTimeFFTFeature(self, data, weights_data, weights_data_fft, space_time):
         # Attention :  Below is implemented simplified FNO LAYER
         # # question : using only real gives better results than using real and imag in sum or concat manner?
-        fft_data = torch.fft.fft(data, norm='forward')
+        fft_data = torch.fft.fft(data, norm='backward')
         fft_data /= torch.tensor(fft_data.shape[1])
         # question : is "bij,own->bin" give same outcome as "bij,own->bwj"?
         FFwithWeights = torch.einsum("bi,j->bj", fft_data, weights_data_fft)
-        iFFWW = torch.fft.ifft(FFwithWeights, norm='forward')
+        iFFWW = torch.fft.ifft(FFwithWeights, norm='backward')
         iFFWW_real = iFFWW.real
         iFFWW_imag = iFFWW.imag
         ifft_data = iFFWW_real + iFFWW_imag

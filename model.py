@@ -315,18 +315,13 @@ class Metamorph(nn.Module):
 
         x = x0 + x1
         x = torch.flatten(x, start_dim=1)
+        x = self.AdaNorm_x(x)
         rgbas_prod = torch.flatten(rgbas_prod, start_dim=1)
+        rgbas_prod =  self.AdaNorm_rgbas_prod(rgbas_prod)
         x_mod = self.shapeShift(self.l1h0(rgbas_prod), x_alpha_l1)
         x_mod = self.shapeShift(self.l2h0(x_mod), x_alpha_l2)
-        x = self.activate(self.l3h0(x_mod)) + x + rgbas_prod
-
-        # x = self.AdaNorm_x(x)
-        # rgbas_prod = torch.flatten(rgbas_prod, start_dim=1)
-        # rgbas_prod =  self.AdaNorm_rgbas_prod(rgbas_prod)
-        # x_mod = self.shapeShift(self.l1h0(rgbas_prod), x_alpha_l1)
-        # x_mod = self.shapeShift(self.l2h0(x_mod), x_alpha_l2)
-        # x_mod = self.AdaNorm_x_mod(self.l3h0(x_mod))
-        # x = self.activate(x_mod) + x + rgbas_prod
+        x_mod = self.AdaNorm_x_mod(self.l3h0(x_mod))
+        x = self.activate(x_mod) + x + rgbas_prod
 
         rres = self.activate(self.l4_h0_r(x))
         gres = self.activate(self.l4_h0_g(x))
@@ -334,11 +329,11 @@ class Metamorph(nn.Module):
         ares = self.activate(self.l4_h0_a(x))
         sres = self.activate(self.l4_h0_s(x))
 
-        # rres = f.layer_norm(rres, normalized_shape=[rres.shape[1]])
-        # gres = f.layer_norm(gres, normalized_shape=[gres.shape[1]])
-        # bres = f.layer_norm(bres, normalized_shape=[bres.shape[1]])
-        # ares = f.layer_norm(ares, normalized_shape=[ares.shape[1]])
-        # sres = f.layer_norm(sres, normalized_shape=[sres.shape[1]])
+        rres = f.layer_norm(rres, normalized_shape=[rres.shape[1]])
+        gres = f.layer_norm(gres, normalized_shape=[gres.shape[1]])
+        bres = f.layer_norm(bres, normalized_shape=[bres.shape[1]])
+        ares = f.layer_norm(ares, normalized_shape=[ares.shape[1]])
+        sres = f.layer_norm(sres, normalized_shape=[sres.shape[1]])
 
         r = self.activate(self.l5_h0_r(rres))
         g = self.activate(self.l5_h0_g(gres))
@@ -346,11 +341,11 @@ class Metamorph(nn.Module):
         a = self.activate(self.l5_h0_a(ares))
         s = self.activate(self.l5_h0_s(sres))
 
-        # r = f.layer_norm(r, normalized_shape=[r.shape[1]])
-        # g = f.layer_norm(g, normalized_shape=[g.shape[1]])
-        # b = f.layer_norm(b, normalized_shape=[b.shape[1]])
-        # a = f.layer_norm(a, normalized_shape=[a.shape[1]])
-        # s = f.layer_norm(s, normalized_shape=[s.shape[1]])
+        r = f.layer_norm(r, normalized_shape=[r.shape[1]])
+        g = f.layer_norm(g, normalized_shape=[g.shape[1]])
+        b = f.layer_norm(b, normalized_shape=[b.shape[1]])
+        a = f.layer_norm(a, normalized_shape=[a.shape[1]])
+        s = f.layer_norm(s, normalized_shape=[s.shape[1]])
 
         r = self.activate(self.l6_h0_r(r))
         g = self.activate(self.l6_h0_g(g))
@@ -364,11 +359,11 @@ class Metamorph(nn.Module):
         ares = self.activate(self.l7_h0_a(a)) + ares
         sres = self.activate(self.l7_h0_s(s)) + sres
 
-        # rres = f.layer_norm(rres, normalized_shape=[rres.shape[1]])
-        # gres = f.layer_norm(gres, normalized_shape=[gres.shape[1]])
-        # bres = f.layer_norm(bres, normalized_shape=[bres.shape[1]])
-        # ares = f.layer_norm(ares, normalized_shape=[ares.shape[1]])
-        # sres = f.layer_norm(sres, normalized_shape=[sres.shape[1]])
+        rres = f.layer_norm(rres, normalized_shape=[rres.shape[1]])
+        gres = f.layer_norm(gres, normalized_shape=[gres.shape[1]])
+        bres = f.layer_norm(bres, normalized_shape=[bres.shape[1]])
+        ares = f.layer_norm(ares, normalized_shape=[ares.shape[1]])
+        sres = f.layer_norm(sres, normalized_shape=[sres.shape[1]])
 
         r = self.activate(self.l8_h0_r(rres))
         g = self.activate(self.l8_h0_g(gres))
@@ -376,11 +371,11 @@ class Metamorph(nn.Module):
         a = self.activate(self.l8_h0_a(ares))
         s = self.activate(self.l8_h0_s(sres))
 
-        # r = f.layer_norm(r, normalized_shape=[r.shape[1]])
-        # g = f.layer_norm(g, normalized_shape=[g.shape[1]])
-        # b = f.layer_norm(b, normalized_shape=[b.shape[1]])
-        # a = f.layer_norm(a, normalized_shape=[a.shape[1]])
-        # s = f.layer_norm(s, normalized_shape=[s.shape[1]])
+        r = f.layer_norm(r, normalized_shape=[r.shape[1]])
+        g = f.layer_norm(g, normalized_shape=[g.shape[1]])
+        b = f.layer_norm(b, normalized_shape=[b.shape[1]])
+        a = f.layer_norm(a, normalized_shape=[a.shape[1]])
+        s = f.layer_norm(s, normalized_shape=[s.shape[1]])
 
         r = self.activate(self.l9_h0_r(r))
         g = self.activate(self.l9_h0_g(g))
@@ -388,11 +383,11 @@ class Metamorph(nn.Module):
         a = self.activate(self.l9_h0_a(a))
         s = self.activate(self.l9_h0_s(s))
 
-        # r = f.layer_norm(r, normalized_shape=[r.shape[1]])
-        # g = f.layer_norm(g, normalized_shape=[g.shape[1]])
-        # b = f.layer_norm(b, normalized_shape=[b.shape[1]])
-        # a = f.layer_norm(a, normalized_shape=[a.shape[1]])
-        # s = f.layer_norm(s, normalized_shape=[s.shape[1]])
+        r = f.layer_norm(r, normalized_shape=[r.shape[1]])
+        g = f.layer_norm(g, normalized_shape=[g.shape[1]])
+        b = f.layer_norm(b, normalized_shape=[b.shape[1]])
+        a = f.layer_norm(a, normalized_shape=[a.shape[1]])
+        s = f.layer_norm(s, normalized_shape=[s.shape[1]])
 
         r = self.activate(self.l10_h0_r(r)) + rres
         g = self.activate(self.l10_h0_g(g)) + gres
@@ -400,11 +395,11 @@ class Metamorph(nn.Module):
         a = self.activate(self.l10_h0_a(a)) + ares
         s = self.activate(self.l10_h0_s(s)) + sres
 
-        # r = f.layer_norm(r, normalized_shape=[r.shape[1]])
-        # g = f.layer_norm(g, normalized_shape=[g.shape[1]])
-        # b = f.layer_norm(b, normalized_shape=[b.shape[1]])
-        # a = f.layer_norm(a, normalized_shape=[a.shape[1]])
-        # s = f.layer_norm(s, normalized_shape=[s.shape[1]])
+        r = f.layer_norm(r, normalized_shape=[r.shape[1]])
+        g = f.layer_norm(g, normalized_shape=[g.shape[1]])
+        b = f.layer_norm(b, normalized_shape=[b.shape[1]])
+        a = f.layer_norm(a, normalized_shape=[a.shape[1]])
+        s = f.layer_norm(s, normalized_shape=[s.shape[1]])
 
         r = self.l11_h0_r(r).view(self.batch_size, self.in_scale, self.in_scale)
         g = self.l11_h0_g(g).view(self.batch_size, self.in_scale, self.in_scale)
@@ -442,12 +437,12 @@ class Metamorph(nn.Module):
 
     def SpaceTimeFFTFeature(self, data, space_time_noise, weights_data, weights_data_fft, weights_space_time_noise):
         # Attention :  Below is implemented simplified FNO LAYER
-        fft_data = torch.fft.fftn(data * weights_data, dim=(1, 2, 3), norm='forward')
+        fft_data = torch.fft.fftn(data * weights_data, dim=(1, 2, 3), norm='backward')
         FFTwithW = torch.einsum("bijk,nmo->bimo", fft_data, weights_data_fft)
         FFTWeightSpaceTimeNoise = torch.einsum("bimo,prs->birs", space_time_noise, weights_space_time_noise)
 
-        iFFW = torch.fft.ifftn(FFTwithW, dim=(1, 2, 3), norm='forward')
-        iFFTWeightSpaceTimeNoise = torch.fft.ifftn(FFTWeightSpaceTimeNoise, dim=(1, 2, 3), norm='forward')
+        iFFW = torch.fft.ifftn(FFTwithW, dim=(1, 2, 3), norm='backward')
+        iFFTWeightSpaceTimeNoise = torch.fft.ifftn(FFTWeightSpaceTimeNoise, dim=(1, 2, 3), norm='backward')
         space_time_noise = self.activate(iFFTWeightSpaceTimeNoise)
         data = self.activate(iFFW)
         data = data * iFFTWeightSpaceTimeNoise  #+self.activate(weights_data*data)
@@ -481,7 +476,7 @@ class Metamorph(nn.Module):
         space_time /= len_tens  # normalize
         space_time = self.activate(self.Walsh_Hadamard_rescaler_l0wh(space_time))
         space_time = self.activate(self.Walsh_Hadamard_rescaler_l1wh(space_time))
-        space_time = torch.fft.ifftn(space_time, norm='forward')
+        space_time = torch.fft.ifftn(space_time, norm='backward')
         return space_time.view(self.batch_size, self.in_scale, self.in_scale).unsqueeze(-1).real
 
     def activate(self, x):

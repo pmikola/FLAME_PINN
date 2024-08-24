@@ -88,10 +88,10 @@ class Metamorph_parameterReinforcer(nn.Module):
         masks = torch.stack(list(self.masks))
         x1 = torch.flatten(model_p, start_dim=1)
         x2 = torch.flatten(masks, start_dim=1)
-        mask_fft = torch.fft.fft(x2, dim=1, norm='forward')
+        mask_fft = torch.fft.fft(x2, dim=1, norm='backward')
         mask_fft = mask_fft[:, :self.modes]
         mask_fft_weight = torch.einsum('bf,wm->bm', mask_fft, self.weights_data_fft)
-        x2 = torch.fft.ifft(mask_fft_weight, norm='forward').real
+        x2 = torch.fft.ifft(mask_fft_weight, norm='backward').real
         x2 = f.sigmoid((self.lin1_mask(x2)))
         self.mask_treshold = torch.mean(x2, dim=0)
         x2 = self.activate(self.lin2_mask(x2))
@@ -107,11 +107,11 @@ class Metamorph_parameterReinforcer(nn.Module):
             fparam = torch.flatten(param)
             fpshape = fparam.shape[0]
             if fpshape < self.modes:
-                fparamWHF = torch.fft.fft(fparam)[:fpshape].real
+                fparamWHF = torch.fft.fft(fparam, norm='backward')[:fpshape].real
                 model_parameters[i, :fpshape] = fparamWHF.detach().clone()
                 i += 1
             else:
-                fparamWHF = torch.fft.fft(fparam)[:self.modes].real
+                fparamWHF = torch.fft.fft(fparam, norm='backward')[:self.modes].real
                 model_parameters[i] = fparamWHF.detach().clone()
                 i += 1
         self.states.append(model_parameters.detach())
@@ -124,11 +124,11 @@ class Metamorph_parameterReinforcer(nn.Module):
             fparam = torch.flatten(param)
             fpshape = fparam.shape[0]
             if fpshape < self.modes:
-                fparamWHF = torch.fft.fft(fparam)[:fpshape].real
+                fparamWHF = torch.fft.fft(fparam, norm='backward')[:fpshape].real
                 model_parameters[i, :fpshape] = fparamWHF.detach().clone()
                 i += 1
             else:
-                fparamWHF = torch.fft.fft(fparam)[:self.modes].real
+                fparamWHF = torch.fft.fft(fparam, norm='backward')[:self.modes].real
                 model_parameters[i] = fparamWHF.detach().clone()
                 i += 1
         self.next_states.append(model_parameters.detach())

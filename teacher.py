@@ -1106,7 +1106,7 @@ class teacher(object):
         plt.show()
 
     def loss_calculation(self, idx, model_output, data_input, data_output, structure_input, structure_output, criterion,
-                         norm='forward'):
+                         norm='backward'):
         pred_r, pred_g, pred_b, pred_a, pred_s, deepS = model_output
 
         r_in = data_input[:, 0:self.model.in_scale, :][idx]
@@ -1158,8 +1158,8 @@ class teacher(object):
         diff_s_true = s_out - s_in
         diff_s_pred = pred_s - s_in
         loss_diff_s = criterion(t * diff_s_pred + t_1 * diff_s_true, diff_s_true)
-        # diff_loss = torch.mean(loss_diff_r + loss_diff_g + loss_diff_b + loss_diff_a + loss_diff_s, dim=[1, 2])
-        diff_loss = loss_diff_r + loss_diff_g + loss_diff_b + loss_diff_a + loss_diff_s
+        diff_loss = torch.mean(loss_diff_r + loss_diff_g + loss_diff_b + loss_diff_a + loss_diff_s, dim=[1, 2])
+        # diff_loss = loss_diff_r + loss_diff_g + loss_diff_b + loss_diff_a + loss_diff_s
 
         # Note: Gradient loss
         grad_r_true = torch.gradient(r_out, dim=[1])[0]
@@ -1178,8 +1178,8 @@ class teacher(object):
         grad_s_pred = torch.gradient(pred_s)[0]
         grad_s = criterion(t * grad_s_pred + t_1 * grad_s_true, grad_s_true)
 
-        # grad_loss = torch.mean(grad_r + grad_g + grad_b + grad_a + grad_s, dim=[1, 2])
-        grad_loss = grad_r + grad_g + grad_b + grad_a + grad_s
+        grad_loss = torch.mean(grad_r + grad_g + grad_b + grad_a + grad_s, dim=[1, 2])
+        # grad_loss = grad_r + grad_g + grad_b + grad_a + grad_s
 
         # Note: Fourier loss
         fft_out_pred_r = torch.real(torch.fft.rfft2(pred_r, norm=norm))
@@ -1204,8 +1204,8 @@ class teacher(object):
         fft_loss_b = criterion(t * fft_out_pred_b + t_1 * fft_out_true_r, fft_out_true_b)
         fft_loss_a = criterion(t * fft_out_pred_a + t_1 * fft_out_true_r, fft_out_true_a)
         fft_loss_s = criterion(t * fft_out_pred_s + t_1 * fft_out_true_r, fft_out_true_s)
-        # fft_loss = torch.mean(fft_loss_r + fft_loss_g + fft_loss_b + fft_loss_a + fft_loss_s, dim=[1, 2])
-        fft_loss = fft_loss_r + fft_loss_g + fft_loss_b + fft_loss_a + fft_loss_s
+        fft_loss = torch.mean(fft_loss_r + fft_loss_g + fft_loss_b + fft_loss_a + fft_loss_s, dim=[1, 2])
+        # fft_loss = fft_loss_r + fft_loss_g + fft_loss_b + fft_loss_a + fft_loss_s
 
         # Note: Fourier Gradient Loss
         diff_fft_true_r = fft_out_true_r - fft_in_true_r
@@ -1223,9 +1223,9 @@ class teacher(object):
         diff_fft_true_s = fft_out_true_s - fft_in_true_s
         diff_fft_pred_s = fft_out_pred_s - fft_in_true_s
         diff_fft_loss_s = criterion(t * diff_fft_pred_s + t_1 * diff_fft_true_r, diff_fft_true_s)
-        # diff_fft_loss = torch.mean(
-        #     diff_fft_loss_r + diff_fft_loss_g + diff_fft_loss_b + diff_fft_loss_a + diff_fft_loss_s, dim=[1, 2])
-        diff_fft_loss = diff_fft_loss_r + diff_fft_loss_g + diff_fft_loss_b + diff_fft_loss_a + diff_fft_loss_s
+        diff_fft_loss = torch.mean(
+            diff_fft_loss_r + diff_fft_loss_g + diff_fft_loss_b + diff_fft_loss_a + diff_fft_loss_s, dim=[1, 2])
+        # diff_fft_loss = diff_fft_loss_r + diff_fft_loss_g + diff_fft_loss_b + diff_fft_loss_a + diff_fft_loss_s
 
         # Note : Exact value loss
         loss_r = criterion(t * pred_r + t_1 * r_out, r_out)
@@ -1233,8 +1233,8 @@ class teacher(object):
         loss_b = criterion(t * pred_b + t_1 * b_out, b_out)
         loss_alpha = criterion(t * pred_a + t_1 * a_out, a_out)
         loss_s = criterion(t * pred_s + t_1 * s_out, s_out)
-        # value_loss = torch.mean(loss_r + loss_g + loss_b + loss_alpha + loss_s, dim=[1, 2])
-        value_loss = loss_r + loss_g + loss_b + loss_alpha + loss_s
+        value_loss = torch.mean(loss_r + loss_g + loss_b + loss_alpha + loss_s, dim=[1, 2])
+        # value_loss = loss_r + loss_g + loss_b + loss_alpha + loss_s
 
         t = t.squeeze(1)
         t_1 = t_1.squeeze(1)
@@ -1280,20 +1280,20 @@ class teacher(object):
         s_true_hist = kornia.enhance.histogram(s_out, bins=bins_true, bandwidth=bandwidth)
         s_pred_hist = kornia.enhance.histogram(pred_s, bins=bins_pred, bandwidth=bandwidth)
         s_hist_loss = criterion(t * s_pred_hist + t_1 * s_true_hist, s_true_hist)
-        # hist_loss = torch.mean(r_hist_loss + b_hist_loss + g_hist_loss + a_hist_loss + s_hist_loss, dim=1)
-        hist_loss = r_hist_loss + b_hist_loss + g_hist_loss + a_hist_loss + s_hist_loss
+        hist_loss = torch.mean(r_hist_loss + b_hist_loss + g_hist_loss + a_hist_loss + s_hist_loss, dim=1)
+        # hist_loss = r_hist_loss + b_hist_loss + g_hist_loss + a_hist_loss + s_hist_loss
 
         # Note: Deep Supervision Loss
         x, x_mod, rgbas_prod, rres, gres, bres, ares, sres = deepS
         dpSWeight = 0.3
-        x_target = torch.randn_like(x) * dpSWeight
-        x_mod_target = torch.randn_like(x_mod) * dpSWeight
-        rgbas_prod_target = torch.randn_like(rgbas_prod) * dpSWeight
-        rres_target = torch.randn_like(rres) * dpSWeight
-        gres_target = torch.randn_like(gres) * dpSWeight
-        bres_target = torch.randn_like(bres) * dpSWeight
-        ares_target = torch.randn_like(ares) * dpSWeight
-        sres_target = torch.randn_like(sres) * dpSWeight
+        x_target = torch.rand_like(x) * dpSWeight
+        x_mod_target = torch.rand_like(x_mod) * dpSWeight
+        rgbas_prod_target = torch.rand_like(rgbas_prod) * dpSWeight
+        rres_target = torch.rand_like(rres) * dpSWeight
+        gres_target = torch.rand_like(gres) * dpSWeight
+        bres_target = torch.rand_like(bres) * dpSWeight
+        ares_target = torch.rand_like(ares) * dpSWeight
+        sres_target = torch.rand_like(sres) * dpSWeight
         loss_x, loss_x_mod, loss_rgbas_prod, loss_rres, loss_gres, loss_bres, loss_ares, loss_sres = (
             f.mse_loss(x, x_target), f.mse_loss(x_mod, x_mod_target),
             f.mse_loss(rgbas_prod, rgbas_prod_target),
@@ -1310,7 +1310,7 @@ class teacher(object):
         res = torch.cat([rres, gres, bres, ares, sres], dim=1)
         preds = torch.cat([pred_r, pred_g, pred_b, pred_a, pred_s], dim=1)
         k = 64
-        rank_weight = 0.5
+        rank_weight = 0.2
         indices = torch.randperm(res.size(0))
         selected_res_indices = indices[:k]
         sampled_res = res[selected_res_indices]
@@ -1348,8 +1348,8 @@ class teacher(object):
         rgbas_pred = torch.permute(rgbas_pred, (0, 3, 1, 2))
         ssim_val = 1 - self.ssim_loss(tt.unsqueeze(2) * rgbas_out + tt_1.unsqueeze(2) * rgbas_pred, rgbas_pred).mean()
 
-        #A, B, C, D, E, F, G, H, I = 1., 1., 1e1, 1e2, 1e2, 1e3, 0.15, 1., 2.  # Note: loss weights for MSE
-        A, B, C, D, E, F, G, H, I = 0.2, 0.2, 5e-1, 2e2, 2e2, 5e1, 1e-20, 1., 5.  # Note: loss weights for Sinkhorn
+        A, B, C, D, E, F, G, H, I = 1., 1., 3e0, 2e2, 2e2, 2e3, 0.15, 1., 2.  # Note: loss weights for MSE
+        # A, B, C, D, E, F, G, H, I = 0.2, 0.2, 5e-1, 2e2, 2e2, 5e1, 1e-20, 1., 5.  # Note: loss weights for Sinkhorn
 
         loss_weights = (A, B, C, D, E, F, G, H, I)
         J = 1/len(loss_weights)
