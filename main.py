@@ -35,7 +35,7 @@ no_layers = 0
 for (name, param) in models[0].named_parameters():
     no_layers += 1
 discriminator = Metamorph_discriminator(no_frame_samples, batch_size, input_window_size, device).to(device)
-parameterReinforcer = Metamorph_parameterReinforcer(no_layers, 10, 100, 10, 128, input_window_size, device).to(device)
+parameterReinforcer = Metamorph_parameterReinforcer(no_layers, 10, 100, 20, 128, input_window_size, device).to(device)
 
 model_params = sum(p.numel() for p in models[0].parameters() if p.requires_grad)
 disc_params = sum(p.numel() for p in discriminator.parameters() if p.requires_grad)

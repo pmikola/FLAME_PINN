@@ -8,6 +8,7 @@ from matplotlib import pyplot as plt
 import torch.nn.functional as f
 from AdaNorm import AdaNorm
 
+
 class Metamorph(nn.Module):
     # Note : Buzzword - Metamorph will be better name here probably :) or HIPNO
     def __init__(self, no_frame_samples, batch_size, input_window_size, device):
@@ -317,7 +318,7 @@ class Metamorph(nn.Module):
         x = torch.flatten(x, start_dim=1)
         x = self.AdaNorm_x(x)
         rgbas_prod = torch.flatten(rgbas_prod, start_dim=1)
-        rgbas_prod =  self.AdaNorm_rgbas_prod(rgbas_prod)
+        rgbas_prod = self.AdaNorm_rgbas_prod(rgbas_prod)
         x_mod = self.shapeShift(self.l1h0(rgbas_prod), x_alpha_l1)
         x_mod = self.shapeShift(self.l2h0(x_mod), x_alpha_l2)
         x_mod = self.AdaNorm_x_mod(self.l3h0(x_mod))
@@ -407,30 +408,33 @@ class Metamorph(nn.Module):
         a = self.l11_h0_a(a).view(self.batch_size, self.in_scale, self.in_scale)
         s = self.l11_h0_s(s).view(self.batch_size, self.in_scale, self.in_scale)
         self.batch_size = old_batch_size
-        # Attention!:  Deep supervision and extractor rank representation of the layers
-        # Note: Deep supervision:
+        # Note: For Deep supervision:
         deepS = x, x_mod, rgbas_prod, rres, gres, bres, ares, sres
         return r, g, b, a, s, deepS
 
     def shapeShift(self, x, h):
         if x.dim() == 3:
-            coefficients = h.view(self.batch_size, x.shape[1], x.shape[2], self.shifterCoefficients)
-            x_p = torch.mul(x[0:self.batch_size, :, :].unsqueeze(3), self.exponents.unsqueeze(0).unsqueeze(1))
+            coefficients = torch.tanh(h.view(self.batch_size, x.shape[1], x.shape[2], self.shifterCoefficients))
+            x_p = torch.pow(x[0:self.batch_size, :, :].unsqueeze(3), self.exponents.unsqueeze(0).unsqueeze(1))
             craftedPolynomial = torch.sum(coefficients * x_p, dim=3)
-            # craftedPolynomial = self.activate(craftedPolynomial)
+            craftedPolynomial = f.layer_norm(craftedPolynomial,
+                                             normalized_shape=[craftedPolynomial.shape[1], craftedPolynomial.shape[2]])
             return craftedPolynomial
         elif x.dim() == 2:
-            coefficients = h.view(self.batch_size, x.shape[1], self.shifterCoefficients)
-            x_p = torch.mul(x[0:self.batch_size, :].unsqueeze(2), self.exponents.unsqueeze(0).unsqueeze(1))
+            coefficients = torch.tanh(h.view(self.batch_size, x.shape[1], self.shifterCoefficients))
+            x_p = torch.pow(x[0:self.batch_size, :].unsqueeze(2), self.exponents.unsqueeze(0).unsqueeze(1))
             craftedPolynomial = torch.sum(coefficients * x_p, dim=2)
-            # craftedPolynomial = self.activate(craftedPolynomial)
+            craftedPolynomial = f.layer_norm(craftedPolynomial, normalized_shape=[craftedPolynomial.shape[1]])
             return craftedPolynomial
         elif x.dim() == 4:
-            coefficients = h.view(self.batch_size, x.shape[1], x.shape[2], x.shape[3], self.shifterCoefficients)
-            x_p = torch.mul(x[0:self.batch_size, :, :, :].unsqueeze(4),
+            coefficients = torch.tanh(
+                h.view(self.batch_size, x.shape[1], x.shape[2], x.shape[3], self.shifterCoefficients))
+            x_p = torch.pow(x[0:self.batch_size, :, :, :].unsqueeze(4),
                             self.exponents.unsqueeze(0).unsqueeze(1).unsqueeze(2))
             craftedPolynomial = torch.sum(coefficients * x_p, dim=4)
-            # craftedPolynomial = self.activate(craftedPolynomial)
+            craftedPolynomial = f.layer_norm(craftedPolynomial,
+                                             normalized_shape=[craftedPolynomial.shape[1], craftedPolynomial.shape[2],
+                                                               craftedPolynomial.shape[3]])
             return craftedPolynomial
         else:
             raise ValueError("Unsupported input dimensions")
@@ -445,11 +449,12 @@ class Metamorph(nn.Module):
         iFFTWeightSpaceTimeNoise = torch.fft.ifftn(FFTWeightSpaceTimeNoise, dim=(1, 2, 3), norm='backward')
         space_time_noise = self.activate(iFFTWeightSpaceTimeNoise)
         data = self.activate(iFFW)
-        data = data * iFFTWeightSpaceTimeNoise  #+self.activate(weights_data*data)
+        data = data * iFFTWeightSpaceTimeNoise * weights_data
         # Attention :  Above is implemented  FNO LAYER with space_time_noise_coding
         dimag = data.imag
         dreal = data.real
         data = dimag * dreal
+        data = f.layer_norm(data, normalized_shape=[data.shape[1], data.shape[2], data.shape[3]])
         return data, space_time_noise
 
     def WalshHadamardSpaceTimeFeature(self, meta_central_points, meta_step, noise_var):
