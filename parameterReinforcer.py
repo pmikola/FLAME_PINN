@@ -55,8 +55,8 @@ class Metamorph_parameterReinforcer(nn.Module):
         self.lin1 = nn.Linear(self.no_layers * self.modes, self.modes)
         self.lin2 = nn.Linear(self.modes, self.modes)
         self.lin3 = nn.Linear(self.modes, self.action_per_layer)
-        self.lin1_mask = nn.Linear(self.modes, self.modes//2)
-        self.lin2_mask = nn.Linear(self.modes//2, 5)
+        self.lin1_mask = nn.Linear(self.modes, self.modes // 2)
+        self.lin2_mask = nn.Linear(self.modes // 2, 5)
         self.softmax = nn.Softmax(dim=1)
         self.init_weights()
 
@@ -305,7 +305,8 @@ class Metamorph_parameterReinforcer(nn.Module):
             moh5[:self.batch_size], nvo[:self.batch_size])
 
         mutated_output = model(dataset_m)
-        mutation_loss = teacher.loss_calculation(dataset_idx,
+        mutation_loss = teacher.loss_calculation(model,
+                                                 dataset_idx,
                                                  mutated_output,
                                                  data_input,
                                                  data_output,
@@ -322,7 +323,7 @@ class Metamorph_parameterReinforcer(nn.Module):
                                   no_samples, alpha=0.1, gamma=0.99):
         loss_calc_data = dataset_idx, data_input, data_output, structure_input, structure_output, criterion_model, norm
         model_output = model_b(dataset)
-        loss = teacher.loss_calculation(dataset_idx, model_output, data_input, data_output, structure_input,
+        loss = teacher.loss_calculation(model_b, dataset_idx, model_output, data_input, data_output, structure_input,
                                         structure_output, criterion_model, norm)
         model = copy.deepcopy(model_b)
         _ = self.save_state(model)
